@@ -390,10 +390,10 @@ function cone(arr, M, bx, by, bz, r, axx, axy, axz, radial, raw, F, rawApex, UVP
 function buildNibble(arr, M, F, t, damp) {
   const time = typeof t === "number" ? t : 0;
   const dk = damp === undefined ? 1 : damp;
-  const BLUE = [0.26, 0.50, 0.95];
-  const FLANK = [0.20, 0.40, 0.80];   // stepped flank shade
-  const DARK = [0.15, 0.28, 0.62];    // back / crevice shade
-  const CREAM = [0.80, 0.88, 1.0];    // belly, muzzle, paws, inner ear
+  const BLUE = [0.20, 0.50, 1.0];
+  const FLANK = [0.16, 0.42, 0.88];   // stepped flank shade
+  const DARK = [0.12, 0.28, 0.68];    // back / crevice shade
+  const CREAM = [0.84, 0.90, 1.0];    // belly, muzzle, paws, inner ear
   const PINK = [0.98, 0.62, 0.70];    // cheeks, ear inners
   const INK = [0.07, 0.07, 0.11];
   const WHITE = [1, 1, 1];
@@ -537,13 +537,13 @@ function buildNibble(arr, M, F, t, damp) {
 function buildEmbercub(arr, M, F, t, damp) {
   const time = typeof t === "number" ? t : 0;
   const dk = damp === undefined ? 1 : damp;
-  const ORANGE = [0.94, 0.50, 0.14];
-  const FLANK = [0.82, 0.40, 0.11];   // stepped flank shade
-  const DARK = [0.55, 0.28, 0.10];    // back / crevice shade
-  const CREAM = [1.0, 0.86, 0.62];    // chest, muzzle, paws, ear inners
+  const ORANGE = [1.0, 0.52, 0.13];
+  const FLANK = [0.88, 0.44, 0.12];   // stepped flank shade
+  const DARK = [0.62, 0.30, 0.10];    // back / crevice shade
+  const CREAM = [1.0, 0.90, 0.68];    // chest, muzzle, paws, ear inners
   const INK = [0.10, 0.07, 0.06];
-  const FLAME = [1.0, 0.60, 0.10];
-  const CORE = [1.0, 0.92, 0.50];
+  const FLAME = [1.0, 0.62, 0.08];
+  const CORE = [1.0, 0.95, 0.60];
   const WHITE = [1, 1, 1];
 
   // Coiled spring crouch: weight sunk back over the haunches, torso base
@@ -575,6 +575,9 @@ function buildEmbercub(arr, M, F, t, damp) {
   tube(arr, M, [0, 1.02, 0.0], [0, 1.20, 0.08], 0.30, 0.31, 8, 1, C(DARK), F, [false, false]);
   ellipsoid(arr, M, 0, 1.10, 0.0, 0.37, 0.17, 0.33, 8, 6, C(ORANGE), F);
   ellipsoid(arr, M, 0, 1.0, 0.22, 0.24, 0.18, 0.16, 7, 5, C(CREAM), F);
+  // Deep neck groove ringing the throat under the skull: separates skull
+  // mass from torso at a glance.
+  tube(arr, M, [0, 1.18, 0.06], [0, 1.28, 0.10], 0.32, 0.30, 10, 1, C(DARK), F, [false, false]);
 
   // Segmented rear legs loaded under the coil: paws planted flat
   // (y untouched), haunches dropped, blend shells melting leg into torso.
@@ -601,10 +604,10 @@ function buildEmbercub(arr, M, F, t, damp) {
     // Deltoid muscle curve capping the front upper leg.
     ellipsoid(arr, M, s * 0.30, 0.54, 0.42, 0.13, 0.15, 0.13, 4, 3, C(ORANGE), F);
     tube(arr, M, [s * 0.30, 0.30, 0.52], [s * 0.30, 0.14, 0.56], 0.095, 0.10, 6, 1, C(FLANK), F, [false, true]);
-    ellipsoid(arr, M, s * 0.30, 0.08, 0.60, 0.12, 0.08, 0.18, 6, 4, C(CREAM), F);
+    ellipsoid(arr, M, s * 0.33, 0.08, 0.60, 0.14, 0.09, 0.20, 6, 4, C(CREAM), F);
     // White foreclaw fan ahead of the forepaw.
     for (const dx of [-0.07, 0, 0.07]) {
-      cone(arr, M, s * 0.30 + dx, 0.08, 0.74, 0.045, s * 0.30 + dx, 0.04, 0.96, 4, WHITE, F, undefined, GLOSS);
+      cone(arr, M, s * 0.33 + dx, 0.08, 0.74, 0.045, s * 0.33 + dx, 0.04, 0.96, 4, WHITE, F, undefined, GLOSS);
     }
   }
 
@@ -642,6 +645,8 @@ function buildEmbercub(arr, M, F, t, damp) {
   for (const s of [-1, 1]) {
     tube(arr, H, [s * 0.25, 1.72, 0.10], [s * 0.265, 1.88, 0.06], 0.13, 0.115, 8, 1, C(ORANGE), F, [false, false]);
     tube(arr, H, [s * 0.25, 1.74, 0.10], [s * 0.30, 2.24, -0.02], 0.11, 0.05, 7, 1, C(ORANGE), F, undefined, HI);
+    // Groove collar ringing the ear base: separates ear from skull mass.
+    tube(arr, H, [s * 0.25, 1.68, 0.10], [s * 0.26, 1.80, 0.07], 0.125, 0.115, 7, 1, C(DARK), F, [false, false]);
     // Ear edge ridge tracing the rear rim.
     tube(arr, H, [s * 0.22, 1.70, 0.02], [s * 0.29, 2.22, -0.06], 0.03, 0.02, 4, 1, C(DARK), F, [false, false]);
     pushQuad(arr, H,
@@ -665,8 +670,8 @@ function buildEmbercub(arr, M, F, t, damp) {
   tube(arr, T, [0.30, 0.64, -0.69], [0.325, 0.78, -0.675], 0.108, 0.10, 7, 1, C(DARK), F, [false, false]);
   tube(arr, T, [0.355, 1.0, -0.635], [0.365, 1.13, -0.615], 0.093, 0.093, 7, 1, C(DARK), F, [false, false]);
   const fl = 1 + 0.22 * Math.sin(time * 11) + 0.10 * Math.sin(time * 23 + 1);
-  const fh = 0.62 * fl;
-  const fr = 0.17 * (1 + 0.10 * Math.sin(time * 17 + 0.7));
+  const fh = 0.93 * fl;
+  const fr = 0.255 * (1 + 0.10 * Math.sin(time * 17 + 0.7));
   coneUnlit(arr, T, 0.38, 1.24, -0.60, fr, 0.38, 1.24 + fh, -0.60, 10, flashCol(FLAME, F));
   coneUnlit(arr, T, 0.38, 1.24, -0.60, fr * 0.5, 0.38, 1.24 + fh * 0.6, -0.58, 8, flashCol(CORE, F));
 
@@ -784,16 +789,16 @@ function bakeSpecAlpha(g, w, h) {
 }
 function paintNibble(g, w, h) {
   const rand = mulberry32(0xB1B1E);
-  g.fillStyle = "#ecf2ff";
+  g.fillStyle = "#e6efff";
   g.fillRect(0, 0, w, h);
   // Cream belly wash toward both v extremes, light blue depth mid-body.
-  brightEdges(g, w, h, "rgba(255,253,246,0.85)", "rgba(190,208,248,0.6)");
+  brightEdges(g, w, h, "rgba(255,253,246,0.85)", "rgba(168,192,250,0.7)");
   // Fur micro-noise: darker blue specks + white flecks (high contrast).
-  speckle(g, rand, w, h, 3600, ["rgba(120,145,220,0.9)", "rgba(255,255,255,0.95)", "rgba(100,125,210,0.75)"]);
+  speckle(g, rand, w, h, 3600, ["rgba(95,125,215,0.95)", "rgba(255,255,255,0.95)", "rgba(75,105,205,0.8)"]);
   // Short vertical fur streaks.
-  furStreaks(g, rand, w, h, 520, "rgba(130,155,220,0.6)");
+  furStreaks(g, rand, w, h, 520, "rgba(105,135,220,0.7)");
   // Ear-inner pink dusting in one patch (ear quads sweep past it).
-  g.fillStyle = "rgba(255,170,185,0.45)";
+  g.fillStyle = "rgba(255,170,185,0.58)";
   g.fillRect(w * 0.70, h * 0.30, w * 0.22, h * 0.22);
   glossPatch(g);
   bakeSpecAlpha(g, w, h);
@@ -803,11 +808,11 @@ function paintEmbercub(g, w, h) {
   g.fillStyle = "#fff3e4";
   g.fillRect(0, 0, w, h);
   // Cream chest wash toward both v extremes.
-  brightEdges(g, w, h, "rgba(255,250,238,0.9)", "rgba(255,220,180,0.55)");
+  brightEdges(g, w, h, "rgba(255,250,238,0.9)", "rgba(255,230,198,0.5)");
   // Dark stripe bands, mirrored top/bottom so Y-flip cannot break them.
-  g.fillStyle = "rgba(150,88,38,0.75)";
+  g.fillStyle = "rgba(180,115,50,0.6)";
   for (const y0 of [h * 0.235, h * 0.47, h * 0.705]) {
-    g.fillRect(0, y0, w, h * 0.075);
+    g.fillRect(0, y0, w, h * 0.06);
   }
   // MACRO MARKING: bold back badge (diamond outline on the back band,
   // vertically symmetric so Y-flip cannot break it).
@@ -821,9 +826,9 @@ function paintEmbercub(g, w, h) {
   g.closePath();
   g.stroke();
   // Fur micro-noise: burnt-orange specks + cream flecks (high contrast).
-  speckle(g, rand, w, h, 3600, ["rgba(200,120,50,0.85)", "rgba(255,252,244,0.95)", "rgba(170,95,35,0.7)"]);
+  speckle(g, rand, w, h, 3600, ["rgba(230,160,80,0.9)", "rgba(255,252,244,0.95)", "rgba(215,140,60,0.75)"]);
   // Short vertical fur streaks.
-  furStreaks(g, rand, w, h, 520, "rgba(190,120,55,0.6)");
+  furStreaks(g, rand, w, h, 520, "rgba(220,155,80,0.65)");
   glossPatch(g);
   bakeSpecAlpha(g, w, h);
 }
