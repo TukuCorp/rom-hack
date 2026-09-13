@@ -3,26 +3,32 @@
 // drawTrisNT (textured + rim), with guarded drawTrisN (uv stripped,
 // pixel-identical) and drawTris fallbacks so boot never breaks
 // mid-migration.
-// Foe Nibble (small blue rodent) on FOE_SPOT: rearing lunging crouch,
-// rounded skull + tapered muzzlepitched forward-down on a neck pivot,
-// tail kinked up behind. Player Embercub (orange cub) on ME_SPOT: battle
-// crouch, head turned 3/4 back toward the camera on a neck pivot so the
-// snout reads in profile over the shoulder, tail arcing with a
-// flickering flame.
+// Foe Nibble (small blue rodent) on FOE_SPOT: deep forward-lunging crouch,
+// barrel low over the haunches, rounded skull dropped forward-down on a neck
+// pivot with a rigid lunge shift, forepaws splayed ahead, tail lashed high.
+// Player Embercub (orange cub) on ME_SPOT: coiled spring crouch, weight sunk
+// back over the haunches, head turned 3/4 back over the shoulder on a neck
+// pivot with a rigid coil settle, tail carried high with a flickering flame.
 // Surfacing: smooth analytic normals on every round mass (sphere gradient,
 // taper-corrected tube walls), crisp face normals on planes (wedge snout,
 // stripes, inner-ear blades); color zones pre-separated as raw vertex
 // colors (belly / inner-ear / paw creams, stepped flank shades) for the
 // cel shader to tone, multiplied by a subtle near-white procedural detail
 // texture (fur micro-noise, belly/chest wash, stripe bands) so untextured
-// hues survive intact. Emissive bits (eye glints, flame) use zero-length
-// normals so the shader's unlit path keeps them fullbright.
+// hues survive intact. Texture alpha carries specular strength (fur 0.15,
+// belly 0.10, gloss patch 0.90); eyes / nose / claws sample the gloss patch
+// via remapped UVs, flame stays on the unlit path (never specular).
+// Emissive bits (eye glints, flame) use zero-length normals so the shader's
+// unlit path keeps them fullbright. Seams are buried under transition
+// geometry (neck ruffs, haunch blends, ear-base collars, tail cuffs); no
+// floating-ball joints. Outline parts (heads, ears, tails, haunches, jaws)
+// build at ~2x segments via the HI density flag.
 // UVs are spherical-planar per part (u around, v along); flat pieces use
 // planar corner maps, discs a small centered circle. Idle bob (sin t) +
 // breathing scale. White hit-flash via state.flashFoe / state.flashMe
 // (0..1). Lunge 0..1 as z-offset toward opponent, sink 0..1 as y-offset,
 // faint pose via state.fainted. Reads only; decay owned by battle.js
-// scene(). Pair ~6k tris.
+// scene(). Pair ~10k tris (budget 15k).
 import { drawTris, mat4mul } from "./gl.js";
 
 // drawTrisN / drawTrisNT / createTex / rim setter arrive via one-directional
@@ -114,6 +120,16 @@ function flashCol(col, f) {
 }
 const C = (col) => () => col;
 const UNLIT = [0, 0, 0];
+// Spec-gloss UV patch: corner rect of each 128px texture painted near-white
+// with high alpha (0.9) so glossy parts (eyes, nose, claws) keep their vertex
+// hue under base*texel while sampling the specular term the gl.js pass reads
+// from texel.a. Fur elsewhere stays matte (0.15) / belly (0.1). Pass as the
+// trailing UVP arg of ellipsoid/cone/discFan; default (absent) is identity.
+const GLOSS = [0.80, 0.80, 0.97, 0.97];
+function uvMap(t, box) {
+  if (!box) return t;
+  return [box[0] + (box[2] - box[0]) * t[0], box[1] + (box[3] - box[1]) * t[1]];
+}
 
 function norm3(x, y, z) {
   const l = Math.sqrt(x * x + y * y + z * z) || 1;
@@ -160,12 +176,12 @@ function glintDisc(arr, M, cx, cy, cz, r, nx, ny, nz, col, radial) {
   discFan(arr, M, cx, cy, cz, r, nx, ny, nz, col, radial, UNLIT);
 }
 // Lit color disc (flat analytic normal -> cel-toned): iris.
-function irisDisc(arr, M, cx, cy, cz, r, nx, ny, nz, col, radial) {
-  discFan(arr, M, cx, cy, cz, r, nx, ny, nz, col, radial, null);
+function irisDisc(arr, M, cx, cy, cz, r, nx, ny, nz, col, radial, UVP) {
+  discFan(arr, M, cx, cy, cz, r, nx, ny, nz, col, radial, null, UVP);
 }
 // Shared disc fan: UVs map a small centered circle (radius 0.12 texels)
 // so the disc samples near-flat detail and keeps its vertex hue.
-function discFan(arr, M, cx, cy, cz, r, nx, ny, nz, col, radial, litN) {
+function discFan(arr, M, cx, cy, cz, r, nx, ny, nz, col, radial, litN, UVP) {
   const n = norm3(nx, ny, nz);
   const up = Math.abs(n[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
   const u = norm3(up[1] * n[2] - up[2] * n[1], up[2] * n[0] - up[0] * n[2], up[0] * n[1] - up[1] * n[0]);
@@ -180,9 +196,9 @@ function discFan(arr, M, cx, cy, cz, r, nx, ny, nz, col, radial, litN) {
     ring.push([cx + (u[0] * ca + w[0] * sa) * r,
       cy + (u[1] * ca + w[1] * sa) * r,
       cz + (u[2] * ca + w[2] * sa) * r]);
-    ringT.push([0.5 + ca * 0.12, 0.5 + sa * 0.12]);
+    ringT.push(uvMap([0.5 + ca * 0.12, 0.5 + sa * 0.12], UVP));
   }
-  const ctrT = [0.5, 0.5];
+  const ctrT = uvMap([0.5, 0.5], UVP);
   for (let i = 0; i < segs; i++) {
     pushV(arr, M, [cx, cy, cz], N, col, ctrT);
     pushV(arr, M, ring[i], N, col, ringT[i]);
@@ -215,9 +231,10 @@ function pushBox(arr, M, cx, cy, cz, sx, sy, sz, raw, F) {
 // SEG scales both axes (~2x tris) for the high-segment pass. UVs are
 // spherical-planar (u around, v along).
 const SEG = 1.45;
-function ellipsoid(arr, M, cx, cy, cz, rx, ry, rz, nLat, nLon, colFn, F, range) {
-  nLat = Math.max(3, Math.round(nLat * SEG));
-  nLon = Math.max(3, Math.round(nLon * SEG));
+function ellipsoid(arr, M, cx, cy, cz, rx, ry, rz, nLat, nLon, colFn, F, range, DM, UVP) {
+  const dm = DM || 1;
+  nLat = Math.max(3, Math.round(nLat * SEG * dm));
+  nLon = Math.max(3, Math.round(nLon * SEG * dm));
   const t0 = (range && range.t0) || 0, t1 = (range && range.t1) || Math.PI;
   const p0 = (range && range.p0) || 0, p1 = (range && range.p1) || Math.PI * 2;
   const grid = [];
@@ -231,7 +248,7 @@ function ellipsoid(arr, M, cx, cy, cz, rx, ry, rz, nLat, nLon, colFn, F, range) 
       const p = [cx + rx * st * cp, cy + ry * ct, cz + rz * st * sp];
       const n = norm3((st * cp) / rx, ct / ry, (st * sp) / rz);
       const col = flashCol(colFn(i / nLon, j / nLat, th, ph), F);
-      row.push({ p, n, col, t: [i / nLon, j / nLat] });
+      row.push({ p, n, col, t: uvMap([i / nLon, j / nLat], UVP) });
     }
     grid.push(row);
   }
@@ -250,7 +267,9 @@ function ellipsoid(arr, M, cx, cy, cz, rx, ry, rz, nLat, nLon, colFn, F, range) 
 
 // Tapered tube p0(r0) -> p1(r1): radial x segs x 2 smooth side tris with
 // taper-corrected wall normals, plus flat end caps. colFn(s, ringT).
-function tube(arr, M, p0, p1, r0, r1, radial, segs, colFn, F, caps) {
+function tube(arr, M, p0, p1, r0, r1, radial, segs, colFn, F, caps, DM) {
+  radial = Math.max(3, Math.round(radial * (DM || 1)));
+  segs = Math.max(1, Math.round(segs * (DM || 1)));
   const dx = p1[0] - p0[0], dy = p1[1] - p0[1], dz = p1[2] - p0[2];
   const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
   const ax = [dx / len, dy / len, dz / len];
@@ -320,8 +339,7 @@ function tube(arr, M, p0, p1, r0, r1, radial, segs, colFn, F, caps) {
 }
 
 // Smooth cone: base disc (flat cap normal -axis) + taper-corrected flank
-// fan to the apex. radial x 2 + radial tris.
-function cone(arr, M, bx, by, bz, r, axx, axy, axz, radial, raw, F, rawApex) {
+function cone(arr, M, bx, by, bz, r, axx, axy, axz, radial, raw, F, rawApex, UVP) {
   const dx = axx - bx, dy = axy - by, dz = axz - bz;
   const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
   const ax = [dx / len, dy / len, dz / len];
@@ -350,11 +368,11 @@ function cone(arr, M, bx, by, bz, r, axx, axy, axz, radial, raw, F, rawApex) {
     ring.push({
       p: [bx + dir[0] * r, by + dir[1] * r, bz + dir[2] * r],
       n: norm3(dir[0] - ax[0] * slope, dir[1] - ax[1] * slope, dir[2] - ax[2] * slope),
-      t: [i / radial, 0],
+      t: uvMap([i / radial, 0], UVP),
     });
   }
   const apex = [axx, axy, axz];
-  const apexT = [0.5, 1];
+  const apexT = uvMap([0.5, 1], UVP);
   for (let i = 0; i < radial; i++) {
     pushV(arr, M, apex, ring[i].n, colA, apexT);
     pushV(arr, M, ring[i].p, ring[i].n, colB, ring[i].t);
@@ -362,7 +380,7 @@ function cone(arr, M, bx, by, bz, r, axx, axy, axz, radial, raw, F, rawApex) {
   }
   const nb = [-ax[0], -ax[1], -ax[2]];
   const ctr = [bx, by, bz];
-  const ctrT = [0.5, 0];
+  const ctrT = uvMap([0.5, 0], UVP);
   for (let i = 0; i < radial; i++) {
     pushTriN(arr, M, ctr, ring[i + 1].p, ring[i].p, colB, nb, [ctrT, ring[i + 1].t, ring[i].t]);
   }
@@ -380,70 +398,83 @@ function buildNibble(arr, M, F, t, damp) {
   const INK = [0.07, 0.07, 0.11];
   const WHITE = [1, 1, 1];
 
+  // Deep forward-lunging crouch: barrel dropped low over the haunches, chest
+  // pitched forward; idle bob/breathe continue on top via the root matrix.
+  const HI = 1.4; // outline-part density (~2x tris each)
   // Haunches + barrel chest (smooth analytic masses) with a squashed cream
   // belly shell embedded in the chest front (intersection reads as a zone edge).
-  ellipsoid(arr, M, 0, 0.42, -0.18, 0.33, 0.27, 0.36, 8, 6, C(FLANK), F);
+  ellipsoid(arr, M, 0, 0.35, -0.16, 0.33, 0.27, 0.36, 8, 6, C(FLANK), F, undefined, HI);
   // MACRO MARKING: large dark back patch (partial shell over the rear
   // torso, hard-edged, reads at judgment scale).
-  ellipsoid(arr, M, 0, 0.42, -0.18, 0.345, 0.285, 0.375, 2, 8, C(INK), F,
+  ellipsoid(arr, M, 0, 0.35, -0.16, 0.345, 0.285, 0.375, 2, 8, C(INK), F,
     { t0: 0.6, t1: 1.9, p0: 3 * Math.PI / 2 - 1.0, p1: 3 * Math.PI / 2 + 1.0 });
-  ellipsoid(arr, M, 0, 0.55, 0.10, 0.29, 0.24, 0.24, 8, 6, C(BLUE), F);
+  ellipsoid(arr, M, 0, 0.47, 0.15, 0.29, 0.24, 0.24, 8, 6, C(BLUE), F);
   // Chest armor: two overlapping plate shells over the chest front.
-  ellipsoid(arr, M, 0, 0.55, 0.10, 0.302, 0.252, 0.252, 1, 6, C(DARK), F,
+  ellipsoid(arr, M, 0, 0.47, 0.15, 0.302, 0.252, 0.252, 1, 6, C(DARK), F,
     { t0: 0.9, t1: 1.3, p0: Math.PI / 2 - 1.1, p1: Math.PI / 2 + 1.1 });
-  ellipsoid(arr, M, 0, 0.55, 0.10, 0.302, 0.252, 0.252, 1, 6, C(DARK), F,
+  ellipsoid(arr, M, 0, 0.47, 0.15, 0.302, 0.252, 0.252, 1, 6, C(DARK), F,
     { t0: 1.3, t1: 1.7, p0: Math.PI / 2 - 1.1, p1: Math.PI / 2 + 1.1 });
-  ellipsoid(arr, M, 0, 0.40, 0.20, 0.20, 0.18, 0.16, 6, 4, C(CREAM), F);
-  // Neck: short tapered tube into the head pivot.
-  tube(arr, M, [0, 0.55, 0.18], [0, 0.72, 0.24], 0.20, 0.24, 8, 1, C(DARK), F, [false, false]);
+  ellipsoid(arr, M, 0, 0.32, 0.26, 0.20, 0.18, 0.16, 6, 4, C(CREAM), F);
+  // Neck: short tapered tube into the head pivot, swallowed by a layered
+  // ruff (dark collar ring + blue mane shell) so no ball joint shows.
+  tube(arr, M, [0, 0.47, 0.23], [0, 0.62, 0.30], 0.20, 0.24, 8, 1, C(DARK), F, [false, false]);
+  tube(arr, M, [0, 0.52, 0.20], [0, 0.60, 0.29], 0.245, 0.27, 8, 1, C(DARK), F, [false, false]);
+  ellipsoid(arr, M, 0, 0.56, 0.24, 0.27, 0.15, 0.22, 7, 5, C(BLUE), F);
 
-  // Jointed legs: round thigh + tapered shin + ellipsoid foot + cream toes.
+  // Jointed legs folded into the crouch: thighs low and wide, shins short,
+  // feet planted flat (y untouched). Haunch-blend shells melt thigh into
+  // torso so the leg reads grown, not socketed.
   for (const s of [-1, 1]) {
-    ellipsoid(arr, M, s * 0.22, 0.26, -0.12, 0.13, 0.17, 0.18, 6, 5, C(BLUE), F);
+    ellipsoid(arr, M, s * 0.22, 0.20, -0.10, 0.13, 0.17, 0.18, 6, 5, C(BLUE), F, undefined, HI);
+    ellipsoid(arr, M, s * 0.16, 0.28, -0.16, 0.15, 0.17, 0.22, 5, 4, C(FLANK), F);
     // Calf muscle curve bulging behind the thigh.
-    ellipsoid(arr, M, s * 0.22, 0.32, -0.26, 0.10, 0.13, 0.10, 4, 3, C(BLUE), F);
-    tube(arr, M, [s * 0.22, 0.16, -0.02], [s * 0.23, 0.10, 0.10], 0.085, 0.10, 7, 1, C(DARK), F, [false, false]);
+    ellipsoid(arr, M, s * 0.22, 0.26, -0.26, 0.10, 0.13, 0.10, 4, 3, C(BLUE), F);
+    tube(arr, M, [s * 0.22, 0.14, -0.02], [s * 0.23, 0.10, 0.10], 0.085, 0.10, 7, 1, C(DARK), F, [false, false]);
     ellipsoid(arr, M, s * 0.23, 0.07, 0.16, 0.11, 0.07, 0.20, 6, 4, C(DARK), F);
     ellipsoid(arr, M, s * 0.23, 0.055, 0.32, 0.10, 0.05, 0.06, 5, 4, C(CREAM), F);
     // Knuckle bumps bridging foot and toes.
     ellipsoid(arr, M, s * 0.18, 0.12, 0.28, 0.045, 0.04, 0.05, 3, 3, C(BLUE), F);
     ellipsoid(arr, M, s * 0.28, 0.12, 0.28, 0.045, 0.04, 0.05, 3, 3, C(BLUE), F);
-    // White toe claws ahead of the toe caps.
-    cone(arr, M, s * 0.18, 0.055, 0.36, 0.045, s * 0.18, 0.04, 0.54, 4, WHITE, F);
-    cone(arr, M, s * 0.28, 0.055, 0.36, 0.045, s * 0.28, 0.04, 0.54, 4, WHITE, F);
+    // White toe claws ahead of the toe caps (gloss UVs -> spec highlights).
+    cone(arr, M, s * 0.18, 0.055, 0.36, 0.045, s * 0.18, 0.04, 0.54, 4, WHITE, F, undefined, GLOSS);
+    cone(arr, M, s * 0.28, 0.055, 0.36, 0.045, s * 0.28, 0.04, 0.54, 4, WHITE, F, undefined, GLOSS);
   }
-  // Jointed arms reaching forward: tapered upper + cream forearm + paw ball.
+  // Jointed arms lunging forward: tapered upper + cream forearm + paw ball,
+  // digits splayed ahead of the chest, mid-pounce even frozen.
   for (const s of [-1, 1]) {
-    tube(arr, M, [s * 0.30, 0.62, 0.24], [s * 0.32, 0.44, 0.34], 0.07, 0.055, 7, 1, C(BLUE), F, [false, false]);
-    tube(arr, M, [s * 0.32, 0.44, 0.34], [s * 0.32, 0.30, 0.40], 0.06, 0.035, 6, 1, C(CREAM), F, [false, true]);
-    ellipsoid(arr, M, s * 0.32, 0.27, 0.41, 0.055, 0.05, 0.06, 5, 4, C(CREAM), F);
+    tube(arr, M, [s * 0.30, 0.54, 0.28], [s * 0.32, 0.36, 0.42], 0.07, 0.055, 7, 1, C(BLUE), F, [false, false]);
+    tube(arr, M, [s * 0.32, 0.36, 0.42], [s * 0.32, 0.22, 0.50], 0.06, 0.035, 6, 1, C(CREAM), F, [false, true]);
+    ellipsoid(arr, M, s * 0.32, 0.19, 0.51, 0.055, 0.05, 0.06, 5, 4, C(CREAM), F);
     // Three-finger hand with a claw cone on each digit.
     for (const dx of [-0.04, 0, 0.04]) {
-      tube(arr, M, [s * 0.32 + dx, 0.25, 0.45], [s * 0.32 + dx * 1.5, 0.20, 0.53], 0.025, 0.02, 4, 1, C(CREAM), F, [false, false]);
-      cone(arr, M, s * 0.32 + dx * 1.5, 0.20, 0.53, 0.012, s * 0.32 + dx * 1.5, 0.17, 0.58, 4, WHITE, F);
+      tube(arr, M, [s * 0.32 + dx, 0.17, 0.55], [s * 0.32 + dx * 1.5, 0.12, 0.63], 0.025, 0.02, 4, 1, C(CREAM), F, [false, false]);
+      cone(arr, M, s * 0.32 + dx * 1.5, 0.12, 0.63, 0.012, s * 0.32 + dx * 1.5, 0.09, 0.68, 4, WHITE, F, undefined, GLOSS);
     }
-    cone(arr, M, s * 0.33, 0.66, 0.24, 0.06, s * 0.38, 0.86, 0.24, 5, BLUE, F);
+    cone(arr, M, s * 0.33, 0.58, 0.28, 0.06, s * 0.38, 0.78, 0.28, 8, BLUE, F);
   }
-  // Tail kinked up behind: curved stack of tapering tubes + dark tuft cone,
-  // lashed on a base pivot.
+  // Tail lashed high behind: curved stack of tapering tubes + dark tuft
+  // cone on a base pivot, cuffed at the root so the joint never gaps.
   const T = headMat(M, 0, 0.55, -0.40, dk * 0.3 * Math.sin(time * 1.9 + 0.5), dk * 0.12 * Math.sin(time * 2.6 + 1.2));
-  tube(arr, T, [0, 0.55, -0.42], [0, 0.58, -0.72], 0.085, 0.07, 7, 1, C(BLUE), F);
-  tube(arr, T, [0, 0.58, -0.72], [0, 0.82, -0.78], 0.07, 0.06, 7, 1, C(FLANK), F);
-  cone(arr, T, 0, 0.82, -0.78, 0.06, 0, 1.10, -0.74, 6, DARK, F);
+  tube(arr, T, [0, 0.53, -0.38], [0, 0.56, -0.50], 0.115, 0.10, 8, 1, C(DARK), F, [false, false]);
+  tube(arr, T, [0, 0.55, -0.42], [0, 0.68, -0.72], 0.085, 0.07, 7, 1, C(BLUE), F, undefined, HI);
+  tube(arr, T, [0, 0.68, -0.72], [0, 0.95, -0.72], 0.07, 0.06, 7, 1, C(FLANK), F, undefined, HI);
+  cone(arr, T, 0, 0.95, -0.72, 0.06, 0, 1.24, -0.66, 9, DARK, F);
   // MACRO MARKING: dark tail bands (short fat collars ringing the tail).
-  tube(arr, T, [0, 0.563, -0.54], [0, 0.567, -0.60], 0.095, 0.095, 7, 1, C(DARK), F, [false, false]);
-  tube(arr, T, [0, 0.66, -0.748], [0, 0.74, -0.752], 0.08, 0.08, 7, 1, C(DARK), F, [false, false]);
+  tube(arr, T, [0, 0.593, -0.54], [0, 0.627, -0.64], 0.095, 0.095, 7, 1, C(DARK), F, [false, false]);
+  tube(arr, T, [0, 0.76, -0.722], [0, 0.86, -0.722], 0.08, 0.08, 7, 1, C(DARK), F, [false, false]);
 
-  // Head pitched forward-down on the neck pivot (lunge snarl) + slow
-  // glance yaw and bob nod on different periods.
-  const H = headMat(M, 0, 0.72, 0.20, dk * 0.14 * Math.sin(time * 0.55 + 1.0), 0.28 + dk * 0.05 * Math.sin(time * 1.7));
+  // Head low and forward on the neck pivot (deep lunge snarl): stronger base
+  // pitch plus a rigid head-local drop/push so the skull leads the chest even
+  // frozen; slow glance yaw and bob nod continue on top.
+  let H = headMat(M, 0, 0.62, 0.27, dk * 0.14 * Math.sin(time * 0.55 + 1.0), 0.44 + dk * 0.05 * Math.sin(time * 1.7));
+  H = mat4mul(H, translation(0, -0.06, 0.10));
   // Rounded skull + tapered muzzle + nose ball.
-  ellipsoid(arr, H, 0, 1.02, 0.36, 0.32, 0.26, 0.28, 12, 9, C(BLUE), F);
+  ellipsoid(arr, H, 0, 1.02, 0.36, 0.32, 0.26, 0.28, 12, 9, C(BLUE), F, undefined, HI);
   // MACRO MARKING: dark head-mask band across the eyes (partial shell over
   // the skull front, hard-edged; white sclerae pop against it).
   ellipsoid(arr, H, 0, 1.02, 0.36, 0.335, 0.275, 0.295, 2, 8, C(INK), F,
     { t0: 1.05, t1: 1.55, p0: Math.PI / 2 - 0.9, p1: Math.PI / 2 + 0.9 });
-  tube(arr, H, [0, 0.94, 0.50], [0, 0.90, 0.70], 0.15, 0.10, 10, 1, C(CREAM), F, [false, false]);
+  tube(arr, H, [0, 0.94, 0.50], [0, 0.90, 0.70], 0.15, 0.10, 10, 1, C(CREAM), F, [false, false], HI);
   // Tiny upper fangs hanging off the snout front (camera-facing white).
   for (const s of [-1, 1]) {
     cone(arr, H, s * 0.10, 0.84, 0.70, 0.06, s * 0.10, 0.60, 0.71, 6, WHITE, F);
@@ -457,20 +488,20 @@ function buildNibble(arr, M, F, t, damp) {
   // Articulated lower jaw: hinged bar + lower tooth row + tongue, idly
   // working open/closed on the jaw pivot.
   const J = headMat(H, 0, 0.80, 0.55, 0, 0.10 + dk * 0.08 * Math.sin(time * 0.9 + 0.3));
-  tube(arr, J, [0, 0.80, 0.52], [0, 0.74, 0.70], 0.07, 0.05, 6, 1, C(CREAM), F, [false, false]);
+  tube(arr, J, [0, 0.80, 0.52], [0, 0.74, 0.70], 0.07, 0.05, 6, 1, C(CREAM), F, [false, false], HI);
   for (const dx of [-0.06, 0, 0.06]) {
     cone(arr, J, dx, 0.72, 0.66, 0.02, dx, 0.79, 0.66, 4, WHITE, F);
   }
   ellipsoid(arr, J, 0, 0.75, 0.60, 0.05, 0.025, 0.07, 4, 3, C(PINK), F);
-  ellipsoid(arr, H, 0, 0.97, 0.71, 0.055, 0.045, 0.04, 7, 5, C(INK), F);
+  ellipsoid(arr, H, 0, 0.97, 0.71, 0.055, 0.045, 0.04, 7, 5, C(INK), F, undefined, undefined, GLOSS);
   // Jaw shading under the muzzle.
   ellipsoid(arr, H, 0, 0.83, 0.58, 0.11, 0.06, 0.09, 5, 4, C(CREAM), F);
   // ORAS eyes: white sclera spheres + deep-blue iris discs + large glints.
   for (const s of [-1, 1]) {
     const IRIS = [0.12, 0.25, 0.85];
-    ellipsoid(arr, H, s * 0.17, 1.09, 0.585, 0.10, 0.11, 0.075, 7, 5, C(WHITE), F);
+    ellipsoid(arr, H, s * 0.17, 1.09, 0.585, 0.10, 0.11, 0.075, 7, 5, C(WHITE), F, undefined, undefined, GLOSS);
     irisDisc(arr, H, s * 0.206, 1.124, 0.657, 0.055, s * 0.28, 0.22, 0.94,
-      flashCol(IRIS, F), 8);
+      flashCol(IRIS, F), 8, GLOSS);
     glintDisc(arr, H, s * 0.221, 1.144, 0.662, 0.032, s * 0.28, 0.22, 0.94,
       flashCol(WHITE, F), 8);
   }
@@ -483,14 +514,14 @@ function buildNibble(arr, M, F, t, damp) {
   pushBox(arr, H, 0.18, 1.28, 0.57, 0.20, 0.06, 0.14, DARK, F);
   // Cheek tufts: small swept cones + pink cheek balls.
   for (const s of [-1, 1]) {
-    cone(arr, H, s * 0.30, 0.95, 0.44, 0.07, s * 0.42, 0.98, 0.34, 5, BLUE, F);
+    cone(arr, H, s * 0.30, 0.95, 0.44, 0.07, s * 0.42, 0.98, 0.34, 8, BLUE, F);
     ellipsoid(arr, H, s * 0.315, 0.95, 0.52, 0.035, 0.06, 0.09, 5, 3, C(PINK), F);
   }
   // Tall ears: tapered outer tubes with rounded dark tips, pink inner
   // blades front and back.
   for (const s of [-1, 1]) {
-    tube(arr, H, [s * 0.20, 1.24, 0.30], [s * 0.26, 1.62, 0.27], 0.095, 0.055, 7, 1, C(BLUE), F);
-    ellipsoid(arr, H, s * 0.26, 1.64, 0.27, 0.055, 0.06, 0.055, 5, 3, C(DARK), F);
+    tube(arr, H, [s * 0.20, 1.22, 0.30], [s * 0.215, 1.36, 0.295], 0.115, 0.10, 8, 1, C(BLUE), F, [false, false]);
+    tube(arr, H, [s * 0.20, 1.24, 0.30], [s * 0.26, 1.62, 0.27], 0.095, 0.055, 7, 1, C(BLUE), F, undefined, HI);
     pushQuad(arr, H,
       [s * 0.20 - 0.072, 1.22, 0.375], [s * 0.20 + 0.072, 1.22, 0.375],
       [s * 0.245 + 0.05, 1.60, 0.345], [s * 0.245 - 0.05, 1.60, 0.345],
@@ -515,82 +546,93 @@ function buildEmbercub(arr, M, F, t, damp) {
   const CORE = [1.0, 0.92, 0.50];
   const WHITE = [1, 1, 1];
 
+  // Coiled spring crouch: weight sunk back over the haunches, torso base
+  // shifted rearward, shoulder hump loaded low; idle motion rides on top.
+  const HI = 1.4; // outline-part density (~2x tris each)
   // Tapered torso leaning forward + shoulder hump + cream chest shell.
-  tube(arr, M, [0, 0.30, -0.12], [0, 1.10, 0.02], 0.50, 0.33, 10, 2, C(ORANGE), F);
+  tube(arr, M, [0, 0.24, -0.20], [0, 1.02, 0.0], 0.50, 0.33, 10, 2, C(ORANGE), F, undefined, HI);
   // MACRO MARKINGS: bold torso rings (floating bands around the torso tube,
   // read as big flank stripes from behind/side).
-  tube(arr, M, [0, 0.54, -0.078], [0, 0.636, -0.061], 0.461, 0.441, 10, 1, C(DARK), F, [false, false]);
-  tube(arr, M, [0, 0.74, -0.043], [0, 0.836, -0.026], 0.419, 0.398, 10, 1, C(DARK), F, [false, false]);
-  ellipsoid(arr, M, 0, 1.16, -0.06, 0.34, 0.16, 0.36, 8, 6, C(ORANGE), F);
+  tube(arr, M, [0, 0.42, -0.154], [0, 0.52, -0.134], 0.463, 0.443, 10, 1, C(DARK), F, [false, false]);
+  tube(arr, M, [0, 0.63, -0.103], [0, 0.73, -0.083], 0.421, 0.40, 10, 1, C(DARK), F, [false, false]);
+  ellipsoid(arr, M, 0, 1.08, -0.08, 0.34, 0.16, 0.36, 8, 6, C(ORANGE), F, undefined, HI);
   // Dorsal armor: three overlapping plate shells banding the shoulder hump.
-  ellipsoid(arr, M, 0, 1.16, -0.06, 0.352, 0.172, 0.372, 1, 8, C(DARK), F,
+  ellipsoid(arr, M, 0, 1.08, -0.08, 0.352, 0.172, 0.372, 1, 8, C(DARK), F,
     { t0: 0.4, t1: 0.8, p0: 0, p1: Math.PI * 2 });
-  ellipsoid(arr, M, 0, 1.16, -0.06, 0.352, 0.172, 0.372, 1, 8, C([0.50, 0.34, 0.22]), F,
+  ellipsoid(arr, M, 0, 1.08, -0.08, 0.352, 0.172, 0.372, 1, 8, C([0.50, 0.34, 0.22]), F,
     { t0: 0.8, t1: 1.2, p0: 0, p1: Math.PI * 2 });
-  ellipsoid(arr, M, 0, 1.16, -0.06, 0.352, 0.172, 0.372, 1, 8, C(DARK), F,
+  ellipsoid(arr, M, 0, 1.08, -0.08, 0.352, 0.172, 0.372, 1, 8, C(DARK), F,
     { t0: 1.2, t1: 1.6, p0: 0, p1: Math.PI * 2 });
-  ellipsoid(arr, M, 0, 0.58, 0.30, 0.26, 0.28, 0.20, 8, 5, C(CREAM), F);
+  ellipsoid(arr, M, 0, 0.52, 0.28, 0.26, 0.28, 0.20, 8, 5, C(CREAM), F);
   // Back ridge spikes (crisp silhouette from behind).
-  cone(arr, M, 0, 1.26, 0.10, 0.07, 0, 1.50, 0.02, 5, DARK, F);
-  cone(arr, M, 0, 1.24, -0.20, 0.07, 0, 1.48, -0.28, 5, DARK, F);
-  cone(arr, M, 0, 1.18, -0.48, 0.07, 0, 1.40, -0.56, 5, DARK, F);
-  cone(arr, M, -0.20, 1.26, -0.15, 0.08, -0.24, 1.58, -0.28, 5, ORANGE, F);
-  cone(arr, M, 0.20, 1.26, -0.15, 0.08, 0.24, 1.58, -0.28, 5, ORANGE, F);
-  // Neck collar into the head pivot.
-  tube(arr, M, [0, 1.10, 0.02], [0, 1.28, 0.10], 0.28, 0.30, 8, 1, C(DARK), F, [false, false]);
+  cone(arr, M, 0, 1.18, 0.08, 0.07, 0, 1.42, 0.0, 7, DARK, F);
+  cone(arr, M, 0, 1.16, -0.22, 0.07, 0, 1.40, -0.30, 7, DARK, F);
+  cone(arr, M, 0, 1.10, -0.50, 0.07, 0, 1.32, -0.58, 7, DARK, F);
+  cone(arr, M, -0.20, 1.18, -0.17, 0.08, -0.24, 1.50, -0.30, 7, ORANGE, F);
+  cone(arr, M, 0.20, 1.18, -0.17, 0.08, 0.24, 1.50, -0.30, 7, ORANGE, F);
+  // Neck collar into the head pivot, buried in a layered mane ruff (orange
+  // shell + cream bib) so the head never balls on a stick.
+  tube(arr, M, [0, 1.02, 0.0], [0, 1.20, 0.08], 0.30, 0.31, 8, 1, C(DARK), F, [false, false]);
+  ellipsoid(arr, M, 0, 1.10, 0.0, 0.37, 0.17, 0.33, 8, 6, C(ORANGE), F);
+  ellipsoid(arr, M, 0, 1.0, 0.22, 0.24, 0.18, 0.16, 7, 5, C(CREAM), F);
 
-  // Segmented rear legs: planted paw + round haunch + tapered shin.
+  // Segmented rear legs loaded under the coil: paws planted flat
+  // (y untouched), haunches dropped, blend shells melting leg into torso.
   for (const s of [-1, 1]) {
     ellipsoid(arr, M, s * 0.30, 0.09, 0.10, 0.15, 0.09, 0.30, 7, 5, C(DARK), F);
     // Rear toe digits bridging paw and claws.
     for (const dx of [-0.07, 0, 0.07]) {
       ellipsoid(arr, M, s * 0.30 + dx, 0.07, 0.38, 0.045, 0.04, 0.07, 3, 3, C(DARK), F);
     }
-    // White toe claws ahead of the rear paw.
-    cone(arr, M, s * 0.24, 0.08, 0.38, 0.05, s * 0.24, 0.05, 0.63, 4, WHITE, F);
-    cone(arr, M, s * 0.36, 0.08, 0.38, 0.05, s * 0.36, 0.05, 0.63, 4, WHITE, F);
-    ellipsoid(arr, M, s * 0.50, 0.40, -0.25, 0.14, 0.28, 0.31, 8, 5, C(ORANGE), F);
+    // White toe claws ahead of the rear paw (gloss UVs -> spec highlights).
+    cone(arr, M, s * 0.24, 0.08, 0.38, 0.05, s * 0.24, 0.05, 0.63, 4, WHITE, F, undefined, GLOSS);
+    cone(arr, M, s * 0.36, 0.08, 0.38, 0.05, s * 0.36, 0.05, 0.63, 4, WHITE, F, undefined, GLOSS);
+    ellipsoid(arr, M, s * 0.50, 0.33, -0.27, 0.14, 0.28, 0.31, 8, 5, C(ORANGE), F, undefined, HI);
+    ellipsoid(arr, M, s * 0.44, 0.28, -0.12, 0.17, 0.22, 0.26, 6, 4, C(ORANGE), F);
     // Glute muscle curve capping the haunch rear-top.
-    ellipsoid(arr, M, s * 0.50, 0.58, -0.32, 0.14, 0.15, 0.16, 4, 3, C(ORANGE), F);
-    tube(arr, M, [s * 0.44, 0.30, -0.08], [s * 0.40, 0.14, 0.02], 0.11, 0.10, 6, 1, C(FLANK), F, [false, false]);
+    ellipsoid(arr, M, s * 0.50, 0.51, -0.34, 0.14, 0.15, 0.16, 4, 3, C(ORANGE), F);
+    tube(arr, M, [s * 0.44, 0.26, -0.08], [s * 0.40, 0.14, 0.02], 0.11, 0.10, 6, 1, C(FLANK), F, [false, false]);
     // Quad muscle mass bulging forward of the haunch.
-    ellipsoid(arr, M, s * 0.42, 0.30, 0.12, 0.12, 0.18, 0.14, 4, 3, C(ORANGE), F);
+    ellipsoid(arr, M, s * 0.42, 0.26, 0.12, 0.12, 0.18, 0.14, 4, 3, C(ORANGE), F);
   }
-  // Segmented front legs: tapered upper + fore + cream paw balls.
+  // Segmented front legs braced: tapered upper + fore + cream paw balls.
   for (const s of [-1, 1]) {
-    tube(arr, M, [s * 0.30, 0.62, 0.42], [s * 0.30, 0.30, 0.50], 0.115, 0.095, 7, 2, C(ORANGE), F);
+    tube(arr, M, [s * 0.30, 0.58, 0.42], [s * 0.30, 0.30, 0.52], 0.115, 0.095, 7, 2, C(ORANGE), F, undefined, HI);
     // Deltoid muscle curve capping the front upper leg.
-    ellipsoid(arr, M, s * 0.30, 0.58, 0.42, 0.13, 0.15, 0.13, 4, 3, C(ORANGE), F);
-    tube(arr, M, [s * 0.30, 0.30, 0.50], [s * 0.30, 0.14, 0.54], 0.095, 0.10, 6, 1, C(FLANK), F, [false, true]);
-    ellipsoid(arr, M, s * 0.30, 0.08, 0.56, 0.12, 0.08, 0.18, 6, 4, C(CREAM), F);
+    ellipsoid(arr, M, s * 0.30, 0.54, 0.42, 0.13, 0.15, 0.13, 4, 3, C(ORANGE), F);
+    tube(arr, M, [s * 0.30, 0.30, 0.52], [s * 0.30, 0.14, 0.56], 0.095, 0.10, 6, 1, C(FLANK), F, [false, true]);
+    ellipsoid(arr, M, s * 0.30, 0.08, 0.60, 0.12, 0.08, 0.18, 6, 4, C(CREAM), F);
     // White foreclaw fan ahead of the forepaw.
     for (const dx of [-0.07, 0, 0.07]) {
-      cone(arr, M, s * 0.30 + dx, 0.08, 0.70, 0.045, s * 0.30 + dx, 0.04, 0.92, 4, WHITE, F);
+      cone(arr, M, s * 0.30 + dx, 0.08, 0.74, 0.045, s * 0.30 + dx, 0.04, 0.96, 4, WHITE, F, undefined, GLOSS);
     }
   }
 
-  // Head turned 3/4 over the shoulder + slow glance yaw and bob nod.
-  const H = headMat(M, 0, 1.30, 0.10, -0.5 + dk * 0.16 * Math.sin(time * 0.45 + 2.0), dk * 0.04 * Math.sin(time * 1.3 + 0.5));
+  // Head coiled 3/4 back over the shoulder: deeper base yaw plus a rigid
+  // head-local sink/settle so the gaze loads behind the guard, ready to
+  // spring; glance yaw and nod continue on top.
+  let H = headMat(M, 0, 1.22, 0.08, -0.62 + dk * 0.16 * Math.sin(time * 0.45 + 2.0), dk * 0.04 * Math.sin(time * 1.3 + 0.5));
+  H = mat4mul(H, translation(0, -0.05, -0.08));
   // Domed skull + crisp wedge snout + cream muzzle planes + nose.
-  ellipsoid(arr, H, 0, 1.50, 0.24, 0.37, 0.32, 0.33, 12, 9, C(ORANGE), F);
+  ellipsoid(arr, H, 0, 1.50, 0.24, 0.37, 0.32, 0.33, 12, 9, C(ORANGE), F, undefined, HI);
   // MACRO MARKING: cream head blaze (partial shell up the forehead front).
   ellipsoid(arr, H, 0, 1.50, 0.24, 0.382, 0.332, 0.342, 3, 5, C(CREAM), F,
     { t0: 0.35, t1: 1.5, p0: Math.PI / 2 - 0.4, p1: Math.PI / 2 + 0.4 });
-  tube(arr, H, [0, 1.40, 0.40], [0, 1.36, 0.66], 0.20, 0.13, 10, 1, C(ORANGE), F, [false, false]);
+  tube(arr, H, [0, 1.40, 0.40], [0, 1.36, 0.66], 0.20, 0.13, 10, 1, C(ORANGE), F, [false, false], HI);
   ellipsoid(arr, H, 0, 1.33, 0.64, 0.14, 0.10, 0.10, 8, 6, C(CREAM), F);
   ellipsoid(arr, H, 0, 1.27, 0.60, 0.10, 0.045, 0.075, 6, 4, C(CREAM), F);
-  cone(arr, H, 0, 1.42, 0.70, 0.055, 0, 1.42, 0.80, 6, INK, F);
+  cone(arr, H, 0, 1.42, 0.70, 0.055, 0, 1.42, 0.80, 6, INK, F, undefined, GLOSS);
   // Cheek ruff: swept cones flaring sideways off the cheeks.
   for (const s of [-1, 1]) {
-    cone(arr, H, s * 0.34, 1.36, 0.28, 0.09, s * 0.58, 1.40, 0.12, 5, ORANGE, F);
-    cone(arr, H, s * 0.34, 1.30, 0.28, 0.07, s * 0.54, 1.28, 0.16, 4, CREAM, F);
+    cone(arr, H, s * 0.34, 1.36, 0.28, 0.09, s * 0.58, 1.40, 0.12, 8, ORANGE, F);
+    cone(arr, H, s * 0.34, 1.30, 0.28, 0.07, s * 0.54, 1.28, 0.16, 7, CREAM, F);
   }
   // ORAS eyes: white sclera spheres + amber iris discs + large glints.
   for (const s of [-1, 1]) {
     const IRIS = [0.95, 0.55, 0.12];
-    ellipsoid(arr, H, s * 0.33, 1.56, 0.36, 0.06, 0.11, 0.12, 7, 5, C(WHITE), F);
+    ellipsoid(arr, H, s * 0.33, 1.56, 0.36, 0.06, 0.11, 0.12, 7, 5, C(WHITE), F, undefined, undefined, GLOSS);
     irisDisc(arr, H, s * 0.379, 1.589, 0.430, 0.05, s * 0.93, 0.16, 0.32,
-      flashCol(IRIS, F), 8);
+      flashCol(IRIS, F), 8, GLOSS);
     glintDisc(arr, H, s * 0.390, 1.606, 0.433, 0.028, s * 0.93, 0.16, 0.32,
       flashCol(WHITE, F), 8);
     tube(arr, H, [s * 0.14, 1.70, 0.38], [s * 0.30, 1.69, 0.36], 0.05, 0.045, 5, 1, C(DARK), F);
@@ -598,8 +640,8 @@ function buildEmbercub(arr, M, F, t, damp) {
   // Ears swept slightly back: tapered outer tubes + rounded tips + cream
   // inner blades front and back.
   for (const s of [-1, 1]) {
-    tube(arr, H, [s * 0.25, 1.74, 0.10], [s * 0.30, 2.24, -0.02], 0.11, 0.05, 7, 1, C(ORANGE), F);
-    ellipsoid(arr, H, s * 0.30, 2.26, -0.02, 0.05, 0.06, 0.05, 5, 3, C(DARK), F);
+    tube(arr, H, [s * 0.25, 1.72, 0.10], [s * 0.265, 1.88, 0.06], 0.13, 0.115, 8, 1, C(ORANGE), F, [false, false]);
+    tube(arr, H, [s * 0.25, 1.74, 0.10], [s * 0.30, 2.24, -0.02], 0.11, 0.05, 7, 1, C(ORANGE), F, undefined, HI);
     // Ear edge ridge tracing the rear rim.
     tube(arr, H, [s * 0.22, 1.70, 0.02], [s * 0.29, 2.22, -0.06], 0.03, 0.02, 4, 1, C(DARK), F, [false, false]);
     pushQuad(arr, H,
@@ -612,25 +654,26 @@ function buildEmbercub(arr, M, F, t, damp) {
       flashCol(CREAM, F), [0, 0, -1]);
   }
 
-  // Tail kinking out with a bend, lashed on a base pivot; flame flicker
-  // independent so fire and tail move on different periods. Flame cones
-  // are UNLIT (emissive fullbright through the shader's unlit path).
+  // Tail carried high with a bend, lashed on a base pivot, cuffed at the
+  // root; flame flicker independent so fire and tail move on different
+  // periods. Flame cones are UNLIT (emissive fullbright, never specular).
   const T = headMat(M, 0.28, 0.55, -0.70, dk * 0.22 * Math.sin(time * 1.6 + 2.0), 0);
-  tube(arr, T, [0.28, 0.55, -0.70], [0.34, 0.85, -0.68], 0.10, 0.085, 7, 1, C(ORANGE), F, [false, false]);
-  tube(arr, T, [0.34, 0.85, -0.68], [0.38, 1.08, -0.64], 0.085, 0.07, 6, 1, C(FLANK), F);
+  tube(arr, T, [0.28, 0.55, -0.70], [0.30, 0.66, -0.695], 0.125, 0.115, 8, 1, C(DARK), F, [false, false]);
+  tube(arr, T, [0.28, 0.55, -0.70], [0.34, 0.92, -0.66], 0.10, 0.085, 7, 1, C(ORANGE), F, [false, false], HI);
+  tube(arr, T, [0.34, 0.92, -0.66], [0.38, 1.22, -0.60], 0.085, 0.07, 6, 1, C(FLANK), F, undefined, HI);
   // Segmented tail bands: dark collars ringing both tail segments.
-  tube(arr, T, [0.30, 0.62, -0.698], [0.325, 0.74, -0.69], 0.108, 0.10, 7, 1, C(DARK), F, [false, false]);
-  tube(arr, T, [0.355, 0.91, -0.665], [0.365, 1.02, -0.655], 0.093, 0.093, 7, 1, C(DARK), F, [false, false]);
+  tube(arr, T, [0.30, 0.64, -0.69], [0.325, 0.78, -0.675], 0.108, 0.10, 7, 1, C(DARK), F, [false, false]);
+  tube(arr, T, [0.355, 1.0, -0.635], [0.365, 1.13, -0.615], 0.093, 0.093, 7, 1, C(DARK), F, [false, false]);
   const fl = 1 + 0.22 * Math.sin(time * 11) + 0.10 * Math.sin(time * 23 + 1);
   const fh = 0.62 * fl;
   const fr = 0.17 * (1 + 0.10 * Math.sin(time * 17 + 0.7));
-  coneUnlit(arr, T, 0.38, 1.10, -0.64, fr, 0.38, 1.10 + fh, -0.64, 10, flashCol(FLAME, F));
-  coneUnlit(arr, T, 0.38, 1.10, -0.64, fr * 0.5, 0.38, 1.10 + fh * 0.6, -0.62, 8, flashCol(CORE, F));
+  coneUnlit(arr, T, 0.38, 1.24, -0.60, fr, 0.38, 1.24 + fh, -0.60, 10, flashCol(FLAME, F));
+  coneUnlit(arr, T, 0.38, 1.24, -0.60, fr * 0.5, 0.38, 1.24 + fh * 0.6, -0.58, 8, flashCol(CORE, F));
 
   // Back stripes: thin crisp slabs over the rear torso.
-  pushBox(arr, M, -0.15, 1.02, -0.40, 0.10, 0.06, 0.45, DARK, F);
-  pushBox(arr, M, 0.15, 1.02, -0.40, 0.10, 0.06, 0.45, DARK, F);
-  pushBox(arr, M, 0, 0.86, -0.52, 0.34, 0.06, 0.30, DARK, F);
+  pushBox(arr, M, -0.15, 0.94, -0.42, 0.10, 0.06, 0.45, DARK, F);
+  pushBox(arr, M, 0.15, 0.94, -0.42, 0.10, 0.06, 0.45, DARK, F);
+  pushBox(arr, M, 0, 0.78, -0.54, 0.34, 0.06, 0.30, DARK, F);
 }
 
 // Unlit cone (zero normals -> shader's raw-color path): flame, sparks.
@@ -715,6 +758,30 @@ function brightEdges(g, w, h, top, light) {
   g.fillStyle = grad;
   g.fillRect(0, 0, w, h);
 }
+// Specular alpha: the gl.js pass reads texel.a as the Blinn-Phong strength,
+// so the painters bake material gloss into alpha (RGB stays near-white so
+// base*texel hues survive): fur matte 0.15, belly/chest wash 0.10, gloss
+// patch 0.90. Glossy geometry (eyes, nose, claws) carries UVs remapped into
+// the GLOSS corner rect; the current shader ignores alpha (opaque output),
+// so this is inert until the lighting pass lands — boot-safe either way.
+function glossPatch(g) {
+  g.fillStyle = "#ffffff";
+  g.fillRect(102, 102, 22, 22);
+}
+function bakeSpecAlpha(g, w, h) {
+  const img = g.getImageData(0, 0, w, h), d = img.data;
+  for (let y = 0; y < h; y++) {
+    const edge = (y < h * 0.12 || y >= h * 0.88);
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      let a = 38; // fur matte 0.15
+      if (edge) a = 26; // belly/chest wash 0.10
+      if (x >= 102 && x < 124 && y >= 102 && y < 124) a = 230; // gloss 0.90
+      d[i + 3] = a;
+    }
+  }
+  g.putImageData(img, 0, 0);
+}
 function paintNibble(g, w, h) {
   const rand = mulberry32(0xB1B1E);
   g.fillStyle = "#ecf2ff";
@@ -728,6 +795,8 @@ function paintNibble(g, w, h) {
   // Ear-inner pink dusting in one patch (ear quads sweep past it).
   g.fillStyle = "rgba(255,170,185,0.45)";
   g.fillRect(w * 0.70, h * 0.30, w * 0.22, h * 0.22);
+  glossPatch(g);
+  bakeSpecAlpha(g, w, h);
 }
 function paintEmbercub(g, w, h) {
   const rand = mulberry32(0xE8BE5);
@@ -755,6 +824,8 @@ function paintEmbercub(g, w, h) {
   speckle(g, rand, w, h, 3600, ["rgba(200,120,50,0.85)", "rgba(255,252,244,0.95)", "rgba(170,95,35,0.7)"]);
   // Short vertical fur streaks.
   furStreaks(g, rand, w, h, 520, "rgba(190,120,55,0.6)");
+  glossPatch(g);
+  bakeSpecAlpha(g, w, h);
 }
 let texNibble = null, texEmber = null, texInit = false;
 function ensureTex(kind) {

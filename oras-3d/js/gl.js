@@ -25,6 +25,8 @@ uniform vec3 uLightDir;
 uniform sampler2D uTex;
 uniform vec3 uCamPos;
 uniform float uRim;
+uniform float uUseTex;
+uniform float uSpec;
 void main(){
   // Base: cel lambert when lit, raw vertex color on the unlit path.
   // Old 6-float draws take the unlit branch exactly as before.
@@ -38,8 +40,27 @@ void main(){
     float band = d > 0.66 ? 1.0 : (d > 0.33 ? 0.72 : 0.48);
     base = vCol * band;
   }
-  // Detail texture multiplies the base (white 1x1 default -> identity).
-  vec3 col = base * texture2D(uTex, vUV).rgb;
+  // Detail texture multiplies the base only on the textured path (uUseTex 1).
+  // Untextured draws (uUseTex 0) use raw base: byte-identical to the old
+  // white-texel multiply (white is exactly 1.0, but this skips the fetch).
+  vec3 col;
+  vec4 texel = vec4(1.0);
+  if (uUseTex > 0.5) { texel = texture2D(uTex, vUV); col = base * texel.rgb; }
+  else { col = base; }
+  // Blinn-Phong specular: textured + lit path only. H = normalize(L + V),
+  // spec = pow(max(dot(N,H),0),24) * texel.a * uSpec, added white.
+  // Zero-normal (unlit) callers skip it; uUseTex 0 gates old paths off.
+  if (uUseTex > 0.5 && uSpec > 0.0 && nl >= 0.01) {
+    vec3 n2 = vNormal / nl;
+    vec3 l2 = uLightDir / length(uLightDir);
+    vec3 vv2 = uCamPos - vWorld;
+    float vl2 = length(vv2);
+    if (vl2 > 0.001) {
+      vec3 hv = normalize(l2 + vv2 / vl2);
+      float s = pow(max(dot(n2, hv), 0.0), 24.0);
+      col += vec3(s * texel.a * uSpec);
+    }
+  }
   // Cool white-blue fresnel rim, only when lit AND uRim != 0.
   if (nl >= 0.01 && uRim != 0.0) {
     vec3 n = vNormal / nl;
@@ -115,6 +136,8 @@ export function initGL(canvas) {
     uTex: gl.getUniformLocation(prog, "uTex"),
     uCamPos: gl.getUniformLocation(prog, "uCamPos"),
     uRim: gl.getUniformLocation(prog, "uRim"),
+    uUseTex: gl.getUniformLocation(prog, "uUseTex"),
+    uSpec: gl.getUniformLocation(prog, "uSpec"),
   };
   // Attribute arrays stay enabled for the life of the context; per-draw code
   // only rebinds + repoints (the bind is what each pointer captures).
@@ -131,6 +154,8 @@ export function initGL(canvas) {
   gl.uniform1i(ctx.uTex, 0);
   gl.uniform3f(ctx.uCamPos, camPos[0], camPos[1], camPos[2]);
   gl.uniform1f(ctx.uRim, 0);
+  gl.uniform1f(ctx.uUseTex, 0);
+  if (ctx.uSpec) gl.uniform1f(ctx.uSpec, 0.9);
   // A new context invalidates every cached GPU buffer; drop streaming state
   // so re-init (tests, context restore) rebuilds instead of binding dead
   // cross-context buffers (WebGL reports INVALID_OPERATION on those).
@@ -167,9 +192,10 @@ function ensureAttribs(ctx) {
     gl.disableVertexAttribArray(ctx.aTexUV);
     uvOn = false;
   }
-  // Old callers never opt into rim: force it off so a prior textured draw
-  // cannot leak fresnel into untextured pixels.
+  // Old callers never opt into rim or texture/spec: force both off so a
+  // prior textured draw cannot leak fresnel or specular into old pixels.
   if (ctx.uRim) gl.uniform1f(ctx.uRim, 0);
+  if (ctx.uUseTex) gl.uniform1f(ctx.uUseTex, 0);
 }
 // Lit 9-float path: aNormal array ON.
 function ensureLitAttribs(ctx) {
@@ -187,6 +213,7 @@ function ensureLitAttribs(ctx) {
     uvOn = false;
   }
   if (ctx.uRim) gl.uniform1f(ctx.uRim, 0);
+  if (ctx.uUseTex) gl.uniform1f(ctx.uUseTex, 0);
 }
 // Textured 11-float path: aNormal + aTexUV arrays ON.
 function ensureTexAttribs(ctx) {
@@ -203,6 +230,8 @@ function ensureTexAttribs(ctx) {
     gl.enableVertexAttribArray(ctx.aTexUV);
     uvOn = true;
   }
+  // Textured path: sample the bound texture and allow Blinn-Phong specular.
+  if (ctx.uUseTex) gl.uniform1f(ctx.uUseTex, 1);
 }
 
 function bindMesh(ctx, buf, mvp) {
