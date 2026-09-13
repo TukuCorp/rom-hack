@@ -8,23 +8,50 @@ const VSRC = `
 attribute vec3 aPos;
 attribute vec3 aCol;
 attribute vec3 aNormal;
+attribute vec2 aTexUV;
 uniform mat4 uMVP;
 varying vec3 vCol;
 varying vec3 vNormal;
-void main(){ gl_Position = uMVP * vec4(aPos, 1.0); vCol = aCol; vNormal = aNormal; }`;
+varying vec3 vWorld;
+varying vec2 vUV;
+void main(){ gl_Position = uMVP * vec4(aPos, 1.0); vCol = aCol; vNormal = aNormal; vWorld = aPos; vUV = aTexUV; }`;
 const FSRC = `
 precision mediump float;
 varying vec3 vCol;
 varying vec3 vNormal;
+varying vec3 vWorld;
+varying vec2 vUV;
 uniform vec3 uLightDir;
+uniform sampler2D uTex;
+uniform vec3 uCamPos;
+uniform float uRim;
 void main(){
+  // Base: cel lambert when lit, raw vertex color on the unlit path.
+  // Old 6-float draws take the unlit branch exactly as before.
   float nl = length(vNormal);
-  if (nl < 0.01) { gl_FragColor = vec4(vCol, 1.0); return; }
-  vec3 n = vNormal / nl;
-  vec3 l = uLightDir / length(uLightDir);
-  float d = max(dot(n, l), 0.0);
-  float band = d > 0.66 ? 1.0 : (d > 0.33 ? 0.72 : 0.48);
-  gl_FragColor = vec4(vCol * band, 1.0);
+  vec3 base;
+  if (nl < 0.01) { base = vCol; }
+  else {
+    vec3 n = vNormal / nl;
+    vec3 l = uLightDir / length(uLightDir);
+    float d = max(dot(n, l), 0.0);
+    float band = d > 0.66 ? 1.0 : (d > 0.33 ? 0.72 : 0.48);
+    base = vCol * band;
+  }
+  // Detail texture multiplies the base (white 1x1 default -> identity).
+  vec3 col = base * texture2D(uTex, vUV).rgb;
+  // Cool white-blue fresnel rim, only when lit AND uRim != 0.
+  if (nl >= 0.01 && uRim != 0.0) {
+    vec3 n = vNormal / nl;
+    vec3 vv = uCamPos - vWorld;
+    float vl = length(vv);
+    if (vl > 0.001) {
+      vv = vv / vl;
+      float f = pow(1.0 - abs(dot(n, vv)), 3.0);
+      col += vec3(0.62, 0.78, 1.0) * (f * uRim);
+    }
+  }
+  gl_FragColor = vec4(col, 1.0);
 }`;
 
 function shader(type, src) {
@@ -41,9 +68,31 @@ let attribsOn = false;
 // 6-float callers read the disabled-attrib constant (0,0,0,1) -> zero-length
 // normal -> unlit fallback, byte-identical pixels to the old shader.
 let litOn = false;
-const perf = { staticUploads: 0, staticBytes: 0, staticDraws: 0, streamDraws: 0, streamBytes: 0, dropped: 0 };
-// Snapshot of upload/draw counters for the main.js fps meter.
-export function getPerfStats() { return { ...perf }; }
+// Tracks the aTexUV array: ON only inside the textured path; OFF everywhere
+// else so old 6/9-float callers sample the white 1x1 texture (UV value
+// irrelevant -> texel always white -> base color unchanged, pixel-identical).
+let uvOn = false;
+// Last context for immediate setCamPos/setRim uploads; camera default
+// matches the battle fallback eye until battle.js calls setCamPos(cam.eye).
+let lastCtx = null;
+let camPos = [2.5, 3.2, 9.5];
+// Default 1x1 white texture: bound in render() and after every textured
+// draw, so untextured callers always sample white.
+let whiteTex = null;
+function makeWhiteTex() {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+    new Uint8Array([255, 255, 255, 255]));
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return tex;
+}
+ const perf = { staticUploads: 0, staticBytes: 0, staticDraws: 0, streamDraws: 0, streamBytes: 0, dropped: 0 };
+ // Snapshot of upload/draw counters for the main.js fps meter.
+ export function getPerfStats() { return { ...perf }; }
 
 export function initGL(canvas) {
   gl = canvas.getContext("webgl", { antialias: true });
@@ -60,8 +109,12 @@ export function initGL(canvas) {
     aPos: gl.getAttribLocation(prog, "aPos"),
     aCol: gl.getAttribLocation(prog, "aCol"),
     aNormal: gl.getAttribLocation(prog, "aNormal"),
+    aTexUV: gl.getAttribLocation(prog, "aTexUV"),
     uMVP: gl.getUniformLocation(prog, "uMVP"),
     uLightDir: gl.getUniformLocation(prog, "uLightDir"),
+    uTex: gl.getUniformLocation(prog, "uTex"),
+    uCamPos: gl.getUniformLocation(prog, "uCamPos"),
+    uRim: gl.getUniformLocation(prog, "uRim"),
   };
   // Attribute arrays stay enabled for the life of the context; per-draw code
   // only rebinds + repoints (the bind is what each pointer captures).
@@ -69,12 +122,20 @@ export function initGL(canvas) {
   gl.enableVertexAttribArray(ctx.aPos);
   gl.enableVertexAttribArray(ctx.aCol);
   if (ctx.aNormal >= 0) gl.disableVertexAttribArray(ctx.aNormal);
+  if (ctx.aTexUV >= 0) gl.disableVertexAttribArray(ctx.aTexUV);
   attribsOn = true;
   litOn = false;
+  uvOn = false;
+  lastCtx = ctx;
+  whiteTex = makeWhiteTex();
+  gl.uniform1i(ctx.uTex, 0);
+  gl.uniform3f(ctx.uCamPos, camPos[0], camPos[1], camPos[2]);
+  gl.uniform1f(ctx.uRim, 0);
   // A new context invalidates every cached GPU buffer; drop streaming state
   // so re-init (tests, context restore) rebuilds instead of binding dead
   // cross-context buffers (WebGL reports INVALID_OPERATION on those).
   streamBuf = null; scratch = null; streamBufN = null; scratchN = null;
+  streamBufNT = null; scratchNT = null;
   return ctx;
 }
 
@@ -101,6 +162,14 @@ function ensureAttribs(ctx) {
     gl.disableVertexAttribArray(ctx.aNormal);
     litOn = false;
   }
+  // Untextured paths leave aTexUV disabled (white-texel identity).
+  if (uvOn && ctx.aTexUV >= 0) {
+    gl.disableVertexAttribArray(ctx.aTexUV);
+    uvOn = false;
+  }
+  // Old callers never opt into rim: force it off so a prior textured draw
+  // cannot leak fresnel into untextured pixels.
+  if (ctx.uRim) gl.uniform1f(ctx.uRim, 0);
 }
 // Lit 9-float path: aNormal array ON.
 function ensureLitAttribs(ctx) {
@@ -112,6 +181,27 @@ function ensureLitAttribs(ctx) {
   if (!litOn && ctx.aNormal >= 0) {
     gl.enableVertexAttribArray(ctx.aNormal);
     litOn = true;
+  }
+  if (uvOn && ctx.aTexUV >= 0) {
+    gl.disableVertexAttribArray(ctx.aTexUV);
+    uvOn = false;
+  }
+  if (ctx.uRim) gl.uniform1f(ctx.uRim, 0);
+}
+// Textured 11-float path: aNormal + aTexUV arrays ON.
+function ensureTexAttribs(ctx) {
+  if (!attribsOn) {
+    gl.enableVertexAttribArray(ctx.aPos);
+    gl.enableVertexAttribArray(ctx.aCol);
+    attribsOn = true;
+  }
+  if (!litOn && ctx.aNormal >= 0) {
+    gl.enableVertexAttribArray(ctx.aNormal);
+    litOn = true;
+  }
+  if (!uvOn && ctx.aTexUV >= 0) {
+    gl.enableVertexAttribArray(ctx.aTexUV);
+    uvOn = true;
   }
 }
 
@@ -281,6 +371,78 @@ export function drawTrisN(ctx, data, mvp) {
   drawDynTrisN(ctx, data, mvp);
 }
 
+// ---- Textured mesh helpers: [x,y,z, r,g,b, nx,ny,nz, u,v], 44-byte stride. ----
+// aPos doubles as the rim view-vector origin (callers bake world transforms
+// into vertices, so it is already world space). tex defaults to the white
+// 1x1 (pixel-identical base); uRim is left untouched so a setRim(v) call just
+// before each batch applies. Old paths reset uRim to 0 via their ensures.
+const STRIDE11 = 44;
+let streamBufNT = null;
+let scratchNT = null;
+export function drawTrisNT(ctx, data11, mvp, tex) {
+  ensureTexAttribs(ctx);
+  let count = data11.length / 11;
+  if (count > STREAM_CAP_TRIS) { perf.dropped += count - STREAM_CAP_TRIS; count = STREAM_CAP_TRIS; }
+  if (count <= 0) return;
+  const need = Math.ceil(count) * 11;
+  if (!scratchNT || scratchNT.length < need) scratchNT = new Float32Array(Math.max(need, 1024));
+  if (!streamBufNT) streamBufNT = gl.createBuffer();
+  if (need < data11.length) {
+    if (data11 instanceof Float32Array) scratchNT.set(data11.subarray(0, need));
+    else for (let i = 0; i < need; i++) scratchNT[i] = data11[i];
+  } else {
+    scratchNT.set(data11);
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, streamBufNT);
+  gl.bufferData(gl.ARRAY_BUFFER, scratchNT.subarray(0, need), gl.DYNAMIC_DRAW);
+  perf.streamDraws++;
+  perf.streamBytes += need * 4;
+  gl.vertexAttribPointer(ctx.aPos, 3, gl.FLOAT, false, STRIDE11, 0);
+  gl.vertexAttribPointer(ctx.aCol, 3, gl.FLOAT, false, STRIDE11, 12);
+  gl.vertexAttribPointer(ctx.aNormal, 3, gl.FLOAT, false, STRIDE11, 24);
+  gl.vertexAttribPointer(ctx.aTexUV, 2, gl.FLOAT, false, STRIDE11, 36);
+  gl.uniformMatrix4fv(ctx.uMVP, false, mvp);
+  gl.bindTexture(gl.TEXTURE_2D, tex || whiteTex);
+  gl.drawArrays(gl.TRIANGLES, 0, count);
+  // Restore white so later untextured draws sample identity regardless of order.
+  gl.bindTexture(gl.TEXTURE_2D, whiteTex);
+}
+
+// Procedural texture: runs painter(g2d, w, h) on an offscreen canvas, uploads
+// as a LINEAR/CLAMP RGBA texture. Painter content is caller-owned original art.
+export function createTex(w, h, painter) {
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const g = c.getContext("2d");
+  painter(g, w, h);
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.bindTexture(gl.TEXTURE_2D, whiteTex);
+  return tex;
+}
+
+// Rim strength for the NEXT drawTrisNT batch (typical ~0.35). Call immediately
+// before each textured batch; old paths force uRim back to 0 on their own.
+// Tolerates setRim(ctx, v).
+export function setRim(v, v2) {
+  let val = v;
+  let c = lastCtx;
+  if (v && typeof v === "object" && typeof v2 === "number") { c = v; val = v2; }
+  try { if (c && c.uRim) gl.uniform1f(c.uRim, +val || 0); } catch {}
+}
+
+// Camera eye for the rim view vector. Battle convention: setCamPos(cam.eye)
+// any time after initGL (uploads immediately and stores for render re-upload).
+export function setCamPos(e) {
+  if (Array.isArray(e) && e.length >= 3) camPos = [e[0], e[1], e[2]];
+  try { if (lastCtx && lastCtx.uCamPos) gl.uniform3f(lastCtx.uCamPos, camPos[0], camPos[1], camPos[2]); } catch {}
+}
+
 export function mat4mul(a, b) {
   const o = new Float32Array(16);
   for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
@@ -307,13 +469,17 @@ const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const norm = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
-
-// Placeholder scene: sky clear + ground disc handled by arena.js builder.
 export function render(ctx, state, t) {
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
   gl.clearColor(0.45, 0.72, 0.95, 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BIT);
   // Cool key from upper front-left; the fragment shader normalizes it.
   if (ctx.uLightDir) gl.uniform3f(ctx.uLightDir, -0.45, 0.8, 0.55);
+  // Frame defaults: white texture on unit 0, stored camera, rim off.
+  // Textured batches rebind per draw and restore white after.
+  if (ctx.uTex) gl.uniform1i(ctx.uTex, 0);
+  gl.bindTexture(gl.TEXTURE_2D, whiteTex);
+  if (ctx.uCamPos) gl.uniform3f(ctx.uCamPos, camPos[0], camPos[1], camPos[2]);
+  if (ctx.uRim) gl.uniform1f(ctx.uRim, 0);
   if (state.scene) state.scene(ctx, state, t);
 }

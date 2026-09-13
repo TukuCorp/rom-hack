@@ -1,6 +1,8 @@
-// models.js: original high-detail battlers from raw triangles (9-float
-// verts: pos + color + normal) lit by the gl.js cel shader via drawTrisN,
-// with a guarded drawTris fallback so boot never breaks mid-migration.
+// models.js: original high-detail battlers from raw triangles (11-float
+// verts: pos + color + normal + uv) lit by the gl.js cel shader via
+// drawTrisNT (textured + rim), with guarded drawTrisN (uv stripped,
+// pixel-identical) and drawTris fallbacks so boot never breaks
+// mid-migration.
 // Foe Nibble (small blue rodent) on FOE_SPOT: rearing lunging crouch,
 // rounded skull + tapered muzzlepitched forward-down on a neck pivot,
 // tail kinked up behind. Player Embercub (orange cub) on ME_SPOT: battle
@@ -11,22 +13,38 @@
 // taper-corrected tube walls), crisp face normals on planes (wedge snout,
 // stripes, inner-ear blades); color zones pre-separated as raw vertex
 // colors (belly / inner-ear / paw creams, stepped flank shades) for the
-// cel shader to tone. Emissive bits (eye glints, flame) use zero-length
+// cel shader to tone, multiplied by a subtle near-white procedural detail
+// texture (fur micro-noise, belly/chest wash, stripe bands) so untextured
+// hues survive intact. Emissive bits (eye glints, flame) use zero-length
 // normals so the shader's unlit path keeps them fullbright.
-// Idle bob (sin t) + breathing scale. White hit-flash via
-// state.flashFoe / state.flashMe (0..1). Lunge 0..1 as z-offset toward
-// opponent, sink 0..1 as y-offset, faint pose via state.fainted.
-// Reads only; decay owned by battle.js scene(). Pair ~2.8k tris.
+// UVs are spherical-planar per part (u around, v along); flat pieces use
+// planar corner maps, discs a small centered circle. Idle bob (sin t) +
+// breathing scale. White hit-flash via state.flashFoe / state.flashMe
+// (0..1). Lunge 0..1 as z-offset toward opponent, sink 0..1 as y-offset,
+// faint pose via state.fainted. Reads only; decay owned by battle.js
+// scene(). Pair ~6k tris.
 import { drawTris, mat4mul } from "./gl.js";
 
-// drawTrisN arrives via one-directional guarded dynamic import (gl.js never
-// imports models) so a mid-write gl.js never breaks boot; until it lands,
-// the drawTris 6-float path below keeps every frame rendering.
+// drawTrisN / drawTrisNT / createTex / rim setter arrive via one-directional
+// guarded dynamic import (gl.js never imports models) so a mid-write gl.js
+// never breaks boot; until they land, the drawTris 6-float path below keeps
+// every frame rendering.
 let drawTrisN = null;
+let drawTrisNT = null;
+let createTex = null;
+let setRim = null;
 try {
   import("./gl.js")
     .then((m) => {
       if (m && typeof m.drawTrisN === "function") drawTrisN = m.drawTrisN;
+      if (m && typeof m.drawTrisNT === "function") drawTrisNT = m.drawTrisNT;
+      if (m && typeof m.createTex === "function") createTex = m.createTex;
+      // Rim strength setter: accept whatever name the gl pass chose.
+      if (m) {
+        for (const k of ["setRim", "setRimStrength", "setUrim", "setRimAmount"]) {
+          if (typeof m[k] === "function") { setRim = m[k].bind(m); break; }
+        }
+      }
     })
     .catch(() => {});
 } catch {}
@@ -102,71 +120,73 @@ function norm3(x, y, z) {
   return [x / l, y / l, z / l];
 }
 
-// Core emitter: one 9-float vertex (pos, color, normal).
-function pushV(arr, M, p, n, col) {
+// Core emitter: one 11-float vertex (pos, color, normal, uv). uv defaults
+// to texture-center so missed callers sample flat detail (pixel-identical
+// hues under the near-white detail textures).
+const UV0 = [0.5, 0.5];
+function pushV(arr, M, p, n, col, uv) {
   const P = xform(M, p[0], p[1], p[2]);
   const N = n === UNLIT ? UNLIT : xformN(M, n[0], n[1], n[2]);
-  arr.push(P[0], P[1], P[2], col[0], col[1], col[2], N[0], N[1], N[2]);
+  const T = uv || UV0;
+  arr.push(P[0], P[1], P[2], col[0], col[1], col[2], N[0], N[1], N[2], T[0], T[1]);
 }
 
 // Flat triangle: face normal from local-space winding (author CCW outward).
-function pushTriN(arr, M, a, b, c, col, n) {
+// Optional corner uvs (ua, ub, uc); default planar map keeps it simple.
+function pushTriN(arr, M, a, b, c, col, n, uvs) {
   let N = n;
   if (!N) {
     const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
     const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
     N = norm3(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
   }
-  pushV(arr, M, a, N, col);
-  pushV(arr, M, b, N, col);
-  pushV(arr, M, c, N, col);
+  const T = uvs || [UV0, UV0, UV0];
+  pushV(arr, M, a, N, col, T[0]);
+  pushV(arr, M, b, N, col, T[1]);
+  pushV(arr, M, c, N, col, T[2]);
 }
 
 // Crisp quad (two tris, single face normal): stripes, glints, ear blades.
-function pushQuad(arr, M, a, b, c, d, col, n) {
-  pushTriN(arr, M, a, b, c, col, n);
-  pushTriN(arr, M, a, c, d, col, n);
+// Corner-planar UVs (a=(0,0) b=(1,0) c=(1,1) d=(0,1)) unless overridden.
+function pushQuad(arr, M, a, b, c, d, col, n, uvs) {
+  const T = uvs || [[0, 0], [1, 0], [1, 1], [0, 1]];
+  pushTriN(arr, M, a, b, c, col, n, [T[0], T[1], T[2]]);
+  pushTriN(arr, M, a, c, d, col, n, [T[0], T[2], T[3]]);
 }
 // Round glossy glint: flat radial fan with zero normals (shader fullbright
 // path), tangent to the eyeball so the rim tucks into the ball and the
 // round silhouette reads instead of a square pixel.
 function glintDisc(arr, M, cx, cy, cz, r, nx, ny, nz, col, radial) {
-  const n = norm3(nx, ny, nz);
-  const up = Math.abs(n[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
-  const u = norm3(up[1] * n[2] - up[2] * n[1], up[2] * n[0] - up[0] * n[2], up[0] * n[1] - up[1] * n[0]);
-  const w = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]];
-  const segs = radial || 8;
-  const ring = [];
-  for (let i = 0; i < segs; i++) {
-    const a = (i / segs) * Math.PI * 2;
-    ring.push([cx + (u[0] * Math.cos(a) + w[0] * Math.sin(a)) * r,
-      cy + (u[1] * Math.cos(a) + w[1] * Math.sin(a)) * r,
-      cz + (u[2] * Math.cos(a) + w[2] * Math.sin(a)) * r]);
-  }
-  for (let i = 0; i < segs; i++) {
-    pushV(arr, M, [cx, cy, cz], UNLIT, col);
-    pushV(arr, M, ring[i], UNLIT, col);
-    pushV(arr, M, ring[(i + 1) % segs], UNLIT, col);
-  }
+  discFan(arr, M, cx, cy, cz, r, nx, ny, nz, col, radial, UNLIT);
 }
 // Lit color disc (flat analytic normal -> cel-toned): iris.
 function irisDisc(arr, M, cx, cy, cz, r, nx, ny, nz, col, radial) {
+  discFan(arr, M, cx, cy, cz, r, nx, ny, nz, col, radial, null);
+}
+// Shared disc fan: UVs map a small centered circle (radius 0.12 texels)
+// so the disc samples near-flat detail and keeps its vertex hue.
+function discFan(arr, M, cx, cy, cz, r, nx, ny, nz, col, radial, litN) {
   const n = norm3(nx, ny, nz);
   const up = Math.abs(n[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
   const u = norm3(up[1] * n[2] - up[2] * n[1], up[2] * n[0] - up[0] * n[2], up[0] * n[1] - up[1] * n[0]);
   const w = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]];
   const segs = radial || 8;
+  const N = litN || n;
   const ring = [];
+  const ringT = [];
   for (let i = 0; i < segs; i++) {
     const a = (i / segs) * Math.PI * 2;
-    ring.push([cx + (u[0] * Math.cos(a) + w[0] * Math.sin(a)) * r,
-      cy + (u[1] * Math.cos(a) + w[1] * Math.sin(a)) * r,
-      cz + (u[2] * Math.cos(a) + w[2] * Math.sin(a)) * r]);
+    const ca = Math.cos(a), sa = Math.sin(a);
+    ring.push([cx + (u[0] * ca + w[0] * sa) * r,
+      cy + (u[1] * ca + w[1] * sa) * r,
+      cz + (u[2] * ca + w[2] * sa) * r]);
+    ringT.push([0.5 + ca * 0.12, 0.5 + sa * 0.12]);
   }
+  const ctrT = [0.5, 0.5];
   for (let i = 0; i < segs; i++) {
-    pushV(arr, M, [cx, cy, cz], n, col);
-    pushV(arr, M, ring[i], n, col);
-    pushV(arr, M, ring[(i + 1) % segs], n, col);
+    pushV(arr, M, [cx, cy, cz], N, col, ctrT);
+    pushV(arr, M, ring[i], N, col, ringT[i]);
+    pushV(arr, M, ring[(i + 1) % segs], N, col, ringT[(i + 1) % segs]);
   }
 }
 
@@ -186,14 +206,18 @@ function pushBox(arr, M, cx, cy, cz, sx, sy, sz, raw, F) {
     [[3, 6, 2, 7], [0, 1, 0]], [[4, 1, 5, 0], [0, -1, 0]],
   ];
   for (const [[a, b, c, d], n] of faces) {
-    pushTriN(arr, M, v[a], v[b], v[c], col, n);
-    pushTriN(arr, M, v[a], v[c], v[d], col, n);
+    pushQuad(arr, M, v[a], v[b], v[c], v[d], col, n);
   }
 }
 
 // Smooth ellipsoid centered c, radii r: nLat x nLon x 2 tris, analytic
 // normals (sphere gradient). colFn(u, v, theta, phi) -> raw rgb.
+// SEG scales both axes (~2x tris) for the high-segment pass. UVs are
+// spherical-planar (u around, v along).
+const SEG = 1.45;
 function ellipsoid(arr, M, cx, cy, cz, rx, ry, rz, nLat, nLon, colFn, F, range) {
+  nLat = Math.max(3, Math.round(nLat * SEG));
+  nLon = Math.max(3, Math.round(nLon * SEG));
   const t0 = (range && range.t0) || 0, t1 = (range && range.t1) || Math.PI;
   const p0 = (range && range.p0) || 0, p1 = (range && range.p1) || Math.PI * 2;
   const grid = [];
@@ -207,19 +231,19 @@ function ellipsoid(arr, M, cx, cy, cz, rx, ry, rz, nLat, nLon, colFn, F, range) 
       const p = [cx + rx * st * cp, cy + ry * ct, cz + rz * st * sp];
       const n = norm3((st * cp) / rx, ct / ry, (st * sp) / rz);
       const col = flashCol(colFn(i / nLon, j / nLat, th, ph), F);
-      row.push({ p, n, col });
+      row.push({ p, n, col, t: [i / nLon, j / nLat] });
     }
     grid.push(row);
   }
   for (let j = 0; j < nLat; j++) {
     for (let i = 0; i < nLon; i++) {
       const a = grid[j][i], b = grid[j][i + 1], c = grid[j + 1][i + 1], d = grid[j + 1][i];
-      pushV(arr, M, a.p, a.n, a.col);
-      pushV(arr, M, d.p, d.n, d.col);
-      pushV(arr, M, c.p, c.n, c.col);
-      pushV(arr, M, a.p, a.n, a.col);
-      pushV(arr, M, c.p, c.n, c.col);
-      pushV(arr, M, b.p, b.n, b.col);
+      pushV(arr, M, a.p, a.n, a.col, a.t);
+      pushV(arr, M, d.p, d.n, d.col, d.t);
+      pushV(arr, M, c.p, c.n, c.col, c.t);
+      pushV(arr, M, a.p, a.n, a.col, a.t);
+      pushV(arr, M, c.p, c.n, c.col, c.t);
+      pushV(arr, M, b.p, b.n, b.col, b.t);
     }
   }
 }
@@ -257,40 +281,40 @@ function tube(arr, M, p0, p1, r0, r1, radial, segs, colFn, F, caps) {
       ];
       const p = [cx + dir[0] * r, cy + dir[1] * r, cz + dir[2] * r];
       const n = norm3(dir[0] - ax[0] * slope, dir[1] - ax[1] * slope, dir[2] - ax[2] * slope);
-      ring.push({ p, n, col: flashCol(colFn(s, i / radial), F) });
+      ring.push({ p, n, col: flashCol(colFn(s, i / radial), F), t: [i / radial, s] });
     }
     rings.push(ring);
   }
   for (let j = 0; j < segs; j++) {
     for (let i = 0; i < radial; i++) {
       const a = rings[j][i], b = rings[j][i + 1], c = rings[j + 1][i + 1], d = rings[j + 1][i];
-      pushV(arr, M, a.p, a.n, a.col);
-      pushV(arr, M, b.p, b.n, b.col);
-      pushV(arr, M, c.p, c.n, c.col);
-      pushV(arr, M, a.p, a.n, a.col);
-      pushV(arr, M, c.p, c.n, c.col);
-      pushV(arr, M, d.p, d.n, d.col);
+      pushV(arr, M, a.p, a.n, a.col, a.t);
+      pushV(arr, M, b.p, b.n, b.col, b.t);
+      pushV(arr, M, c.p, c.n, c.col, c.t);
+      pushV(arr, M, a.p, a.n, a.col, a.t);
+      pushV(arr, M, c.p, c.n, c.col, c.t);
+      pushV(arr, M, d.p, d.n, d.col, d.t);
     }
   }
   if (caps === undefined || caps[0]) {
     const n0 = [-ax[0], -ax[1], -ax[2]];
     const c0 = flashCol(colFn(0, 0.5), F);
-    const ctr = { p: p0.slice(), n: n0, col: c0 };
+    const ctr = { p: p0.slice(), n: n0, col: c0, t: [0.5, 0] };
     for (let i = 0; i < radial; i++) {
-      pushV(arr, M, ctr.p, ctr.n, ctr.col);
-      pushV(arr, M, rings[0][i + 1].p, n0, rings[0][i + 1].col);
-      pushV(arr, M, rings[0][i].p, n0, rings[0][i].col);
+      pushV(arr, M, ctr.p, ctr.n, ctr.col, ctr.t);
+      pushV(arr, M, rings[0][i + 1].p, n0, rings[0][i + 1].col, rings[0][i + 1].t);
+      pushV(arr, M, rings[0][i].p, n0, rings[0][i].col, rings[0][i].t);
     }
   }
   if (caps === undefined || caps[1]) {
     const n1 = ax.slice();
     const c1 = flashCol(colFn(1, 0.5), F);
-    const ctr = { p: p1.slice(), n: n1, col: c1 };
+    const ctr = { p: p1.slice(), n: n1, col: c1, t: [0.5, 1] };
     const last = rings[segs];
     for (let i = 0; i < radial; i++) {
-      pushV(arr, M, ctr.p, ctr.n, ctr.col);
-      pushV(arr, M, last[i].p, n1, last[i].col);
-      pushV(arr, M, last[i + 1].p, n1, last[i + 1].col);
+      pushV(arr, M, ctr.p, ctr.n, ctr.col, ctr.t);
+      pushV(arr, M, last[i].p, n1, last[i].col, last[i].t);
+      pushV(arr, M, last[i + 1].p, n1, last[i + 1].col, last[i + 1].t);
     }
   }
 }
@@ -326,18 +350,21 @@ function cone(arr, M, bx, by, bz, r, axx, axy, axz, radial, raw, F, rawApex) {
     ring.push({
       p: [bx + dir[0] * r, by + dir[1] * r, bz + dir[2] * r],
       n: norm3(dir[0] - ax[0] * slope, dir[1] - ax[1] * slope, dir[2] - ax[2] * slope),
+      t: [i / radial, 0],
     });
   }
   const apex = [axx, axy, axz];
+  const apexT = [0.5, 1];
   for (let i = 0; i < radial; i++) {
-    pushV(arr, M, apex, ring[i].n, colA);
-    pushV(arr, M, ring[i].p, ring[i].n, colB);
-    pushV(arr, M, ring[i + 1].p, ring[i + 1].n, colB);
+    pushV(arr, M, apex, ring[i].n, colA, apexT);
+    pushV(arr, M, ring[i].p, ring[i].n, colB, ring[i].t);
+    pushV(arr, M, ring[i + 1].p, ring[i + 1].n, colB, ring[i + 1].t);
   }
   const nb = [-ax[0], -ax[1], -ax[2]];
   const ctr = [bx, by, bz];
+  const ctrT = [0.5, 0];
   for (let i = 0; i < radial; i++) {
-    pushTriN(arr, M, ctr, ring[i + 1].p, ring[i].p, colB, nb);
+    pushTriN(arr, M, ctr, ring[i + 1].p, ring[i].p, colB, nb, [ctrT, ring[i + 1].t, ring[i].t]);
   }
 }
 
@@ -356,6 +383,10 @@ function buildNibble(arr, M, F, t, damp) {
   // Haunches + barrel chest (smooth analytic masses) with a squashed cream
   // belly shell embedded in the chest front (intersection reads as a zone edge).
   ellipsoid(arr, M, 0, 0.42, -0.18, 0.33, 0.27, 0.36, 8, 6, C(FLANK), F);
+  // MACRO MARKING: large dark back patch (partial shell over the rear
+  // torso, hard-edged, reads at judgment scale).
+  ellipsoid(arr, M, 0, 0.42, -0.18, 0.345, 0.285, 0.375, 2, 8, C(INK), F,
+    { t0: 0.6, t1: 1.9, p0: 3 * Math.PI / 2 - 1.0, p1: 3 * Math.PI / 2 + 1.0 });
   ellipsoid(arr, M, 0, 0.55, 0.10, 0.29, 0.24, 0.24, 8, 6, C(BLUE), F);
   ellipsoid(arr, M, 0, 0.40, 0.20, 0.20, 0.18, 0.16, 6, 4, C(CREAM), F);
   // Neck: short tapered tube into the head pivot.
@@ -364,14 +395,19 @@ function buildNibble(arr, M, F, t, damp) {
   // Jointed legs: round thigh + tapered shin + ellipsoid foot + cream toes.
   for (const s of [-1, 1]) {
     ellipsoid(arr, M, s * 0.22, 0.26, -0.12, 0.13, 0.17, 0.18, 6, 5, C(BLUE), F);
+    // Calf muscle curve bulging behind the thigh.
+    ellipsoid(arr, M, s * 0.22, 0.32, -0.26, 0.10, 0.13, 0.10, 4, 3, C(BLUE), F);
     tube(arr, M, [s * 0.22, 0.16, -0.02], [s * 0.23, 0.10, 0.10], 0.085, 0.10, 7, 1, C(DARK), F, [false, false]);
     ellipsoid(arr, M, s * 0.23, 0.07, 0.16, 0.11, 0.07, 0.20, 6, 4, C(DARK), F);
     ellipsoid(arr, M, s * 0.23, 0.055, 0.32, 0.10, 0.05, 0.06, 5, 4, C(CREAM), F);
+    // White toe claws ahead of the toe caps.
+    cone(arr, M, s * 0.18, 0.055, 0.36, 0.045, s * 0.18, 0.04, 0.54, 4, WHITE, F);
+    cone(arr, M, s * 0.28, 0.055, 0.36, 0.045, s * 0.28, 0.04, 0.54, 4, WHITE, F);
   }
   // Jointed arms reaching forward: tapered upper + cream forearm + paw ball.
   for (const s of [-1, 1]) {
     tube(arr, M, [s * 0.30, 0.62, 0.24], [s * 0.32, 0.44, 0.34], 0.07, 0.055, 7, 1, C(BLUE), F, [false, false]);
-    tube(arr, M, [s * 0.32, 0.44, 0.34], [s * 0.32, 0.30, 0.40], 0.055, 0.05, 6, 1, C(CREAM), F, [false, true]);
+    tube(arr, M, [s * 0.32, 0.44, 0.34], [s * 0.32, 0.30, 0.40], 0.06, 0.035, 6, 1, C(CREAM), F, [false, true]);
     ellipsoid(arr, M, s * 0.32, 0.27, 0.41, 0.055, 0.05, 0.06, 5, 4, C(CREAM), F);
     cone(arr, M, s * 0.33, 0.66, 0.24, 0.06, s * 0.38, 0.86, 0.24, 5, BLUE, F);
   }
@@ -381,13 +417,26 @@ function buildNibble(arr, M, F, t, damp) {
   tube(arr, T, [0, 0.55, -0.42], [0, 0.58, -0.72], 0.085, 0.07, 7, 1, C(BLUE), F);
   tube(arr, T, [0, 0.58, -0.72], [0, 0.82, -0.78], 0.07, 0.06, 7, 1, C(FLANK), F);
   cone(arr, T, 0, 0.82, -0.78, 0.06, 0, 1.10, -0.74, 6, DARK, F);
+  // MACRO MARKING: dark tail bands (short fat collars ringing the tail).
+  tube(arr, T, [0, 0.563, -0.54], [0, 0.567, -0.60], 0.095, 0.095, 7, 1, C(DARK), F, [false, false]);
+  tube(arr, T, [0, 0.66, -0.748], [0, 0.74, -0.752], 0.08, 0.08, 7, 1, C(DARK), F, [false, false]);
 
   // Head pitched forward-down on the neck pivot (lunge snarl) + slow
   // glance yaw and bob nod on different periods.
   const H = headMat(M, 0, 0.72, 0.20, dk * 0.14 * Math.sin(time * 0.55 + 1.0), 0.28 + dk * 0.05 * Math.sin(time * 1.7));
   // Rounded skull + tapered muzzle + nose ball.
   ellipsoid(arr, H, 0, 1.02, 0.36, 0.32, 0.26, 0.28, 12, 9, C(BLUE), F);
+  // MACRO MARKING: dark head-mask band across the eyes (partial shell over
+  // the skull front, hard-edged; white sclerae pop against it).
+  ellipsoid(arr, H, 0, 1.02, 0.36, 0.335, 0.275, 0.295, 2, 8, C(INK), F,
+    { t0: 1.05, t1: 1.55, p0: Math.PI / 2 - 0.9, p1: Math.PI / 2 + 0.9 });
   tube(arr, H, [0, 0.94, 0.50], [0, 0.90, 0.70], 0.15, 0.10, 10, 1, C(CREAM), F, [false, false]);
+  // Tiny upper fangs hanging off the snout front (camera-facing white).
+  for (const s of [-1, 1]) {
+    cone(arr, H, s * 0.10, 0.84, 0.70, 0.06, s * 0.10, 0.60, 0.71, 6, WHITE, F);
+  }
+  // Thick dark mouth interior so the white fangs pop by contrast.
+  ellipsoid(arr, H, 0, 0.79, 0.66, 0.13, 0.05, 0.07, 6, 4, C(INK), F);
   ellipsoid(arr, H, 0, 0.97, 0.71, 0.055, 0.045, 0.04, 7, 5, C(INK), F);
   // Jaw shading under the muzzle.
   ellipsoid(arr, H, 0, 0.83, 0.58, 0.11, 0.06, 0.09, 5, 4, C(CREAM), F);
@@ -415,12 +464,12 @@ function buildNibble(arr, M, F, t, damp) {
     tube(arr, H, [s * 0.20, 1.24, 0.30], [s * 0.26, 1.62, 0.27], 0.095, 0.055, 7, 1, C(BLUE), F);
     ellipsoid(arr, H, s * 0.26, 1.64, 0.27, 0.055, 0.06, 0.055, 5, 3, C(DARK), F);
     pushQuad(arr, H,
-      [s * 0.20 - 0.045, 1.30, 0.375], [s * 0.20 + 0.045, 1.30, 0.375],
-      [s * 0.245 + 0.03, 1.56, 0.345], [s * 0.245 - 0.03, 1.56, 0.345],
+      [s * 0.20 - 0.072, 1.22, 0.375], [s * 0.20 + 0.072, 1.22, 0.375],
+      [s * 0.245 + 0.05, 1.60, 0.345], [s * 0.245 - 0.05, 1.60, 0.345],
       flashCol(PINK, F), [0, 0, 1]);
     pushQuad(arr, H,
-      [s * 0.20 + 0.045, 1.30, 0.225], [s * 0.20 - 0.045, 1.30, 0.225],
-      [s * 0.245 - 0.03, 1.56, 0.255], [s * 0.245 + 0.03, 1.56, 0.255],
+      [s * 0.20 + 0.072, 1.22, 0.225], [s * 0.20 - 0.072, 1.22, 0.225],
+      [s * 0.245 - 0.05, 1.60, 0.255], [s * 0.245 + 0.05, 1.60, 0.255],
       flashCol(PINK, F), [0, 0, -1]);
   }
 }
@@ -440,6 +489,10 @@ function buildEmbercub(arr, M, F, t, damp) {
 
   // Tapered torso leaning forward + shoulder hump + cream chest shell.
   tube(arr, M, [0, 0.30, -0.12], [0, 1.10, 0.02], 0.50, 0.33, 10, 2, C(ORANGE), F);
+  // MACRO MARKINGS: bold torso rings (floating bands around the torso tube,
+  // read as big flank stripes from behind/side).
+  tube(arr, M, [0, 0.54, -0.078], [0, 0.636, -0.061], 0.461, 0.441, 10, 1, C(DARK), F, [false, false]);
+  tube(arr, M, [0, 0.74, -0.043], [0, 0.836, -0.026], 0.419, 0.398, 10, 1, C(DARK), F, [false, false]);
   ellipsoid(arr, M, 0, 1.16, -0.06, 0.34, 0.16, 0.36, 8, 6, C(ORANGE), F);
   ellipsoid(arr, M, 0, 0.58, 0.30, 0.26, 0.28, 0.20, 8, 5, C(CREAM), F);
   // Back ridge spikes (crisp silhouette from behind).
@@ -454,20 +507,34 @@ function buildEmbercub(arr, M, F, t, damp) {
   // Segmented rear legs: planted paw + round haunch + tapered shin.
   for (const s of [-1, 1]) {
     ellipsoid(arr, M, s * 0.30, 0.09, 0.10, 0.15, 0.09, 0.30, 7, 5, C(DARK), F);
+    // White toe claws ahead of the rear paw.
+    cone(arr, M, s * 0.24, 0.08, 0.38, 0.05, s * 0.24, 0.05, 0.63, 4, WHITE, F);
+    cone(arr, M, s * 0.36, 0.08, 0.38, 0.05, s * 0.36, 0.05, 0.63, 4, WHITE, F);
     ellipsoid(arr, M, s * 0.50, 0.40, -0.25, 0.14, 0.28, 0.31, 8, 5, C(ORANGE), F);
+    // Glute muscle curve capping the haunch rear-top.
+    ellipsoid(arr, M, s * 0.50, 0.58, -0.32, 0.14, 0.15, 0.16, 4, 3, C(ORANGE), F);
     tube(arr, M, [s * 0.44, 0.30, -0.08], [s * 0.40, 0.14, 0.02], 0.11, 0.10, 6, 1, C(FLANK), F, [false, false]);
   }
   // Segmented front legs: tapered upper + fore + cream paw balls.
   for (const s of [-1, 1]) {
     tube(arr, M, [s * 0.30, 0.62, 0.42], [s * 0.30, 0.30, 0.50], 0.115, 0.095, 7, 2, C(ORANGE), F);
+    // Deltoid muscle curve capping the front upper leg.
+    ellipsoid(arr, M, s * 0.30, 0.58, 0.42, 0.13, 0.15, 0.13, 4, 3, C(ORANGE), F);
     tube(arr, M, [s * 0.30, 0.30, 0.50], [s * 0.30, 0.14, 0.54], 0.095, 0.10, 6, 1, C(FLANK), F, [false, true]);
     ellipsoid(arr, M, s * 0.30, 0.08, 0.56, 0.12, 0.08, 0.18, 6, 4, C(CREAM), F);
+    // White foreclaw fan ahead of the forepaw.
+    for (const dx of [-0.07, 0, 0.07]) {
+      cone(arr, M, s * 0.30 + dx, 0.08, 0.70, 0.045, s * 0.30 + dx, 0.04, 0.92, 4, WHITE, F);
+    }
   }
 
   // Head turned 3/4 over the shoulder + slow glance yaw and bob nod.
   const H = headMat(M, 0, 1.30, 0.10, -0.5 + dk * 0.16 * Math.sin(time * 0.45 + 2.0), dk * 0.04 * Math.sin(time * 1.3 + 0.5));
   // Domed skull + crisp wedge snout + cream muzzle planes + nose.
   ellipsoid(arr, H, 0, 1.50, 0.24, 0.37, 0.32, 0.33, 12, 9, C(ORANGE), F);
+  // MACRO MARKING: cream head blaze (partial shell up the forehead front).
+  ellipsoid(arr, H, 0, 1.50, 0.24, 0.382, 0.332, 0.342, 3, 5, C(CREAM), F,
+    { t0: 0.35, t1: 1.5, p0: Math.PI / 2 - 0.4, p1: Math.PI / 2 + 0.4 });
   tube(arr, H, [0, 1.40, 0.40], [0, 1.36, 0.66], 0.20, 0.13, 10, 1, C(ORANGE), F, [false, false]);
   ellipsoid(arr, H, 0, 1.33, 0.64, 0.14, 0.10, 0.10, 8, 6, C(CREAM), F);
   ellipsoid(arr, H, 0, 1.27, 0.60, 0.10, 0.045, 0.075, 6, 4, C(CREAM), F);
@@ -493,12 +560,12 @@ function buildEmbercub(arr, M, F, t, damp) {
     tube(arr, H, [s * 0.25, 1.74, 0.10], [s * 0.30, 2.24, -0.02], 0.11, 0.05, 7, 1, C(ORANGE), F);
     ellipsoid(arr, H, s * 0.30, 2.26, -0.02, 0.05, 0.06, 0.05, 5, 3, C(DARK), F);
     pushQuad(arr, H,
-      [s * 0.25 - 0.05, 1.82, 0.20], [s * 0.25 + 0.05, 1.82, 0.20],
-      [s * 0.285 + 0.03, 2.12, 0.10], [s * 0.285 - 0.03, 2.12, 0.10],
+      [s * 0.25 - 0.08, 1.76, 0.20], [s * 0.25 + 0.08, 1.76, 0.20],
+      [s * 0.285 + 0.05, 2.18, 0.10], [s * 0.285 - 0.05, 2.18, 0.10],
       flashCol(CREAM, F), [0, 0, 1]);
     pushQuad(arr, H,
-      [s * 0.25 + 0.05, 1.82, 0.02], [s * 0.25 - 0.05, 1.82, 0.02],
-      [s * 0.285 - 0.03, 2.12, -0.06], [s * 0.285 + 0.03, 2.12, -0.06],
+      [s * 0.25 + 0.08, 1.76, 0.02], [s * 0.25 - 0.08, 1.76, 0.02],
+      [s * 0.285 - 0.05, 2.18, -0.06], [s * 0.285 + 0.05, 2.18, -0.06],
       flashCol(CREAM, F), [0, 0, -1]);
   }
 
@@ -537,6 +604,7 @@ function coneUnlit(arr, M, bx, by, bz, r, axx, axy, axz, radial, col) {
     ax[0] * u[1] - ax[1] * u[0]
   );
   const ring = [];
+  const ringT = [];
   for (let i = 0; i <= radial; i++) {
     const a = (i / radial) * Math.PI * 2;
     ring.push([
@@ -544,13 +612,115 @@ function coneUnlit(arr, M, bx, by, bz, r, axx, axy, axz, radial, col) {
       by + (u[1] * Math.cos(a) + w[1] * Math.sin(a)) * r,
       bz + (u[2] * Math.cos(a) + w[2] * Math.sin(a)) * r,
     ]);
+    // Flame samples the texture's bright core wash (near-white) so the
+    // emissive orange keeps full saturation under base*texel.
+    ringT.push([0.44 + 0.06 * Math.cos(a), 0.06 + 0.03 * Math.sin(a)]);
   }
   const apex = [axx, axy, axz];
+  const apexT = [0.5, 0.02];
   for (let i = 0; i < radial; i++) {
-    pushV(arr, M, apex, UNLIT, col);
-    pushV(arr, M, ring[i], UNLIT, col);
-    pushV(arr, M, ring[i + 1], UNLIT, col);
+    pushV(arr, M, apex, UNLIT, col, apexT);
+    pushV(arr, M, ring[i], UNLIT, col, ringT[i]);
+    pushV(arr, M, ring[i + 1], UNLIT, col, ringT[i + 1]);
   }
+}
+
+// ---- Procedural detail textures (original art, painted at boot) ----
+// Two 128px canvas textures, near-white detail modulators so the vertex
+// color zones survive base*texel intact while fur micro-noise, belly/chest
+// washes, stripe bands, and ear-inner tints read on the surface. Symmetric
+// top/bottom washes so the look holds regardless of texture Y-flip. Created
+// lazily on first draw (GL context must exist) via GL.createTex when the
+// gl.js pass provides it; absent -> the untextured path below, boot safe.
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function speckle(g, rand, w, h, n, cols) {
+  for (let k = 0; k < n; k++) {
+    const x = (rand() * w) | 0, y = (rand() * h) | 0;
+    g.fillStyle = cols[(rand() * cols.length) | 0];
+    g.fillRect(x, y, 1, 1);
+  }
+}
+function furStreaks(g, rand, w, h, n, style) {
+  g.strokeStyle = style;
+  g.lineWidth = 1;
+  for (let k = 0; k < n; k++) {
+    const x = rand() * w, y = rand() * h, l = 2 + rand() * 5;
+    g.beginPath();
+    g.moveTo(x, y);
+    g.lineTo(x + (rand() - 0.5) * 1.5, y + l);
+    g.stroke();
+  }
+}
+function brightEdges(g, w, h, top, light) {
+  const grad = g.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, top);
+  grad.addColorStop(0.10, light);
+  grad.addColorStop(0.5, light);
+  grad.addColorStop(0.90, light);
+  grad.addColorStop(1, top);
+  g.fillStyle = grad;
+  g.fillRect(0, 0, w, h);
+}
+function paintNibble(g, w, h) {
+  const rand = mulberry32(0xB1B1E);
+  g.fillStyle = "#ecf2ff";
+  g.fillRect(0, 0, w, h);
+  // Cream belly wash toward both v extremes, light blue depth mid-body.
+  brightEdges(g, w, h, "rgba(255,253,246,0.85)", "rgba(190,208,248,0.6)");
+  // Fur micro-noise: darker blue specks + white flecks (high contrast).
+  speckle(g, rand, w, h, 3600, ["rgba(120,145,220,0.9)", "rgba(255,255,255,0.95)", "rgba(100,125,210,0.75)"]);
+  // Short vertical fur streaks.
+  furStreaks(g, rand, w, h, 520, "rgba(130,155,220,0.6)");
+  // Ear-inner pink dusting in one patch (ear quads sweep past it).
+  g.fillStyle = "rgba(255,170,185,0.45)";
+  g.fillRect(w * 0.70, h * 0.30, w * 0.22, h * 0.22);
+}
+function paintEmbercub(g, w, h) {
+  const rand = mulberry32(0xE8BE5);
+  g.fillStyle = "#fff3e4";
+  g.fillRect(0, 0, w, h);
+  // Cream chest wash toward both v extremes.
+  brightEdges(g, w, h, "rgba(255,250,238,0.9)", "rgba(255,220,180,0.55)");
+  // Dark stripe bands, mirrored top/bottom so Y-flip cannot break them.
+  g.fillStyle = "rgba(150,88,38,0.75)";
+  for (const y0 of [h * 0.235, h * 0.47, h * 0.705]) {
+    g.fillRect(0, y0, w, h * 0.075);
+  }
+  // MACRO MARKING: bold back badge (diamond outline on the back band,
+  // vertically symmetric so Y-flip cannot break it).
+  g.strokeStyle = "rgba(120,66,26,0.85)";
+  g.lineWidth = 9;
+  g.beginPath();
+  g.moveTo(w * 0.75, h * 0.30);
+  g.lineTo(w * 0.90, h * 0.50);
+  g.lineTo(w * 0.75, h * 0.70);
+  g.lineTo(w * 0.60, h * 0.50);
+  g.closePath();
+  g.stroke();
+  // Fur micro-noise: burnt-orange specks + cream flecks (high contrast).
+  speckle(g, rand, w, h, 3600, ["rgba(200,120,50,0.85)", "rgba(255,252,244,0.95)", "rgba(170,95,35,0.7)"]);
+  // Short vertical fur streaks.
+  furStreaks(g, rand, w, h, 520, "rgba(190,120,55,0.6)");
+}
+let texNibble = null, texEmber = null, texInit = false;
+function ensureTex(kind) {
+  if (!texInit && createTex) {
+    // One attempt once the gl.js pass lands; any failure sticks to null so
+    // a missing/broken createTex can never break boot or spam per frame.
+    texInit = true;
+    try { texNibble = createTex(128, 128, paintNibble) || null; } catch { texNibble = null; }
+    try { texEmber = createTex(128, 128, paintEmbercub) || null; } catch { texEmber = null; }
+  }
+  if (kind === "foe") return texNibble || undefined;
+  return texEmber || undefined;
 }
 
 function rootMatrix(px, py, pz, faceY, breath, fainted, faintSign, roll, lean) {
@@ -564,9 +734,29 @@ function rootMatrix(px, py, pz, faceY, breath, fainted, faintSign, roll, lean) {
   return M;
 }
 
+// Per-battler 11-float soups (pos + color + normal + uv), one texture each.
+function stripTo9(arr11) {
+  const out = new Array((arr11.length / 11) * 9);
+  let j = 0;
+  for (let i = 0; i < arr11.length; i += 11) {
+    out[j++] = arr11[i]; out[j++] = arr11[i + 1]; out[j++] = arr11[i + 2];
+    out[j++] = arr11[i + 3]; out[j++] = arr11[i + 4]; out[j++] = arr11[i + 5];
+    out[j++] = arr11[i + 6]; out[j++] = arr11[i + 7]; out[j++] = arr11[i + 8];
+  }
+  return out;
+}
+function stripTo6(arr11) {
+  const out = new Array((arr11.length / 11) * 6);
+  let j = 0;
+  for (let i = 0; i < arr11.length; i += 11) {
+    out[j++] = arr11[i]; out[j++] = arr11[i + 1]; out[j++] = arr11[i + 2];
+    out[j++] = arr11[i + 3]; out[j++] = arr11[i + 4]; out[j++] = arr11[i + 5];
+  }
+  return out;
+}
 export function drawMons(ctx, viewProj, state, t) {
   const time = typeof t === "number" ? t : 0;
-  const arr = [];
+  const arrFoe = [], arrMe = [];
 
   const flashFoe = clamp01(state && typeof state.flashFoe === "number" ? state.flashFoe : 0);
   const flashMe = clamp01(state && typeof state.flashMe === "number" ? state.flashMe : 0);
@@ -596,7 +786,7 @@ export function drawMons(ctx, viewProj, state, t) {
     const lean = damp * 0.03 * Math.sin(time * 1.1 + 0.7);
     const M = rootMatrix(SPOTS.foe[0], Math.max(0, bob) - sinkFoe, SPOTS.foe[2] + lungeFoe, 0,
       [FOE_S * (1 + 0.02 * s), FOE_S * (1 + 0.03 * s), FOE_S * (1 + 0.02 * s)], foeFainted, 1, roll, lean);
-    buildNibble(arr, M, flashFoe, time, damp);
+    buildNibble(arrFoe, M, flashFoe, time, damp);
   }
 
   // Player Embercub on ME_SPOT, faces -z (foe). Phase-shifted bob/breathe.
@@ -614,34 +804,50 @@ export function drawMons(ctx, viewProj, state, t) {
     // near-side eye + flame in 3/4 profile instead of the far flank.
     const M = rootMatrix(SPOTS.me[0], Math.max(0, bob) - sinkMe, SPOTS.me[2] - lungeMe, Math.PI + 0.35,
       [ME_S * (1 + 0.02 * s), ME_S * (1 + 0.03 * s), ME_S * (1 + 0.02 * s)], meFainted, -1, roll, lean);
-    buildEmbercub(arr, M, flashMe, time, damp);
+    buildEmbercub(arrMe, M, flashMe, time, damp);
   }
 
-  if (!arr.length) return;
+  if (!arrFoe.length && !arrMe.length) return;
   // Emit in tri-boundary chunks: gl.js streams plain Arrays through a
   // capped scratch buffer (STREAM_CAP_TRIS verts/call, remainder dropped),
   // so a whole-pair soup must never go out in one call. Chunking is
   // pixel-identical (opaque depth-tested tris, order-independent).
   const CHUNK_TRIS = 1100; // 3300 verts/call, under the stream cap
+  // Textured path: per-battler soup + its procedural texture, rim armed per
+  // batch inside emitNT.
+  if (drawTrisNT) {
+    try {
+      emitNT(ctx, viewProj, arrFoe, ensureTex("foe"));
+      emitNT(ctx, viewProj, arrMe, ensureTex("me"));
+      return;
+    } catch { /* fall through to the untextured path */ }
+  }
   if (drawTrisN) {
-    for (let i = 0; i < arr.length; i += CHUNK_TRIS * 27) {
-      drawTrisN(ctx, arr.slice(i, i + CHUNK_TRIS * 27), viewProj);
+    const foe9 = stripTo9(arrFoe), me9 = stripTo9(arrMe);
+    for (let i = 0; i < foe9.length; i += CHUNK_TRIS * 27) {
+      drawTrisN(ctx, foe9.slice(i, i + CHUNK_TRIS * 27), viewProj);
+    }
+    for (let i = 0; i < me9.length; i += CHUNK_TRIS * 27) {
+      drawTrisN(ctx, me9.slice(i, i + CHUNK_TRIS * 27), viewProj);
     }
     return;
   }
-  // Fallback: strip normals to the legacy 6-float layout so every frame
+  // Fallback: strip normals+uvs to the legacy 6-float layout so every frame
   // renders (flat vertex colors) even before the migration lands.
-  const flat = new Array((arr.length / 9) * 6);
-  let j = 0;
-  for (let i = 0; i < arr.length; i += 9) {
-    flat[j++] = arr[i];
-    flat[j++] = arr[i + 1];
-    flat[j++] = arr[i + 2];
-    flat[j++] = arr[i + 3];
-    flat[j++] = arr[i + 4];
-    flat[j++] = arr[i + 5];
+  const foe6 = stripTo6(arrFoe), me6 = stripTo6(arrMe);
+  for (let i = 0; i < foe6.length; i += CHUNK_TRIS * 18) {
+    drawTris(ctx, foe6.slice(i, i + CHUNK_TRIS * 18), viewProj);
   }
-  for (let i = 0; i < flat.length; i += CHUNK_TRIS * 18) {
-    drawTris(ctx, flat.slice(i, i + CHUNK_TRIS * 18), viewProj);
+  for (let i = 0; i < me6.length; i += CHUNK_TRIS * 18) {
+    drawTris(ctx, me6.slice(i, i + CHUNK_TRIS * 18), viewProj);
+  }
+}
+function emitNT(ctx, viewProj, arr11, tex) {
+  const CHUNK_FLOATS = 1100 * 33; // 11 floats/vert
+  for (let i = 0; i < arr11.length; i += CHUNK_FLOATS) {
+    // Old paths auto-reset uRim to 0, so arm it immediately before every
+    // textured batch; guarded — absent setter skips silently.
+    if (setRim) { try { setRim(0.6); } catch {} }
+    drawTrisNT(ctx, arr11.slice(i, i + CHUNK_FLOATS), viewProj, tex);
   }
 }

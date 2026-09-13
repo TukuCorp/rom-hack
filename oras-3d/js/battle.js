@@ -31,7 +31,7 @@ export const state = {
 // file mid-flight never breaks boot. Statically imported above: hud.js,
 // gl.js (both exist). Pieces below may or may not exist yet.
 let getCamera = null, drawArena = null, drawMons = null;
-let triggerFx = null, drawFx = null;
+let triggerFx = null, drawFx = null, setCamPos = null;
 
 async function loadPieces() {
   try { const m = await import("./camera.js"); if (m && typeof m.getCamera === "function") getCamera = m.getCamera; } catch {}
@@ -42,6 +42,7 @@ async function loadPieces() {
     if (m && typeof m.triggerFx === "function") triggerFx = m.triggerFx;
     if (m && typeof m.drawFx === "function") drawFx = m.drawFx;
   } catch {}
+  try { const m = await import("./gl.js"); if (m && typeof m.setCamPos === "function") setCamPos = m.setCamPos; } catch {}
 }
 loadPieces();
 
@@ -72,6 +73,7 @@ function scene(ctx, st, t) {
     } catch {}
   }
   const fovy = (cam && typeof cam.fovy === "number") ? cam.fovy : FALLBACK_CAM.fovy;
+  if (setCamPos) { try { setCamPos(Array.isArray(cam.eye) ? cam.eye : FALLBACK_CAM.eye); } catch {} }
   const viewProj = mat4mul(perspective(fovy, 16 / 10, 0.1, 100), lookAt(cam.eye, cam.at, [0, 1, 0]));
   if (drawArena) { try { drawArena(ctx, viewProj, t); } catch {} }
   if (drawMons) { try { drawMons(ctx, viewProj, st, t); } catch {} }
