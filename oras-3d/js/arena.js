@@ -4,17 +4,18 @@
 // faint triangle inlays + hex response pattern, long specular streak decals,
 // and a blue stadium wall with halo-backed glowing arches (bloom-spill fake)
 // under a bright top beam, graded into a fog skirt at the wall base.
-// Lighting is baked into vertex colors: a cool-blue directional wash from
-// front-left plus distance fog grading the floor toward the wall.
-// Hand-built flat-shaded triangles via gl.js drawTris. Static soup built
-// once (~510 tris, under the 600 budget).
-import { drawTris } from "./gl.js";
+// front-left plus distance fog grading the floor toward the wall. Baked wash
+// stays in the vertex colors; flat/+Y/zero normals ride a 9-float channel so
+// the gl.js cel shader can model the architecture (see tri/triV below).
+// Hand-built flat-shaded triangles via gl.js drawTrisN (guarded fallback to
+// drawTris). Static soup built once (~510 tris, under the 600 budget).
+import * as GL from "./gl.js";
 
 // Battler ground spots, shared with models.js / effects.js. FROZEN.
 export const FOE_SPOT = [0, 0, -5.2];
 export const ME_SPOT = [0, 0, 2.5];
 
-let cache = null;
+let cache9 = null, cache6 = null;
 // STATIC atmosphere overlay (round 6): div#atmo over #stage but below #hud
 // (inserted before #hud in tree order, z-index 0). CSS-only bloom fake the
 // WebGL geometry cannot sell: cyan haze glowing top-center fading down,
@@ -41,13 +42,19 @@ function ensureAtmo() {
 }
 ensureAtmo();
 
-function tri(out, ax, ay, az, bx, by, bz, cx, cy, cz, r, g, b) {
-  out.push(ax, ay, az, r, g, b, bx, by, bz, r, g, b, cx, cy, cz, r, g, b);
+// Normal channel for the cel pass (data9 = [x,y,z, r,g,b, nx,ny,nz]).
+// tri/triV default to +Y (floor decals, rings, pool, sky); wall planes pass
+// FACE (+Z); pure-emissive pieces (beam, hot cores, moon, stars) pass zeros
+// to stay fullbright (unlit path in the shader).
+const FACE = [0, 0, 1];
+function tri(out, ax, ay, az, bx, by, bz, cx, cy, cz, r, g, b, nx = 0, ny = 1, nz = 0) {
+  out.push(ax, ay, az, r, g, b, nx, ny, nz, bx, by, bz, r, g, b, nx, ny, nz, cx, cy, cz, r, g, b, nx, ny, nz);
 }
-function triV(out, a, b, c) {
-  out.push(a[0], a[1], a[2], a[3], a[4], a[5]);
-  out.push(b[0], b[1], b[2], b[3], b[4], b[5]);
-  out.push(c[0], c[1], c[2], c[3], c[4], c[5]);
+function triV(out, a, b, c, n) {
+  const nx = n ? n[0] : 0, ny = n ? n[1] : 1, nz = n ? n[2] : 0;
+  out.push(a[0], a[1], a[2], a[3], a[4], a[5], nx, ny, nz);
+  out.push(b[0], b[1], b[2], b[3], b[4], b[5], nx, ny, nz);
+  out.push(c[0], c[1], c[2], c[3], c[4], c[5], nx, ny, nz);
 }
 
 // Cool-blue key wash from front-left: ~+/-0.2 brightness across the arena,
@@ -233,19 +240,19 @@ function buildWall(out) {
   const X0 = -34, X1 = 34;
   const deep = [0.03, 0.12, 0.24];
   // Base band y 0..7 with baked wash gradient.
-  triV(out, wVert(deep, X0, 0, Z), wVert(deep, X1, 0, Z), wVert(deep, X1, 8.4, Z));
-  triV(out, wVert(deep, X0, 0, Z), wVert(deep, X1, 8.4, Z), wVert(deep, X0, 8.4, Z));
+  triV(out, wVert(deep, X0, 0, Z), wVert(deep, X1, 0, Z), wVert(deep, X1, 8.4, Z), FACE);
+  triV(out, wVert(deep, X0, 0, Z), wVert(deep, X1, 8.4, Z), wVert(deep, X0, 8.4, Z), FACE);
   // Center floodlight wash, cooler and left-biased.
   const wash = [0.09, 0.27, 0.47];
   triV(out,
-    wVert(wash, -9, 0, Z + 0.005), wVert(wash, 9, 0, Z + 0.005), wVert(wash, 9, 8.4, Z + 0.005));
+    wVert(wash, -9, 0, Z + 0.005), wVert(wash, 9, 0, Z + 0.005), wVert(wash, 9, 8.4, Z + 0.005), FACE);
   triV(out,
-    wVert(wash, -9, 0, Z + 0.005), wVert(wash, 9, 8.4, Z + 0.005), wVert(wash, -9, 8.4, Z + 0.005));
+    wVert(wash, -9, 0, Z + 0.005), wVert(wash, 9, 8.4, Z + 0.005), wVert(wash, -9, 8.4, Z + 0.005), FACE);
   // Top beam: bright cyan strip y 7.5..8.15, lifted for the upper crowd tier.
   const beam = [0.45, 0.90, 1.0];
   const zb = Z + 0.01;
-  tri(out, X0, 7.5, zb, X1, 7.5, zb, X1, 8.15, zb, beam[0], beam[1], beam[2]);
-  tri(out, X0, 7.5, zb, X1, 8.15, zb, X0, 8.15, zb, beam[0], beam[1], beam[2]);
+  tri(out, X0, 7.5, zb, X1, 7.5, zb, X1, 8.15, zb, beam[0], beam[1], beam[2], 0, 0, 0);
+  tri(out, X0, 7.5, zb, X1, 8.15, zb, X0, 8.15, zb, beam[0], beam[1], beam[2], 0, 0, 0);
   // Arch row with bloom-spill fake: three nested halo fields per arch,
   // near-white trim rim, bright sill strip + hot core, glow body, dark inset.
   const haloO = [0.25, 0.58, 0.82];
@@ -260,24 +267,24 @@ function buildWall(out) {
     const cx = -22.5 + k * 5;
     const zho = Z + 0.010 + (k % 3) * 0.004, zhm = Z + 0.022 + (k % 2) * 0.004, zhi = Z + 0.030;
     const zt = Z + 0.034, za = Z + 0.038, zi = Z + 0.044, zh = Z + 0.049;
-    tri(out, cx - 6.3, 1.8, zho, cx + 6.3, 1.8, zho, cx + 6.3, 6.1, zho, haloO[0], haloO[1], haloO[2]);
-    tri(out, cx - 6.3, 1.8, zho, cx + 6.3, 6.1, zho, cx - 6.3, 6.1, zho, haloO[0], haloO[1], haloO[2]);
-    tri(out, cx - 3.6, 2.1, zhm, cx + 3.6, 2.1, zhm, cx + 3.6, 6.1, zhm, haloM[0], haloM[1], haloM[2]);
-    tri(out, cx - 3.6, 2.1, zhm, cx + 3.6, 6.1, zhm, cx - 3.6, 6.1, zhm, haloM[0], haloM[1], haloM[2]);
-    tri(out, cx - 2.0, 2.5, zhi, cx + 2.0, 2.5, zhi, cx + 2.0, 6.0, zhi, haloI[0], haloI[1], haloI[2]);
-    tri(out, cx - 2.0, 2.5, zhi, cx + 2.0, 6.0, zhi, cx - 2.0, 6.0, zhi, haloI[0], haloI[1], haloI[2]);
-    tri(out, cx - 0.97, 3.28, zt, cx + 0.97, 3.28, zt, cx + 0.97, 5.08, zt, trim[0], trim[1], trim[2]);
-    tri(out, cx - 0.97, 3.28, zt, cx + 0.97, 5.08, zt, cx - 0.97, 5.08, zt, trim[0], trim[1], trim[2]);
-    tri(out, cx - 0.97, 5.08, zt, cx + 0.97, 5.08, zt, cx, 5.82, zt, trim[0], trim[1], trim[2]);
-    tri(out, cx - 1.0, 3.02, za, cx + 1.0, 3.02, za, cx + 1.0, 3.28, za, sill[0], sill[1], sill[2]);
-    tri(out, cx - 1.0, 3.02, za, cx + 1.0, 3.28, za, cx - 1.0, 3.28, za, sill[0], sill[1], sill[2]);
-    tri(out, cx - 0.55, 2.98, zh, cx + 0.55, 2.98, zh, cx, 3.55, zh, hot[0], hot[1], hot[2]);
-    tri(out, cx - 0.8, 3.4, za, cx + 0.8, 3.4, za, cx + 0.8, 5.0, za, glow[0], glow[1], glow[2]);
-    tri(out, cx - 0.8, 3.4, za, cx + 0.8, 5.0, za, cx - 0.8, 5.0, za, glow[0], glow[1], glow[2]);
-    tri(out, cx - 0.8, 5.0, za, cx + 0.8, 5.0, za, cx, 5.7, za, glow[0], glow[1], glow[2]);
-    tri(out, cx - 0.5, 3.6, zi, cx + 0.5, 3.6, zi, cx + 0.5, 4.9, zi, dark[0], dark[1], dark[2]);
-    tri(out, cx - 0.5, 3.6, zi, cx + 0.5, 4.9, zi, cx - 0.5, 4.9, zi, dark[0], dark[1], dark[2]);
-    tri(out, cx - 0.5, 4.9, zi, cx + 0.5, 4.9, zi, cx, 5.4, zi, dark[0], dark[1], dark[2]);
+    tri(out, cx - 6.3, 1.8, zho, cx + 6.3, 1.8, zho, cx + 6.3, 6.1, zho, haloO[0], haloO[1], haloO[2], 0, 0, 1);
+    tri(out, cx - 6.3, 1.8, zho, cx + 6.3, 6.1, zho, cx - 6.3, 6.1, zho, haloO[0], haloO[1], haloO[2], 0, 0, 1);
+    tri(out, cx - 3.6, 2.1, zhm, cx + 3.6, 2.1, zhm, cx + 3.6, 6.1, zhm, haloM[0], haloM[1], haloM[2], 0, 0, 1);
+    tri(out, cx - 3.6, 2.1, zhm, cx + 3.6, 6.1, zhm, cx - 3.6, 6.1, zhm, haloM[0], haloM[1], haloM[2], 0, 0, 1);
+    tri(out, cx - 2.0, 2.5, zhi, cx + 2.0, 2.5, zhi, cx + 2.0, 6.0, zhi, haloI[0], haloI[1], haloI[2], 0, 0, 1);
+    tri(out, cx - 2.0, 2.5, zhi, cx + 2.0, 6.0, zhi, cx - 2.0, 6.0, zhi, haloI[0], haloI[1], haloI[2], 0, 0, 1);
+    tri(out, cx - 0.97, 3.28, zt, cx + 0.97, 3.28, zt, cx + 0.97, 5.08, zt, trim[0], trim[1], trim[2], 0, 0, 1);
+    tri(out, cx - 0.97, 3.28, zt, cx + 0.97, 5.08, zt, cx - 0.97, 5.08, zt, trim[0], trim[1], trim[2], 0, 0, 1);
+    tri(out, cx - 0.97, 5.08, zt, cx + 0.97, 5.08, zt, cx, 5.82, zt, trim[0], trim[1], trim[2], 0, 0, 1);
+    tri(out, cx - 1.0, 3.02, za, cx + 1.0, 3.02, za, cx + 1.0, 3.28, za, sill[0], sill[1], sill[2], 0, 0, 1);
+    tri(out, cx - 1.0, 3.02, za, cx + 1.0, 3.28, za, cx - 1.0, 3.28, za, sill[0], sill[1], sill[2], 0, 0, 1);
+    tri(out, cx - 0.55, 2.98, zh, cx + 0.55, 2.98, zh, cx, 3.55, zh, hot[0], hot[1], hot[2], 0, 0, 0);
+    tri(out, cx - 0.8, 3.4, za, cx + 0.8, 3.4, za, cx + 0.8, 5.0, za, glow[0], glow[1], glow[2], 0, 0, 1);
+    tri(out, cx - 0.8, 3.4, za, cx + 0.8, 5.0, za, cx - 0.8, 5.0, za, glow[0], glow[1], glow[2], 0, 0, 1);
+    tri(out, cx - 0.8, 5.0, za, cx + 0.8, 5.0, za, cx, 5.7, za, glow[0], glow[1], glow[2], 0, 0, 1);
+    tri(out, cx - 0.5, 3.6, zi, cx + 0.5, 3.6, zi, cx + 0.5, 4.9, zi, dark[0], dark[1], dark[2], 0, 0, 1);
+    tri(out, cx - 0.5, 3.6, zi, cx + 0.5, 4.9, zi, cx - 0.5, 4.9, zi, dark[0], dark[1], dark[2], 0, 0, 1);
+    tri(out, cx - 0.5, 4.9, zi, cx + 0.5, 4.9, zi, cx, 5.4, zi, dark[0], dark[1], dark[2], 0, 0, 1);
   }
   // Luminous crowd tiers: speckled emissive spectator flecks below the arches
   // plus one stacked tier above them; dark backing bands keep layered depth.
@@ -289,16 +296,16 @@ function buildWall(out) {
   triV(out,
     [X0, 0, zf, sk0[0], sk0[1], sk0[2]],
     [X1, 0, zf, sk0[0], sk0[1], sk0[2]],
-    [X1, 3.2, zf, sk1[0], sk1[1], sk1[2]]);
+    [X1, 3.2, zf, sk1[0], sk1[1], sk1[2]], FACE);
   triV(out,
     [X0, 0, zf, sk0[0], sk0[1], sk0[2]],
     [X1, 3.2, zf, sk1[0], sk1[1], sk1[2]],
-    [X0, 3.2, zf, sk1[0], sk1[1], sk1[2]]);
+    [X0, 3.2, zf, sk1[0], sk1[1], sk1[2]], FACE);
   // Bright base strip y 0.05..0.35.
   const bs = [0.40, 0.85, 0.95];
   const zs = Z + 0.05;
-  tri(out, X0, 0.05, zs, X1, 0.05, zs, X1, 0.35, zs, bs[0], bs[1], bs[2]);
-  tri(out, X0, 0.05, zs, X1, 0.35, zs, X0, 0.35, zs, bs[0], bs[1], bs[2]);
+  tri(out, X0, 0.05, zs, X1, 0.05, zs, X1, 0.35, zs, bs[0], bs[1], bs[2], 0, 0, 1);
+  tri(out, X0, 0.05, zs, X1, 0.35, zs, X0, 0.35, zs, bs[0], bs[1], bs[2], 0, 0, 1);
 }
 // Luminous crowd tiers (round 8): dark backing bands with speckled emissive
 // spectator flecks in varied warm/cool tints; dark gaps between the tiers.
@@ -317,16 +324,16 @@ function buildCrowd(out) {
   ];
   for (const [yb, n] of tiers) {
     const bl = [0.40, 0.62, 0.90];
-    tri(out, X0, yb - 0.22, zbl, X1, yb - 0.22, zbl, X1, yb + 1.08, zbl, bl[0], bl[1], bl[2]);
-    tri(out, X0, yb - 0.22, zbl, X1, yb + 1.08, zbl, X0, yb + 1.08, zbl, bl[0], bl[1], bl[2]);
+    tri(out, X0, yb - 0.22, zbl, X1, yb - 0.22, zbl, X1, yb + 1.08, zbl, bl[0], bl[1], bl[2], 0, 0, 1);
+    tri(out, X0, yb - 0.22, zbl, X1, yb + 1.08, zbl, X0, yb + 1.08, zbl, bl[0], bl[1], bl[2], 0, 0, 1);
     triV(out,
       [X0, yb - 0.15, zb, dark[0], dark[1], dark[2]],
       [X1, yb - 0.15, zb, dark[0], dark[1], dark[2]],
-      [X1, yb + 1.0, zb, dark[0], dark[1], dark[2]]);
+      [X1, yb + 1.0, zb, dark[0], dark[1], dark[2]], FACE);
     triV(out,
       [X0, yb - 0.15, zb, dark[0], dark[1], dark[2]],
       [X1, yb + 1.0, zb, dark[0], dark[1], dark[2]],
-      [X0, yb + 1.0, zb, dark[0], dark[1], dark[2]]);
+      [X0, yb + 1.0, zb, dark[0], dark[1], dark[2]], FACE);
     for (let i = 0; i < n; i++) {
       // Deterministic scatter; ~1/4 slots stay dark silhouettes.
       const h = ((i * 2654435761 + n * 97 + (yb * 13 | 0)) >>> 0) % 100;
@@ -339,7 +346,7 @@ function buildCrowd(out) {
       const dim = 0.70 + (h % 8) * 0.045;
       const yj = yb + (h % 4) * 0.09;
       tri(out, cx - w, yj, zc, cx + w, yj, zc, cx + (h % 5 - 2) * 0.12, yj + hh, zc,
-        t[0] * dim, t[1] * dim, t[2] * dim);
+        t[0] * dim, t[1] * dim, t[2] * dim, 0, 0, 1);
     }
   }
 }
@@ -419,7 +426,7 @@ function buildSky(out) {
   ];
   for (const [sx, sy, s, b] of stars) {
     tri(out, sx - s, sy - s * 0.6, zs, sx + s, sy - s * 0.6, zs, sx, sy + s * 0.8, zs,
-      0.8 * b, 0.88 * b, 1.0 * b);
+      0.8 * b, 0.88 * b, 1.0 * b, 0, 0, 0);
   }
   // Moon: pale disc + faint halo, upper right where the frame still sees sky.
   const mx = 13.5, my = 10.8, mz = Z + 0.1;
@@ -431,7 +438,7 @@ function buildSky(out) {
     tri(out, mx, my, mz,
       mx + Math.cos(a) * 1.6, my + Math.sin(a) * 1.6, mz,
       mx + Math.cos(b2) * 1.6, my + Math.sin(b2) * 1.6, mz,
-      mc[0], mc[1], mc[2]);
+      mc[0], mc[1], mc[2], 0, 0, 0);
   }
   const mh = [0.22, 0.32, 0.48];
   const HS = 6;
@@ -442,12 +449,12 @@ function buildSky(out) {
       mx + Math.cos(a) * 2.7, my + Math.sin(a) * 2.7, mz,
       mx + Math.cos(b2) * 2.7, my + Math.sin(b2) * 2.7, mz,
       mx + Math.cos(b2) * 1.9, my + Math.sin(b2) * 1.9, mz,
-      mh[0], mh[1], mh[2]);
+      mh[0], mh[1], mh[2], 0, 0, 0);
     tri(out,
       mx + Math.cos(a) * 2.7, my + Math.sin(a) * 2.7, mz,
       mx + Math.cos(b2) * 1.9, my + Math.sin(b2) * 1.9, mz,
       mx + Math.cos(a) * 1.9, my + Math.sin(a) * 1.9, mz,
-      mh[0], mh[1], mh[2]);
+      mh[0], mh[1], mh[2], 0, 0, 0);
   }
 }
 
@@ -468,6 +475,14 @@ function buildArena() {
 
 export function drawArena(ctx, viewProj, t) {
   ensureAtmo();
-  if (!cache) cache = buildArena();
-  drawTris(ctx, cache, viewProj);
+  if (!cache9) cache9 = buildArena();
+  if (typeof GL.drawTrisN === "function") { GL.drawTrisN(ctx, cache9, viewProj); return; }
+  if (!cache6) {
+    const n9 = cache9.length / 9, flat = new Float32Array(n9 * 6);
+    for (let v = 0; v < n9; v++) {
+      for (let k = 0; k < 6; k++) flat[v * 6 + k] = cache9[v * 9 + k];
+    }
+    cache6 = flat;
+  }
+  GL.drawTris(ctx, cache6, viewProj);
 }
