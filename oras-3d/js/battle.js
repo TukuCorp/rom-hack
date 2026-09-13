@@ -25,6 +25,7 @@ export const state = {
   sinkFoe: 0,      // 0..1 faint sink, eased to 1 for the loser
   sinkMe: 0,       // 0..1 faint sink, eased to 1 for the loser
   fainted: null,   // null | "foe" | "me"
+  introScale: 1,   // 0..1 send-out scale, read by models.js (ME root)
 };
 
 // ---- Optional piece builders: dynamic import each, guarded so a missing
@@ -49,10 +50,20 @@ loadPieces();
 const FALLBACK_CAM = { eye: [2.5, 3.2, 9.5], at: [0, 1.2, -2], fovy: 0.62 };
 
 let lastT = -1;
+// Ramp gate: ME stays hidden (introScale 0) through the "appeared!" line;
+// the throw fires introArmed and scene() eases 0->1 during the "Go!" line.
+let introArmed = false;
 function scene(ctx, st, t) {
   // Per-frame decay (frame-rate independent).
   const dt = lastT < 0 ? 0.016 : Math.min(0.05, Math.max(0, t - lastT));
   lastT = t;
+  // Send-out ramp: 0->1 in ~0.7s once the throw fires. Models.js multiplies
+  // the ME root scale by introScale (guarded ?? 1 over there).
+  if (st.introScale == null) st.introScale = 1;
+  else if (introArmed && st.introScale < 1) {
+    st.introScale = Math.min(1, st.introScale + dt * 1.4);
+    if (st.introScale >= 1) introArmed = false;
+  }
   // Hit-flash holds at 1 for 120ms post-hit, then decays to 0 by ~300ms.
   if (t < (st.flashFoeHold || 0)) st.flashFoe = 1;
   else st.flashFoe = Math.max(0, st.flashFoe - dt * 5.6);
@@ -64,7 +75,6 @@ function scene(ctx, st, t) {
   // Ease the loser down to a full sink of 1 on faint.
   if (st.fainted === "foe") st.sinkFoe = Math.min(1, st.sinkFoe + dt * 1.4);
   else if (st.fainted === "me") st.sinkMe = Math.min(1, st.sinkMe + dt * 1.4);
-
   let cam = FALLBACK_CAM;
   if (getCamera) {
     try {
@@ -96,13 +106,15 @@ function paint() {
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Damaging hit on one side: flash + lunge + shake + particle fx.
-function doHit(victim, kind) {
+// noFx skips the triggerFx spawn: the Ember path uses it because the
+// 'emberfly' travel (fired before the wait) already owns the impact burst.
+function doHit(victim, kind, noFx) {
   if (!Array.isArray(state.fx)) state.fx = [];
   const hold = performance.now() / 1000 + 0.12;
   if (victim === "foe") { state.flashFoe = 1; state.flashFoeHold = hold; state.lungeMe = 1; }
   else { state.flashMe = 1; state.flashMeHold = hold; state.lungeFoe = 1; }
   state.camShake = kind === "ember" ? 3.5 : 6;
-  if (triggerFx) { try { triggerFx(state, kind); } catch {} }
+  if (!noFx && triggerFx) { try { triggerFx(state, kind); } catch {} }
 }
 
 function doFaint(loser) {
@@ -113,14 +125,30 @@ function doFaint(loser) {
 
 export async function runBattle() {
   paint();
+  if (!Array.isArray(state.fx)) state.fx = [];
+  // Send-out: ME hidden until the throw lands.
+  introArmed = false;
+  state.introScale = 0;
+  if (triggerFx) { try { triggerFx(state, "dust"); } catch {} }
   await say(`Wild ${state.foe.name} appeared!`);
+  if (triggerFx) { try { triggerFx(state, "throw"); } catch {} }
+  introArmed = true;
+  state.introScale = 0;
   await say(`Go! ${state.me.name}!`);
   for (;;) {
     const i = await askMove(state.me.moves);
     const mv = state.me.moves[i];
     await say(`${state.me.name} used ${mv}!`);
     if (POWER[mv]) {
-      doHit("foe", mv === "Ember" ? "ember" : "tackle");
+      if (mv === "Ember") {
+        // Impact sync: fire the traveling fireball, wait for arrival,
+        // THEN damage + flash + shake on impact.
+        if (triggerFx) { try { triggerFx(state, "emberfly"); } catch {} }
+        await wait(250);
+        doHit("foe", "ember", true);
+      } else {
+        doHit("foe", "tackle");
+      }
       state.foe.cur = Math.max(0, state.foe.cur - damage(state.me, state.foe, mv));
       paint();
       await wait(550);

@@ -40,11 +40,14 @@ function home(state, who) {
   return arenaAnchor(who) || (who === "me" ? HOME_ME : HOME_FOE);
 }
 
-// Direction inference for 2-arg triggerFx(state, kind) calls. Ember is always
-// player -> foe (foe Nibble has no Ember). Tackle reads the live lunge field
-// the scene just set; faint reads state.fainted. opts { from, to } overrides.
+// Direction inference for 2-arg triggerFx(state, kind) calls. Ember/emberfly
+// are always player -> foe (foe Nibble has no Ember). Tackle reads the live
+// lunge field the scene just set; faint reads state.fainted. Throw always
+// lands on me, dust always on foe. opts { from, to } overrides.
 function dir(state, kind, opts) {
-  if (kind === "ember") return [opts.from || "me", opts.to || "foe"];
+  if (kind === "ember" || kind === "emberfly") return [opts.from || "me", opts.to || "foe"];
+  if (kind === "throw") return [opts.from || null, opts.to || "me"];
+  if (kind === "dust") return [opts.from || null, opts.to || "foe"];
   if (kind === "faint") {
     const to = opts.to || state.fainted || "foe";
     return [opts.from || null, to];
@@ -311,6 +314,150 @@ function spawnFaintPuffs(q, now, b) {
     });
   }
 }
+// Signature-moment spawners (ORAS intro + traveling Ember). Original
+// procedural art only. Future-born particles (born > now) pop on arrival;
+// drawFx skips age < 0 without sweeping, so they survive until their beat.
+const THROW_T = 0.5; // ball flight seconds, bottom-center -> ME spot
+const FLY_T = 0.3; // ember fireball flight seconds, attacker -> defender
+
+function spawnThrow(q, now, me) {
+  // Ball arc: starts low near the camera (bottom-center of frame), arcs to
+  // the ME chest spot. Lerp + sine lift is resolved in drawFx (p.ball).
+  const ex = me[0], ey = me[1] + 0.2, ez = me[2];
+  q.push({
+    ball: 1, x: me[0] + 0.55, y: 0.1, z: me[2] + 1.1,
+    ex, ey, ez, T: THROW_T, arc: 0.9,
+    vx: 0, vy: 0, vz: 0, g: 0,
+    born: now, life: THROW_T, size: 0.16, c: [1, 0.15, 0.12],
+  });
+  const at = now + THROW_T; // arrival beat: white open-flash + sparkles
+  for (let i = 0; i < 6; i++) {
+    q.push({
+      x: ex + (Math.random() - 0.5) * 0.3,
+      y: ey + (Math.random() - 0.5) * 0.3,
+      z: ez + (Math.random() - 0.5) * 0.2,
+      vx: (Math.random() - 0.5) * 0.6,
+      vy: (Math.random() - 0.5) * 0.6,
+      vz: (Math.random() - 0.5) * 0.6,
+      g: 0, born: at, life: 0.3 + Math.random() * 0.1,
+      c: [1, 1, 0.97], size: 0.26 + Math.random() * 0.12,
+      grow: 0.06, hold: 0.12,
+    });
+  }
+  const sparkCols = [[1, 1, 1], [1, 0.97, 0.8], [1, 1, 0.9]];
+  for (let i = 0; i < 22; i++) {
+    const sa = Math.random() * Math.PI * 2;
+    const ss = 2 + Math.random() * 3;
+    q.push({
+      x: ex, y: ey, z: ez,
+      vx: Math.cos(sa) * ss, vy: Math.random() * 2.5 + 0.5, vz: Math.sin(sa) * ss,
+      g: -5, born: at, life: 0.35 + Math.random() * 0.2,
+      c: sparkCols[(Math.random() * sparkCols.length) | 0],
+      size: 0.03 + Math.random() * 0.03,
+    });
+  }
+}
+
+function spawnDust(q, now, foe) {
+  // Foe encounter dust: tan-gray puffs kicked up at the foe ground spot.
+  const gx = foe[0], gz = foe[2];
+  const cols = [[0.62, 0.55, 0.45], [0.55, 0.48, 0.4], [0.7, 0.63, 0.52]];
+  for (let i = 0; i < 14; i++) {
+    q.push({
+      x: gx + (Math.random() - 0.5) * 1.0,
+      y: 0.06 + Math.random() * 0.15,
+      z: gz + (Math.random() - 0.5) * 1.0,
+      vx: (Math.random() - 0.5) * 2.4,
+      vy: 0.8 + Math.random() * 1.2,
+      vz: (Math.random() - 0.5) * 2.4,
+      g: -1.2, born: now, life: 0.35 + Math.random() * 0.2,
+      c: cols[(Math.random() * cols.length) | 0],
+      size: 0.1 + Math.random() * 0.08,
+      grow: 0.18, smoke: 1,
+    });
+  }
+}
+
+function spawnEmberFly(q, now, a, b) {
+  // Traveling fireball: bright head lerps attacker -> defender in FLY_T
+  // (drawFx resolves p.fly), flame-tongue trail pops along its path, impact
+  // volume + floor pool spawn in the future (born = now + FLY_T).
+  const sx = a[0], sy = a[1] + 0.35, sz = a[2] - 0.2;
+  const ex = b[0], ey = b[1] + 0.3, ez = b[2] + 0.3;
+  q.push({
+    fly: 1, x: sx, y: sy, z: sz, ex, ey, ez, T: FLY_T, arc: 0.25,
+    vx: 0, vy: 0, vz: 0, g: 0,
+    born: now, life: FLY_T + 0.02, size: 0.22, c: [1, 0.6, 0.2],
+  });
+  const trailCols = [[1, 0.7, 0.3], [1, 0.8, 0.45], [1, 0.6, 0.22], [1, 0.9, 0.6]];
+  for (let i = 0; i < 26; i++) {
+    const f = i / 26;
+    q.push({
+      x: sx + (ex - sx) * f + (Math.random() - 0.5) * 0.16,
+      y: sy + (ey - sy) * f + Math.sin(f * Math.PI) * 0.25 + (Math.random() - 0.5) * 0.16,
+      z: sz + (ez - sz) * f + (Math.random() - 0.5) * 0.16,
+      vx: (Math.random() - 0.5) * 1, vy: 0.5 + Math.random() * 0.8, vz: (Math.random() - 0.5) * 1,
+      g: 0.5, born: now + f * FLY_T, life: 0.2,
+      c: trailCols[(Math.random() * trailCols.length) | 0],
+      size: 0.05 + Math.random() * 0.04, soft: 1,
+    });
+  }
+  const at = now + FLY_T; // impact beat (battle.js lands damage ~250ms in)
+  for (let i = 0; i < 8; i++) {
+    q.push({
+      x: ex + (Math.random() - 0.5) * 0.5,
+      y: ey + (Math.random() - 0.5) * 0.5,
+      z: ez + (Math.random() - 0.5) * 0.2,
+      vx: (Math.random() - 0.5) * 0.6,
+      vy: (Math.random() - 0.5) * 0.6,
+      vz: (Math.random() - 0.5) * 0.6,
+      g: 0, born: at, life: 0.5 + Math.random() * 0.1,
+      c: [1, 1, 0.95], size: 0.24 + Math.random() * 0.12,
+      soft: 1, grow: 0.08, hold: 0.3,
+    });
+  }
+  const shellCols = [[1, 0.78, 0.3], [1, 0.87, 0.45], [1, 0.65, 0.25]];
+  for (let i = 0; i < 30; i++) {
+    const th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1);
+    const sp = 1.2 + Math.random() * 1.8;
+    q.push({
+      x: ex, y: ey, z: ez,
+      vx: Math.sin(ph) * Math.cos(th) * sp,
+      vy: Math.abs(Math.cos(ph)) * sp * 0.8 + 0.3,
+      vz: Math.sin(ph) * Math.sin(th) * sp,
+      g: -1.5, born: at, life: 0.5 + Math.random() * 0.15,
+      c: shellCols[(Math.random() * shellCols.length) | 0],
+      size: 0.06 + Math.random() * 0.04, soft: 1, grow: 0.1, hold: 0.3,
+    });
+  }
+  for (let i = 0; i < 16; i++) {
+    const sa = Math.random() * Math.PI * 2;
+    const ss = 4 + Math.random() * 4;
+    q.push({
+      x: ex, y: ey, z: ez,
+      vx: Math.cos(sa) * ss, vy: Math.random() * 3 + 1, vz: Math.sin(sa) * ss,
+      g: -6, born: at, life: 0.4 + Math.random() * 0.2,
+      c: [1, 0.95, 0.7], size: 0.035 + Math.random() * 0.025, w: 0.35, h: 2.4,
+    });
+  }
+  for (let i = 0; i < 6; i++) {
+    q.push({
+      x: ex + (Math.random() - 0.5) * 0.6,
+      y: ey + 0.7 + Math.random() * 0.3,
+      z: ez + (Math.random() - 0.5) * 0.4,
+      vx: (Math.random() - 0.5) * 0.7,
+      vy: 1.4 + Math.random() * 0.8,
+      vz: (Math.random() - 0.5) * 0.7,
+      g: 0.4, born: at, life: 0.65 + Math.random() * 0.1,
+      c: [0.42, 0.38, 0.35], size: 0.1 + Math.random() * 0.06,
+      soft: 1, grow: 0.25, smoke: 1,
+    });
+  }
+  q.push({
+    x: b[0], y: 0.05, z: b[2], vx: 0, vy: 0, vz: 0, g: 0,
+    born: at, life: 0.5, c: [1, 0.7, 0.35], size: 0.55, grow: 0.06, fan: 8,
+  });
+}
 
 // Fullscreen warm-white wash: arena-wide light spill faked with a DOM overlay
 // (color only, no GL blending). div#flash is created once over #stage, reused
@@ -349,12 +496,16 @@ function pulseWash() {
 }
 
 export function triggerFx(state, kind, opts = {}) {
-  if (kind !== "ember" && kind !== "tackle" && kind !== "faint") return;
+  if (kind !== "ember" && kind !== "tackle" && kind !== "faint" &&
+      kind !== "throw" && kind !== "dust" && kind !== "emberfly") return;
   const q = ensureQueue(state);
   const now = performance.now() / 1000; // same clock main.js derives t from
   const [from, to] = dir(state, kind, opts);
   if (kind === "ember") { spawnEmber(q, now, home(state, from), home(state, to)); pulseWash(); }
+  else if (kind === "emberfly") { spawnEmberFly(q, now, home(state, from), home(state, to)); pulseWash(); }
   else if (kind === "tackle") { spawnTackleStar(q, now, home(state, to)); pulseWash(); }
+  else if (kind === "throw") spawnThrow(q, now, home(state, to));
+  else if (kind === "dust") spawnDust(q, now, home(state, to));
   else spawnFaintPuffs(q, now, home(state, to));
   cap(q);
 }
@@ -371,11 +522,26 @@ export function drawFx(ctx, viewProj, state, t) {
   for (const p of q) {
     const out = p.smoke ? dataSmoke : data;
     const age = t - p.born;
+    // Future-born (arrival) particles are SKIPPED, never swept: the sweep
+    // above only removes age > life, so age < 0 survives until its beat.
     if (age < 0) continue;
     const k = Math.max(0, 1 - age / p.life);
-    const x = p.x + p.vx * age;
-    const y = p.y + p.vy * age + 0.5 * p.g * age * age;
-    const z = p.z + p.vz * age;
+    // Signature flights (ball arc, traveling fireball): analytic lerp from
+    // (x,y,z) to (ex,ey,ez) over T seconds with a sine lift, so the head
+    // reads as one body mid-flight regardless of frame rate.
+    const glides = (p.ball || p.fly) && p.T;
+    let x, y, z;
+    if (glides) {
+      const f = Math.min(1, age / p.T);
+      const lift = (p.arc || 0) * Math.sin(f * Math.PI);
+      x = p.x + (p.ex - p.x) * f;
+      y = p.y + (p.ey - p.y) * f + lift;
+      z = p.z + (p.ez - p.z) * f;
+    } else {
+      x = p.x + p.vx * age;
+      y = p.y + p.vy * age + 0.5 * p.g * age * age;
+      z = p.z + p.vz * age;
+    }
     let s;
     const fullUntil = p.hold || 0;
     if (p.grow && age < p.grow) s = p.size * (0.3 + 0.7 * (age / p.grow));
@@ -389,8 +555,29 @@ export function drawFx(ctx, viewProj, state, t) {
     const r = Math.min(1, p.c[0] * fade);
     const g = Math.min(1, p.c[1] * fade);
     const bl = Math.min(1, p.c[2] * fade);
-    if (p.fan) {
-      // Flat radial fan in the XZ plane: light-pool decal, no billboarding.
+    if (p.ball) {
+      // Thrown ball: red top dome, white bottom dome, dark equator band +
+      // white button glint. Solid colors (no ember fade) so it reads mid-arc.
+      out.push(x - s, y, z, 0.85, 0.08, 0.08,
+        x + s, y, z, 0.85, 0.08, 0.08, x, y + s, z, 1, 0.16, 0.12);
+      out.push(x + s, y, z, 0.95, 0.95, 0.95,
+        x - s, y, z, 0.95, 0.95, 0.95, x, y - s, z, 1, 1, 1);
+      const bw = s * 0.5, bh = s * 0.12;
+      out.push(x - bw, y, z, 0.12, 0.1, 0.12,
+        x + bw, y, z, 0.12, 0.1, 0.12, x + bw, y + bh, z, 0.2, 0.18, 0.2);
+      out.push(x - bw, y, z, 0.12, 0.1, 0.12,
+        x + bw, y + bh, z, 0.2, 0.18, 0.2, x - bw, y + bh, z, 0.2, 0.18, 0.2);
+      const gw = s * 0.22;
+      out.push(x, y + gw, z, 1, 1, 1, x - gw, y, z, 1, 1, 1, x + gw, y, z, 1, 1, 1);
+    } else if (p.fly) {
+      // Traveling fireball: orange outer diamond + white-hot inner core.
+      const o = s, c = s * 0.45;
+      const or_ = Math.min(1, r), og = Math.min(1, g * 0.9), ob = Math.min(1, bl * 0.9);
+      out.push(x, y + o, z, or_, og, ob, x - o, y, z, or_, og, ob, x + o, y, z, or_, og, ob);
+      out.push(x + o, y, z, or_, og, ob, x - o, y, z, or_, og, ob, x, y - o, z, or_, og, ob);
+      out.push(x, y + c, z, 1, 0.98, 0.9, x - c, y, z, 1, 0.98, 0.9, x + c, y, z, 1, 0.98, 0.9);
+      out.push(x + c, y, z, 1, 0.98, 0.9, x - c, y, z, 1, 0.98, 0.9, x, y - c, z, 1, 0.98, 0.9);
+    } else if (p.fan) {
       const n = p.fan;
       for (let j = 0; j < n; j++) {
         const a0 = (j / n) * Math.PI * 2, a1 = ((j + 1) / n) * Math.PI * 2;

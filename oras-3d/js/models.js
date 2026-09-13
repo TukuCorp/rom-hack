@@ -916,6 +916,7 @@ export function drawMons(ctx, viewProj, state, t) {
   // bottom-left. Ground-origin scale, so feet stay planted on ME_SPOT.
   {
     const ME_S = 0.50;
+    const introS = (state && typeof state.introScale === "number") ? state.introScale : 1;
     const damp = meFainted ? 0.12 : 1;
     const bob = Math.sin(time * 2.2 + 2.1) * 0.08 * damp;
     const s = Math.sin(time * 2.7 + 1.2) * damp;
@@ -925,7 +926,7 @@ export function drawMons(ctx, viewProj, state, t) {
     // leads toward frame center so the over-shoulder camera catches snout +
     // near-side eye + flame in 3/4 profile instead of the far flank.
     const M = rootMatrix(SPOTS.me[0], Math.max(0, bob) - sinkMe, SPOTS.me[2] - lungeMe, Math.PI + 0.35,
-      [ME_S * (1 + 0.02 * s), ME_S * (1 + 0.03 * s), ME_S * (1 + 0.02 * s)], meFainted, -1, roll, lean);
+      [ME_S * (1 + 0.02 * s) * introS, ME_S * (1 + 0.03 * s) * introS, ME_S * (1 + 0.02 * s) * introS], meFainted, -1, roll, lean);
     buildEmbercub(arrMe, M, flashMe, time, damp);
   }
 
