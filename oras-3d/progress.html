@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Gauntlet — ORAS 3D Battle Demo</title>
+<style>body{font-family:system-ui;margin:0;background:#0b0e14;color:#e8ecf3}main{max-width:900px;margin:0 auto;padding:20px}
+.card{background:#131824;border:1px solid #232c40;border-radius:12px;padding:14px;margin:12px 0}
+.win{border-color:#2ea043}.lose{border-color:#e3350d}img{max-width:100%}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.meta{color:#9aa6bd;font-size:12.5px}</style></head><body><main>
+<h1>ORAS 3D Battle — Gauntlet vs Bulbapedia ORAS captures</h1>
+<p>Bar: official Omega Ruby / Alpha Sapphire battle screenshots in <kbd>oras-3d/bar/</kbd> (see NOTES.md). Builders vs harsh critic, blind A/B. Live.</p>
+<p class="meta">Harness: critic screenshots our <kbd>index.html</kbd> canvas at the bar PNG's viewport, strips labels, sets the pair side by side, picks a winner, names the single biggest gap, logs a round below. Ours wins blind or the piece loops.</p>
+<div id="rounds"></div>
+<script>
+async function refresh(){try{const r=await fetch('progress.json');const j=await r.json();
+document.getElementById('rounds').innerHTML=j.rounds.map(r=>`<div class="card ${r.win?'win':'lose'}"><h3>${r.piece} — round ${r.round}: ${r.win?'CRITIC PICKS OURS':'gap: '+r.gap}</h3>${r.imgs?`<div class="grid"><div><p class="meta">A</p><img src="${r.imgs[0]}"></div><div><p class="meta">B</p><img src="${r.imgs[1]}"></div></div>`:''}<p>${r.note}</p></div>`).join('');}catch(e){}}
+setInterval(refresh,3000);refresh();
+</script></main></body></html>

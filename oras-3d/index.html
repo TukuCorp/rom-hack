@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>ORAS 3D Battle Demo (original code &amp; art)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>ORAS 3D Battle <small>browser demo · original code &amp; art · no ROM assets</small></h1>
+  <div class="spacer"></div>
+  <a class="btn" href="progress.html">Gauntlet progress</a>
+</header>
+<main>
+  <div id="stage">
+    <canvas id="gl" width="800" height="480"></canvas>
+    <div id="hud">
+      <div id="foe-plate" class="plate"><span class="nm"></span><span class="lv"></span><div class="hpbar"><div class="hpfill"></div></div></div>
+      <div id="me-plate" class="plate"><span class="nm"></span><span class="lv"></span><div class="hpbar"><div class="hpfill"></div></div><span class="hpnum"></span></div>
+      <div id="textbox"><span id="text"></span><span id="arrow">▼</span></div>
+      <div id="movemenu" hidden></div>
+    </div>
+  </div>
+  <p class="hint">Keyboard: arrows move · <kbd>Z</kbd> confirm · <kbd>X</kbd> back. Builders own one file each: <kbd>models</kbd> <kbd>arena</kbd> <kbd>camera</kbd> <kbd>hud</kbd> <kbd>effects</kbd> <kbd>battle</kbd>.</p>
+</main>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
