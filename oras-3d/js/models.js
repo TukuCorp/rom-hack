@@ -388,6 +388,11 @@ function buildNibble(arr, M, F, t, damp) {
   ellipsoid(arr, M, 0, 0.42, -0.18, 0.345, 0.285, 0.375, 2, 8, C(INK), F,
     { t0: 0.6, t1: 1.9, p0: 3 * Math.PI / 2 - 1.0, p1: 3 * Math.PI / 2 + 1.0 });
   ellipsoid(arr, M, 0, 0.55, 0.10, 0.29, 0.24, 0.24, 8, 6, C(BLUE), F);
+  // Chest armor: two overlapping plate shells over the chest front.
+  ellipsoid(arr, M, 0, 0.55, 0.10, 0.302, 0.252, 0.252, 1, 6, C(DARK), F,
+    { t0: 0.9, t1: 1.3, p0: Math.PI / 2 - 1.1, p1: Math.PI / 2 + 1.1 });
+  ellipsoid(arr, M, 0, 0.55, 0.10, 0.302, 0.252, 0.252, 1, 6, C(DARK), F,
+    { t0: 1.3, t1: 1.7, p0: Math.PI / 2 - 1.1, p1: Math.PI / 2 + 1.1 });
   ellipsoid(arr, M, 0, 0.40, 0.20, 0.20, 0.18, 0.16, 6, 4, C(CREAM), F);
   // Neck: short tapered tube into the head pivot.
   tube(arr, M, [0, 0.55, 0.18], [0, 0.72, 0.24], 0.20, 0.24, 8, 1, C(DARK), F, [false, false]);
@@ -400,6 +405,9 @@ function buildNibble(arr, M, F, t, damp) {
     tube(arr, M, [s * 0.22, 0.16, -0.02], [s * 0.23, 0.10, 0.10], 0.085, 0.10, 7, 1, C(DARK), F, [false, false]);
     ellipsoid(arr, M, s * 0.23, 0.07, 0.16, 0.11, 0.07, 0.20, 6, 4, C(DARK), F);
     ellipsoid(arr, M, s * 0.23, 0.055, 0.32, 0.10, 0.05, 0.06, 5, 4, C(CREAM), F);
+    // Knuckle bumps bridging foot and toes.
+    ellipsoid(arr, M, s * 0.18, 0.12, 0.28, 0.045, 0.04, 0.05, 3, 3, C(BLUE), F);
+    ellipsoid(arr, M, s * 0.28, 0.12, 0.28, 0.045, 0.04, 0.05, 3, 3, C(BLUE), F);
     // White toe claws ahead of the toe caps.
     cone(arr, M, s * 0.18, 0.055, 0.36, 0.045, s * 0.18, 0.04, 0.54, 4, WHITE, F);
     cone(arr, M, s * 0.28, 0.055, 0.36, 0.045, s * 0.28, 0.04, 0.54, 4, WHITE, F);
@@ -409,6 +417,11 @@ function buildNibble(arr, M, F, t, damp) {
     tube(arr, M, [s * 0.30, 0.62, 0.24], [s * 0.32, 0.44, 0.34], 0.07, 0.055, 7, 1, C(BLUE), F, [false, false]);
     tube(arr, M, [s * 0.32, 0.44, 0.34], [s * 0.32, 0.30, 0.40], 0.06, 0.035, 6, 1, C(CREAM), F, [false, true]);
     ellipsoid(arr, M, s * 0.32, 0.27, 0.41, 0.055, 0.05, 0.06, 5, 4, C(CREAM), F);
+    // Three-finger hand with a claw cone on each digit.
+    for (const dx of [-0.04, 0, 0.04]) {
+      tube(arr, M, [s * 0.32 + dx, 0.25, 0.45], [s * 0.32 + dx * 1.5, 0.20, 0.53], 0.025, 0.02, 4, 1, C(CREAM), F, [false, false]);
+      cone(arr, M, s * 0.32 + dx * 1.5, 0.20, 0.53, 0.012, s * 0.32 + dx * 1.5, 0.17, 0.58, 4, WHITE, F);
+    }
     cone(arr, M, s * 0.33, 0.66, 0.24, 0.06, s * 0.38, 0.86, 0.24, 5, BLUE, F);
   }
   // Tail kinked up behind: curved stack of tapering tubes + dark tuft cone,
@@ -435,8 +448,20 @@ function buildNibble(arr, M, F, t, damp) {
   for (const s of [-1, 1]) {
     cone(arr, H, s * 0.10, 0.84, 0.70, 0.06, s * 0.10, 0.60, 0.71, 6, WHITE, F);
   }
+  // Upper tooth row lining the snout (bone white).
+  for (const dx of [-0.06, 0, 0.06]) {
+    cone(arr, H, dx, 0.86, 0.70, 0.02, dx, 0.79, 0.70, 4, WHITE, F);
+  }
   // Thick dark mouth interior so the white fangs pop by contrast.
   ellipsoid(arr, H, 0, 0.79, 0.66, 0.13, 0.05, 0.07, 6, 4, C(INK), F);
+  // Articulated lower jaw: hinged bar + lower tooth row + tongue, idly
+  // working open/closed on the jaw pivot.
+  const J = headMat(H, 0, 0.80, 0.55, 0, 0.10 + dk * 0.08 * Math.sin(time * 0.9 + 0.3));
+  tube(arr, J, [0, 0.80, 0.52], [0, 0.74, 0.70], 0.07, 0.05, 6, 1, C(CREAM), F, [false, false]);
+  for (const dx of [-0.06, 0, 0.06]) {
+    cone(arr, J, dx, 0.72, 0.66, 0.02, dx, 0.79, 0.66, 4, WHITE, F);
+  }
+  ellipsoid(arr, J, 0, 0.75, 0.60, 0.05, 0.025, 0.07, 4, 3, C(PINK), F);
   ellipsoid(arr, H, 0, 0.97, 0.71, 0.055, 0.045, 0.04, 7, 5, C(INK), F);
   // Jaw shading under the muzzle.
   ellipsoid(arr, H, 0, 0.83, 0.58, 0.11, 0.06, 0.09, 5, 4, C(CREAM), F);
@@ -453,6 +478,9 @@ function buildNibble(arr, M, F, t, damp) {
   for (const s of [-1, 1]) {
     tube(arr, H, [s * 0.10, 1.21, 0.55], [s * 0.26, 1.20, 0.52], 0.045, 0.04, 5, 1, C(DARK), F);
   }
+  // Brow armor plates: crisp slabs capping the brow ridges.
+  pushBox(arr, H, -0.18, 1.28, 0.57, 0.20, 0.06, 0.14, DARK, F);
+  pushBox(arr, H, 0.18, 1.28, 0.57, 0.20, 0.06, 0.14, DARK, F);
   // Cheek tufts: small swept cones + pink cheek balls.
   for (const s of [-1, 1]) {
     cone(arr, H, s * 0.30, 0.95, 0.44, 0.07, s * 0.42, 0.98, 0.34, 5, BLUE, F);
@@ -494,6 +522,13 @@ function buildEmbercub(arr, M, F, t, damp) {
   tube(arr, M, [0, 0.54, -0.078], [0, 0.636, -0.061], 0.461, 0.441, 10, 1, C(DARK), F, [false, false]);
   tube(arr, M, [0, 0.74, -0.043], [0, 0.836, -0.026], 0.419, 0.398, 10, 1, C(DARK), F, [false, false]);
   ellipsoid(arr, M, 0, 1.16, -0.06, 0.34, 0.16, 0.36, 8, 6, C(ORANGE), F);
+  // Dorsal armor: three overlapping plate shells banding the shoulder hump.
+  ellipsoid(arr, M, 0, 1.16, -0.06, 0.352, 0.172, 0.372, 1, 8, C(DARK), F,
+    { t0: 0.4, t1: 0.8, p0: 0, p1: Math.PI * 2 });
+  ellipsoid(arr, M, 0, 1.16, -0.06, 0.352, 0.172, 0.372, 1, 8, C([0.50, 0.34, 0.22]), F,
+    { t0: 0.8, t1: 1.2, p0: 0, p1: Math.PI * 2 });
+  ellipsoid(arr, M, 0, 1.16, -0.06, 0.352, 0.172, 0.372, 1, 8, C(DARK), F,
+    { t0: 1.2, t1: 1.6, p0: 0, p1: Math.PI * 2 });
   ellipsoid(arr, M, 0, 0.58, 0.30, 0.26, 0.28, 0.20, 8, 5, C(CREAM), F);
   // Back ridge spikes (crisp silhouette from behind).
   cone(arr, M, 0, 1.26, 0.10, 0.07, 0, 1.50, 0.02, 5, DARK, F);
@@ -507,6 +542,10 @@ function buildEmbercub(arr, M, F, t, damp) {
   // Segmented rear legs: planted paw + round haunch + tapered shin.
   for (const s of [-1, 1]) {
     ellipsoid(arr, M, s * 0.30, 0.09, 0.10, 0.15, 0.09, 0.30, 7, 5, C(DARK), F);
+    // Rear toe digits bridging paw and claws.
+    for (const dx of [-0.07, 0, 0.07]) {
+      ellipsoid(arr, M, s * 0.30 + dx, 0.07, 0.38, 0.045, 0.04, 0.07, 3, 3, C(DARK), F);
+    }
     // White toe claws ahead of the rear paw.
     cone(arr, M, s * 0.24, 0.08, 0.38, 0.05, s * 0.24, 0.05, 0.63, 4, WHITE, F);
     cone(arr, M, s * 0.36, 0.08, 0.38, 0.05, s * 0.36, 0.05, 0.63, 4, WHITE, F);
@@ -514,6 +553,8 @@ function buildEmbercub(arr, M, F, t, damp) {
     // Glute muscle curve capping the haunch rear-top.
     ellipsoid(arr, M, s * 0.50, 0.58, -0.32, 0.14, 0.15, 0.16, 4, 3, C(ORANGE), F);
     tube(arr, M, [s * 0.44, 0.30, -0.08], [s * 0.40, 0.14, 0.02], 0.11, 0.10, 6, 1, C(FLANK), F, [false, false]);
+    // Quad muscle mass bulging forward of the haunch.
+    ellipsoid(arr, M, s * 0.42, 0.30, 0.12, 0.12, 0.18, 0.14, 4, 3, C(ORANGE), F);
   }
   // Segmented front legs: tapered upper + fore + cream paw balls.
   for (const s of [-1, 1]) {
@@ -559,6 +600,8 @@ function buildEmbercub(arr, M, F, t, damp) {
   for (const s of [-1, 1]) {
     tube(arr, H, [s * 0.25, 1.74, 0.10], [s * 0.30, 2.24, -0.02], 0.11, 0.05, 7, 1, C(ORANGE), F);
     ellipsoid(arr, H, s * 0.30, 2.26, -0.02, 0.05, 0.06, 0.05, 5, 3, C(DARK), F);
+    // Ear edge ridge tracing the rear rim.
+    tube(arr, H, [s * 0.22, 1.70, 0.02], [s * 0.29, 2.22, -0.06], 0.03, 0.02, 4, 1, C(DARK), F, [false, false]);
     pushQuad(arr, H,
       [s * 0.25 - 0.08, 1.76, 0.20], [s * 0.25 + 0.08, 1.76, 0.20],
       [s * 0.285 + 0.05, 2.18, 0.10], [s * 0.285 - 0.05, 2.18, 0.10],
@@ -575,6 +618,9 @@ function buildEmbercub(arr, M, F, t, damp) {
   const T = headMat(M, 0.28, 0.55, -0.70, dk * 0.22 * Math.sin(time * 1.6 + 2.0), 0);
   tube(arr, T, [0.28, 0.55, -0.70], [0.34, 0.85, -0.68], 0.10, 0.085, 7, 1, C(ORANGE), F, [false, false]);
   tube(arr, T, [0.34, 0.85, -0.68], [0.38, 1.08, -0.64], 0.085, 0.07, 6, 1, C(FLANK), F);
+  // Segmented tail bands: dark collars ringing both tail segments.
+  tube(arr, T, [0.30, 0.62, -0.698], [0.325, 0.74, -0.69], 0.108, 0.10, 7, 1, C(DARK), F, [false, false]);
+  tube(arr, T, [0.355, 0.91, -0.665], [0.365, 1.02, -0.655], 0.093, 0.093, 7, 1, C(DARK), F, [false, false]);
   const fl = 1 + 0.22 * Math.sin(time * 11) + 0.10 * Math.sin(time * 23 + 1);
   const fh = 0.62 * fl;
   const fr = 0.17 * (1 + 0.10 * Math.sin(time * 17 + 0.7));
