@@ -8,8 +8,9 @@
 import { drawTris } from "./gl.js";
 
 // Fallback battler anchors (chest height). Canonical spots live in arena.js
-// (FOE/ME); BattleBuilder's state.mePos / state.foePos win when published.
-export const HOME_ME = [0, 0.7, 2.8];
+// (FOE/ME); ME rides the calibrated frame-left offset (models.js).
+// BattleBuilder's state.mePos / state.foePos win when published.
+export const HOME_ME = [-1.15, 0.7, 1.4];
 export const HOME_FOE = [0, 1.1, -6];
 
 const MAX_P = 450;
@@ -20,18 +21,22 @@ const LIFE = 0.6;
 // else lifts the older FOE_SPOT/ME_SPOT ground spots to chest height.
 let ARENA = null;
 import("./arena.js").then((m) => { ARENA = m; }, () => { ARENA = null; });
-// Guarded GL handle for drawFx blending: same pattern as ARENA (any failure
-// falls back to plain drawTris with no state changes). Namespace reads are
-// live, so GLMOD.gl tracks the real context after initGL.
 let GLMOD = null;
 import("./gl.js").then((m) => { GLMOD = m; }, () => { GLMOD = null; });
 const LIFT_ME = 0.7, LIFT_FOE = 1.1; // chest heights matching HOME_*
+// Guarded GL handle for drawFx blending: same pattern as ARENA (any failure
+// falls back to plain drawTris with no state changes). Namespace reads are
+// live, so GLMOD.gl tracks the real context after initGL.
 function arenaAnchor(who) {
   if (!ARENA) return null;
+  // Calibrated frame-left offset for the ally (matches models.js root).
+  const ME_DX = -1.15, ME_DZ = -1.1;
   const direct = who === "me" ? ARENA.ME : ARENA.FOE;
-  if (Array.isArray(direct) && direct.length >= 3) return direct;
+  if (Array.isArray(direct) && direct.length >= 3)
+    return who === "me" ? [direct[0] + ME_DX, direct[1], direct[2] + ME_DZ] : direct;
   const spot = who === "me" ? ARENA.ME_SPOT : ARENA.FOE_SPOT;
-  if (Array.isArray(spot) && spot.length >= 3) return [spot[0], spot[1] + (who === "me" ? LIFT_ME : LIFT_FOE), spot[2]];
+  if (Array.isArray(spot) && spot.length >= 3)
+    return [spot[0] + (who === "me" ? ME_DX : 0), spot[1] + (who === "me" ? LIFT_ME : LIFT_FOE), spot[2] + (who === "me" ? ME_DZ : 0)];
   return null;
 }
 function home(state, who) {

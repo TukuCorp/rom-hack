@@ -58,7 +58,7 @@ try {
 // Battler spots: arena.js FOE_SPOT/ME_SPOT are canonical. Guarded
 // dynamic import (one-directional: arena never imports models) so a
 // mid-write arena.js never breaks boot; defaults match arena values.
-const SPOTS = { foe: [0, 0, -7], me: [0, 0, 2.5] };
+const SPOTS = { foe: [0, 0, -5.2], me: [0, 0, 2.5] };
 import("./arena.js").then((m) => {
   if (m) {
     if (m.FOE_SPOT) SPOTS.foe = m.FOE_SPOT;
@@ -925,7 +925,7 @@ export function drawMons(ctx, viewProj, state, t) {
     // Slight yaw off pure -z: body still squares up to the foe, but the head
     // leads toward frame center so the over-shoulder camera catches snout +
     // near-side eye + flame in 3/4 profile instead of the far flank.
-    const M = rootMatrix(SPOTS.me[0], Math.max(0, bob) - sinkMe, SPOTS.me[2] - lungeMe, Math.PI + 0.35,
+    const M = rootMatrix(SPOTS.me[0] - 1.15, Math.max(0, bob) - sinkMe, SPOTS.me[2] - 1.1, Math.PI + 0.35,
       [ME_S * (1 + 0.02 * s) * introS, ME_S * (1 + 0.03 * s) * introS, ME_S * (1 + 0.02 * s) * introS], meFainted, -1, roll, lean);
     buildEmbercub(arrMe, M, flashMe, time, damp);
   }

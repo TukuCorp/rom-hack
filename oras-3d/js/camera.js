@@ -1,14 +1,14 @@
 // camera.js: ORAS-style over-shoulder battle camera. Pure math, no GL.
-// Low behind-player framing: ally big in the bottom-left foreground,
-// foe centered mid-distance on a diagonal.
+// High behind-player framing: ally anchors the bottom-left foreground,
+// foe stands center-distance on the arena diagonal.
 export function getCamera(state, t) {
   const time = typeof t === "number" ? t : 0;
   // Slow orbital sway around the default framing (zero at t=0 so the
-  // spec numbers read exact on boot; amplitudes tuned for the low eye).
+  // spec numbers read exact on boot; amplitudes tuned for the high eye).
   const swayX = Math.sin(time * 0.4) * 0.08;
   const swayY = (Math.sin(time * 0.53 + 1.3) - Math.sin(1.3)) * 0.08;
-  let eye = [1.2 + swayX, 1.15 + swayY, 3.9 + (Math.cos(time * 0.31) - 1) * 0.08];
-  const at = [-0.6, 0.95, -2];
+  let eye = [2.4 + swayX, 2.7 + swayY, 7.6 + (Math.cos(time * 0.31) - 1) * 0.08];
+  const at = [-0.9, 0.5, -3.0];
   const fovy = 0.61; // ~35deg
 
   // Push-in while the move menu is open.
@@ -20,7 +20,7 @@ export function getCamera(state, t) {
   } catch (_) { menuOpen = false; }
   if (menuOpen) {
     // Push-in: dolly along the view direction toward the foe.
-    const target = [0.85, 1.1, 2.4];
+    const target = [1.9, 2.4, 6.0];
     // Static blend toward the push-in framing (no persistent anim state).
     const k = 0.55;
     eye = [

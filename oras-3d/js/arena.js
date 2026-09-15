@@ -466,9 +466,9 @@ function buildArena() {
   buildPool(out);
   buildSky(out);
   glowRing(out, FOE_SPOT[0], FOE_SPOT[2], 1.0);
-  glowRing(out, ME_SPOT[0], ME_SPOT[2], 0.85);
+  glowRing(out, ME_SPOT[0] - 1.15, ME_SPOT[2] - 1.1, 0.85);
   buildReflection(out, FOE_SPOT[0], FOE_SPOT[2], 1.0);
-  buildReflection(out, ME_SPOT[0], ME_SPOT[2], 0.7);
+  buildReflection(out, ME_SPOT[0] - 1.15, ME_SPOT[2] - 1.1, 0.7);
   buildWall(out);
   return new Float32Array(out);
 }
