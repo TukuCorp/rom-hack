@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="icon" href="data:,">
+<title>Emberleaf - Hoenn-style Ruby Demo (original fan demake)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Emberleaf <small>ruby-style demake · Emberleaf Town + Coral Route · original code &amp; art</small></h1>
+  <div class="spacer"></div>
+  <a class="btn" href="/">Emulator build</a>
+</header>
+<main>
+  <div id="stage">
+    <canvas id="screen" width="256" height="192"></canvas>
+  </div>
+  <div id="touch">
+    <div class="dpad">
+      <button data-key="ArrowUp">▲</button>
+      <div><button data-key="ArrowLeft">◀</button><button data-key="ArrowDown">▼</button><button data-key="ArrowRight">▶</button></div>
+    </div>
+    <div class="ab">
+      <button data-key="x" class="round">B</button>
+      <button data-key="z" class="round">A</button>
+      <button data-key="Enter" class="small">START</button>
+    </div>
+  </div>
+  <p class="hint">Keyboard: arrows/WASD move · <kbd>Z</kbd> confirm · <kbd>X</kbd> back · <kbd>Enter</kbd> menu · <kbd>M</kbd> mute. Progress autosaves to this browser.</p>
+</main>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
