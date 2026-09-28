@@ -1,5 +1,6 @@
 # Never publish the commercial ROM or save files to a public repo.
 *.nds
+*.gba
 *.sav
 *.dsv
 *.gci

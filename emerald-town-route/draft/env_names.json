@@ -1,0 +1,22 @@
+{
+  "_note": "Replacement entries for src/data/region_map/region_map_sections.json. Swap the matching id blocks; keep x/y/width/height.",
+  "replacements": [
+    {
+      "id": "MAPSEC_LITTLEROOT_TOWN",
+      "name": "EMBERLEAF TOWN",
+      "x": 4,
+      "y": 11,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "MAPSEC_ROUTE_101",
+      "name": "ROUTE 101 CORAL PATH",
+      "x": 4,
+      "y": 10,
+      "width": 1,
+      "height": 1
+    }
+  ],
+  "_layouts": "Map tile layouts (data/layouts/*/map.bin, border.bin) are binary: edit ONLY in Porymap block editor. Coral-sand band goes on LAYOUT_ROUTE101; new town buildings on LAYOUT_LITTLEROOT_TOWN. Keep warp/door/sign/NPC coords in the matching map.json files in sync."
+}
