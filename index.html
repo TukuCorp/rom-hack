@@ -3,138 +3,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Pokémon SoulSilver (USA) — Play in Browser</title>
 <link rel="icon" href="data:,">
-<style>
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:#e8ecf3; font:14px/1.5 system-ui,Segoe UI,Roboto,Arial,sans-serif; }
-  header { display:flex; gap:12px; align-items:center; padding:10px 16px; background:var(--panel); border-bottom:1px solid #232c40; position:sticky; top:0; z-index:5; }
-  header h1 { font-size:15px; margin:0; font-weight:650; }
-  header h1 small { font-weight:400; color:#9aa6bd; }
-  header .spacer { flex:1; }
-  button,.btn { background:#1d2638; color:#e8ecf3; border:1px solid #33405c; border-radius:8px; padding:7px 12px; cursor:pointer; font-size:13px; }
-  button:hover { background:#27334d; }
-  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:650; }
-  main { max-width:1060px; margin:0 auto; padding:14px 14px 40px; }
-  #stage { width:100%; aspect-ratio: 4/3.4; max-height:76vh; background:#000; border-radius:12px; overflow:hidden; border:1px solid #232c40; }
-  #game { width:100%; height:100%; }
-  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:12px 0; }
-  .hint { color:#9aa6bd; font-size:12.5px; }
-  details.controls { background:var(--panel); border:1px solid #232c40; border-radius:12px; padding:10px 14px; margin-top:12px; }
-  details.controls summary { cursor:pointer; font-weight:650; }
-  table.keys { border-collapse:collapse; margin-top:8px; font-size:13px; }
-  table.keys td, table.keys th { border:1px solid #2a3550; padding:4px 10px; text-align:left; }
-  table.keys th { background:#1a2233; }
-  #status { font-size:12.5px; color:#9aa6bd; }
-  #status b { color:#e8ecf3; }
-  input[type=file] { display:none; }
-  kbd { background:#1d2638; border:1px solid #33405c; border-bottom-width:2px; border-radius:6px; padding:0 6px; font-size:12px; }
-</style>
+<title>Emberleaf - Hoenn-style Ruby Demo (original fan demake)</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header>
-  <h1>Pokémon SoulSilver <small>USA (NDS) · browser play · melonDS/DeSmuME via EmulatorJS</small></h1>
+  <h1>Emberleaf <small>ruby-style demake · Emberleaf Town + Coral Route · original code &amp; art</small></h1>
   <div class="spacer"></div>
-  <label class="btn" for="romfile" title="Load a different .nds from disk">Load ROM…</label>
-  <input type="file" id="romfile" accept=".nds,.zip,.7z">
-  <button id="fs" title="Fullscreen">Fullscreen</button>
+  <a class="btn" href="https://github.com/tah-allotrope/rom-hack">GitHub repo</a>
 </header>
 <main>
-  <div id="stage"><div id="game"></div></div>
-  <div class="row">
-    <button class="primary" id="start" disabled>Loading…</button>
-    <span id="status">Probing local ROM…</span>
+  <div id="stage">
+    <canvas id="screen" width="256" height="192"></canvas>
   </div>
-  <div class="hint">
-    Runs <b>fully in-browser</b> (WASM). Keyboard + mouse/touch for the DS touchscreen, gamepad supported.
-    Saves: in-game save + EmulatorJS save-states persist in this browser (IndexedDB).
-    Serve over <kbd>http://localhost:8000</kbd> via <kbd>server.py</kbd> (sets COOP/COEP so WASM threads work). Do not open via <kbd>file://</kbd>.
+  <div id="touch">
+    <div class="dpad">
+      <button data-key="ArrowUp">▲</button>
+      <div><button data-key="ArrowLeft">◀</button><button data-key="ArrowDown">▼</button><button data-key="ArrowRight">▶</button></div>
+    </div>
+    <div class="ab">
+      <button data-key="x" class="round">B</button>
+      <button data-key="z" class="round">A</button>
+      <button data-key="Enter" class="small">START</button>
+    </div>
   </div>
-  <details class="controls" open>
-    <summary>Controls</summary>
-    <table class="keys">
-      <tr><th>DS</th><th>Keyboard (EmulatorJS default)</th><th>Notes</th></tr>
-      <tr><td>D-Pad</td><td><kbd>↑↓←→</kbd></td><td>Also left stick on gamepad</td></tr>
-      <tr><td>A / B</td><td><kbd>X</kbd> / <kbd>Z</kbd></td><td>Remappable in Settings → Controls</td></tr>
-      <tr><td>X / Y</td><td><kbd>S</kbd> / <kbd>A</kbd></td><td></td></tr>
-      <tr><td>L / R</td><td><kbd>Q</kbd> / <kbd>W</kbd></td><td></td></tr>
-      <tr><td>Start / Select</td><td><kbd>Enter</kbd> / <kbd>Shift</kbd></td><td></td></tr>
-      <tr><td>Touch screen</td><td>Mouse click / drag, finger on mobile</td><td>Required for Pokédex/menus/minigames</td></tr>
-      <tr><td>Menu</td><td>Settings gear in player</td><td>Save states, cheat, shaders, fullscreen, key remap</td></tr>
-    </table>
-  </details>
+  <p class="hint">Keyboard: arrows/WASD move · <kbd>Z</kbd> confirm · <kbd>X</kbd> back · <kbd>Enter</kbd> menu · <kbd>M</kbd> mute. Progress autosaves to this browser.</p>
 </main>
-
-<script>
-const ROM_NAME = "Pokemon - SoulSilver Version (USA).nds";
-const ROM_URL = "./" + ROM_NAME; // served by server.py; browser encodes spaces/parens
-const statusEl = document.getElementById("status");
-const startBtn = document.getElementById("start");
-const say = (h) => { statusEl.innerHTML = h; };
-
-async function probeRom() {
-  try {
-    const r = await fetch(ROM_URL, { method: "HEAD" });
-    if (r.ok) {
-      const len = +r.headers.get("content-length") || 0;
-      const mb = len ? (len/1048576).toFixed(1)+" MB" : "found";
-      say(`ROM: <b>${ROM_NAME}</b> (${mb}) — press Start.`);
-      startBtn.disabled = false;
-      startBtn.textContent = "▶ Start SoulSilver";
-      return true;
-    }
-  } catch (e) {}
-  // HEAD may be blocked; try 1-byte range
-  try {
-    const r = await fetch(ROM_URL, { headers: { Range: "bytes=0-0" } });
-    if (r.ok || r.status === 206) {
-      say(`ROM: <b>${ROM_NAME}</b> — press Start.`);
-      startBtn.disabled = false;
-      startBtn.textContent = "▶ Start SoulSilver";
-      return true;
-    }
-  } catch (e) {}
-  say(`Could not fetch <b>${ROM_NAME}</b> over HTTP. Start <b>server.py</b> (<kbd>python server.py</kbd>) and open <b>http://localhost:8000</b> — or use <b>Load ROM…</b> to pick the .nds manually.`);
-  startBtn.disabled = false;
-  startBtn.textContent = "Browse for ROM…";
-  startBtn.onclick = () => document.getElementById("romfile").click();
-  return false;
-}
-
-let booted = false;
-function boot(gameUrl) {
-  if (booted) return; booted = true;
-  window.EJS_player = "#game";
-  window.EJS_core = "nds";              // EmulatorJS NDS (melonDS primary, DeSmuME fallback)
-  window.EJS_gameName = "Pokemon SoulSilver (USA)";
-  window.EJS_gameUrl = gameUrl;
-  window.EJS_pathtodata = "https://cdn.emulatorjs.org/stable/data/";
-  window.EJS_color = "#e3350d";
-  window.EJS_startOnLoaded = true;      // boot straight into the game
-  window.EJS_fullscreenOnLoaded = false;
-  window.EJS_threads = false;           // single-thread melonDS: threaded build stalled under remote debugging
-  window.EJS_cacheLimit = 1024 * 1024 * 1024; // 1GB: keep 128MB ROM in cache
-  window.EJS_defaultOptions = { "nds-screen-layout": "vertical" };
-  const s = document.createElement("script");
-  s.src = "https://cdn.emulatorjs.org/stable/data/loader.js";
-  s.onload = () => say("Emulator loaded — starting game… (first boot downloads the NDS core, ~10–20s)");
-  s.onerror = () => say("Failed to load EmulatorJS CDN. Check internet, then reload.");
-  document.body.appendChild(s);
-  startBtn.disabled = true;
-  startBtn.textContent = "Starting…";
-}
-
-startBtn.onclick = () => boot(ROM_URL);
-document.getElementById("fs").onclick = () => {
-  const el = document.getElementById("stage");
-  if (document.fullscreenElement) document.exitFullscreen();
-  else el.requestFullscreen && el.requestFullscreen();
-};
-document.getElementById("romfile").addEventListener("change", (e) => {
-  const f = e.target.files[0]; if (!f) return;
-  boot(URL.createObjectURL(f));
-});
-probeRom();
-</script>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>

@@ -825,7 +825,7 @@ export class Overworld {
       case "sam":
         this.event = true;
         textbox.say(fmtPages(sub(DIALOG.trainer_sam, G)), () => {
-          this.startBattle(GYM_TRAINER, { trainer: { name: "SAM" } }, (win) => {
+          this.startBattle(GYM_TRAINER, { trainer: { name: "REY" } }, (win) => {
             this.event = false;
             if (win) { F.beat_sam = true; this.npcs = this.buildNpcs(this.map); this.healSilent(); }
             else this.faintReset();
@@ -833,7 +833,7 @@ export class Overworld {
         });
         break;
       case "harlan":
-        if (F.badge1) { textbox.say(["HARLAN: With that badge,\nyou can go far."]); break; }
+        if (F.badge1) { textbox.say(["CORA: With that badge,\nyou can go far."]); break; }
         this.event = true;
         textbox.say(fmtPages(sub(DIALOG.harlan_before, G)), () => {
           this.startBattle(GYM_LEADER, { trainer: { name: "HARLAN", after: DIALOG.harlan_after } }, (win) => {

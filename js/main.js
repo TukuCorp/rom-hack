@@ -6,10 +6,10 @@ import { MON_FRONT, blit } from "./sprites.js";
 import { ensureAudio, playSong, stopSong, toggleMute, sfx } from "./audio.js";
 export * as engine from "./engine.js";
 
-const SAVE_KEY = "ssweb1";
+const SAVE_KEY = "rubyhoenn1";
 
 export const GAME = {
-  gender: "boy", name: "ASHER", rivalName: "SILAS",
+  gender: "boy", name: "RUAN", rivalName: "KAI",
   flags: {}, party: [], bag: { orbit: 0, potion: 0 }, badges: 0,
   pos: { map: "house", x: 3, y: 3, dir: "down" }, lastMon: "",
   save() {
@@ -77,7 +77,7 @@ class Title {
       this.pickGender = true;
     } else if (this.pickGender && (c === "BOY" || c === "GIRL")) {
       GAME.gender = c.toLowerCase();
-      GAME.name = c === "BOY" ? "ASHER" : "LYRA";
+      GAME.name = c === "BOY" ? "RUAN" : "LINA";
       GAME.flags = {}; GAME.party = []; GAME.bag = { orbit: 0, potion: 0 };
       GAME.badges = 0; GAME.pos = { map: "house", x: 3, y: 3, dir: "down" };
       GAME.save(); resetOverworld(); setScreen(overworld());
@@ -188,20 +188,20 @@ class Title {
     g.lineJoin = "round";
     g.font = '700 13px Georgia, "Times New Roman", serif';
     g.strokeStyle = "#060a24"; g.lineWidth = 3;
-    g.strokeText("S O U L", W / 2, 10);
-    g.fillStyle = "#eef2fc"; g.fillText("S O U L", W / 2, 10);
+    g.strokeText("E M B E R", W / 2, 10);
+    g.fillStyle = "#eef2fc"; g.fillText("E M B E R", W / 2, 10);
     g.font = '900 30px Georgia, "Times New Roman", serif';
-    g.lineWidth = 4; g.strokeText("SILVER", W / 2, 24);
+    g.lineWidth = 4; g.strokeText("LEAF", W / 2, 24);
     const gold = g.createLinearGradient(0, 24, 0, 54);
     gold.addColorStop(0, "#fff6c8"); gold.addColorStop(0.45, "#f8d838");
     gold.addColorStop(0.75, "#e09018"); gold.addColorStop(1, "#fff0a8");
-    g.fillStyle = gold; g.fillText("SILVER", W / 2, 24);
+    g.fillStyle = gold; g.fillText("LEAF", W / 2, 24);
     g.font = '700 7px Verdana, Geneva, sans-serif';
     const ribW = 118;
     g.fillStyle = "#0a1440"; g.fillRect(W / 2 - ribW / 2, 56, ribW, 12);
     g.strokeStyle = "#f8d838"; g.lineWidth = 1;
     g.strokeRect(W / 2 - ribW / 2 + 0.5, 56.5, ribW - 1, 11);
-    g.fillStyle = "#f8d838"; g.fillText("★  JOHTO WEB EDITION  ★", W / 2, 59);
+    g.fillStyle = "#f8d838"; g.fillText("★  CORAL EDITION  ★", W / 2, 59);
     g.textAlign = "left";
     // --- marching creatures at native pixel scale on the shoreline ---
     const order = ["skyro", "nibble", "pinebug", "voltpup", "gusthawk"];

@@ -1,7 +1,0 @@
-# Never publish the commercial ROM or save files to a public repo.
-*.nds
-*.sav
-*.dsv
-*.gci
-*.savestate
-tmp-e2e/
