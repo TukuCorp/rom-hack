@@ -1,0 +1,549 @@
+/* ui.css — Gen VII battle UI chrome: top-screen battler plates, bottom-screen message + menus.
+   Owned by: HUD builder. (style.css owns the console shell; this file owns screen contents.)
+
+   Every size is expressed in container-query units (cqw / cqh / cqmin) of the screen box:
+   1cqw = 1% of the screen width, 1cqh = 1% of its height. Nothing is tied to one viewport.
+   Colours and proportions are measured from the visual bar in sunmoon/bar/ (reference only). */
+
+#topui, #bottomui {
+  font-family: "Trebuchet MS", "Segoe UI", Tahoma, Verdana, sans-serif;
+  container-type: size;
+}
+#topui { --ink: #0a0f0c; }
+
+/* ======================================================== battler plates */
+
+.plate {
+  position: absolute; display: flex; flex-direction: column; align-items: stretch;
+  /* Gen VII's HUD face is a heavy condensed grotesque with a baked-in dark outline. No font is
+     shipped, so the plate asks for the narrow system faces and relies on stroke + weight below.
+     Scoped to the plates: the bottom-screen chrome keeps the body stack it won its rounds with. */
+  font-family: "Arial Narrow", "Liberation Sans Narrow", "Nimbus Sans Narrow", "DejaVu Sans Condensed",
+               "Roboto Condensed", "Segoe UI", Tahoma, sans-serif;
+  color: #fff; text-shadow: 0 .22cqh .4cqh rgba(0,0,0,.75);
+  transition: opacity .22s linear;
+  max-width: 52cqw; min-width: 0;   /* the plate can never be cut by the screen box */
+}
+.plate.foe { top: 2.4cqh; right: 2.2cqw; }
+.plate.ally { bottom: 3.2cqh; left: 2.4cqw; }
+.plate.off { opacity: 0; }
+
+/* name row floats above the plate, straight over the field (Gen VII) */
+.plate .ptop {
+  display: flex; align-items: baseline; gap: 1cqw; margin-bottom: .55cqh;
+  padding: 0 .6cqw; white-space: nowrap; min-width: 0;
+}
+.plate .nm {
+  font-size: 4.4cqh; font-weight: 800; letter-spacing: -.005em; color: #fff;
+  paint-order: stroke fill; -webkit-text-stroke: .5cqh var(--ink);
+  filter: drop-shadow(0 .3cqh .25cqh rgba(0,0,0,.55));
+  overflow: hidden; text-overflow: ellipsis; max-width: 32cqw; min-width: 0;
+}
+.plate .lv { margin-left: auto; font-size: 4.1cqh; font-weight: 800; letter-spacing: -.005em; }
+.plate .lv i { font-style: normal; color: #ffd23d; -webkit-text-stroke: .5cqh var(--ink); paint-order: stroke fill; }
+.plate .lv b { font-weight: 800; color: #fff; -webkit-text-stroke: .5cqh var(--ink); paint-order: stroke fill; }
+
+/* gender glyph, drawn like the capture's: an inked ring, with a cross (♀) or an arrow (♂).
+   Male blue / female pink is the Gen VI–VII convention; nothing is drawn for a genderless mon. */
+.plate .sex {
+  position: relative; flex: none; align-self: center; width: 3cqh; height: 3.5cqh;
+  margin-left: -.5cqw;
+}
+.plate .sex.genderless { display: none; }
+.plate .sex i { position: absolute; inset: 0; display: block; }
+.plate .sex::before, .plate .sex::after,
+.plate .sex i::before, .plate .sex i::after { content: ''; position: absolute; display: block; }
+.plate .sex.male { --gc: #3f86f2; }
+.plate .sex.female { --gc: #ff3ea5; }
+.plate .sex::before {                    /* the ring */
+  left: .4cqh; top: 0; width: 2.2cqh; height: 2.2cqh; border-radius: 50%;
+  border: .44cqh solid var(--gc); box-shadow: 0 0 0 .18cqh var(--ink);
+}
+.plate .sex.female::after {              /* stem of the cross */
+  left: 1.28cqh; top: 1.7cqh; width: .44cqh; height: 1.8cqh;
+  background: var(--gc); box-shadow: 0 0 0 .18cqh var(--ink);
+}
+.plate .sex.female i::before {           /* crossbar */
+  left: 0; top: 2.75cqh; width: 3cqh; height: .44cqh;
+  background: var(--gc); box-shadow: 0 0 0 .18cqh var(--ink);
+}
+.plate .sex.male::before { left: 0; top: 1.3cqh; }
+.plate .sex.male::after {                /* arrow shaft, 45° out of the ring */
+  left: 1.75cqh; top: 1.54cqh; width: 1.35cqh; height: .42cqh;
+  transform-origin: 0 50%; transform: rotate(-45deg);
+  background: var(--gc); box-shadow: 0 0 0 .18cqh var(--ink);
+}
+.plate .sex.male i::before {             /* arrowhead: two strokes meeting at the tip */
+  left: 1.7cqh; top: 0; width: 1.3cqh; height: .42cqh;
+  background: var(--gc); box-shadow: 0 0 0 .18cqh var(--ink);
+}
+.plate .sex.male i::after {
+  left: 2.58cqh; top: 0; width: .42cqh; height: 1.3cqh;
+  background: var(--gc); box-shadow: 0 0 0 .18cqh var(--ink);
+}
+
+/* held item (ally only, while the Z-Ring is charged) */
+.plate .zcry {
+  display: none; align-items: center; gap: .5cqw; font-size: 2.3cqh; font-weight: 800;
+  letter-spacing: .03em; color: #ffe9a0; -webkit-text-stroke: .32cqh var(--ink); paint-order: stroke fill;
+}
+.plate.zready .zcry { display: inline-flex; }
+.plate .zcry .gem {
+  width: 1.9cqh; height: 1.9cqh; flex: none; background: linear-gradient(140deg,#fff6c0,#ffb31f 55%,#e2540a);
+  clip-path: polygon(50% 0, 100% 40%, 72% 100%, 28% 100%, 0 40%);
+  filter: drop-shadow(0 0 .7cqh rgba(255,190,60,.85));
+}
+.plate.zarmed .zcry { color: #fff; filter: drop-shadow(0 0 1cqh rgba(255,180,40,.95)); }
+
+/* the green HP panel itself: a rimmed bar with a slanted left end.
+   min-width is capped by the plate so a narrow screen narrows the bar instead of cutting it. */
+.plate .pbarbg {
+  position: relative; transform: skewX(-11deg); border-radius: 1.3cqh;
+  min-width: min(30cqw, 100%); max-width: 100%; min-height: 6.4cqh; padding: 1.15cqh 1.5cqw;
+  display: flex; align-items: center;
+  background: linear-gradient(180deg, #14883c 0%, #046b28 20%, #024d1a 56%, #01300e 88%, #001c07 100%);
+  border: .22cqh solid rgba(2,18,7,.8);
+  box-shadow: inset 0 .28cqh 0 rgba(150,240,170,.5), inset 0 -.55cqh .8cqh rgba(0,0,0,.55),
+              0 .55cqh 1.3cqh rgba(0,18,6,.45);
+}
+.plate .pinner { transform: skewX(11deg); display: flex; align-items: center; gap: .9cqw; width: 100%; min-width: 0; }
+
+.plate .track {
+  position: relative; flex: 1; min-width: 0; height: 3.5cqh; border-radius: 1cqh; padding: .3cqh .35cqh;
+  background: linear-gradient(180deg,#03060a,#16241a);
+  border: .26cqh solid #04070a; overflow: hidden;
+  box-shadow: inset 0 .25cqh .45cqh rgba(0,0,0,.9);
+}
+/* the fill is inset on both ends — at any HP the bar keeps a dark end cap inside the track
+   and stops short of the plate's rim, with the Poké Ball badge sitting at its end. */
+.plate .fill, .plate .ghost {
+  position: absolute; left: .35cqh; top: .3cqh; bottom: .3cqh;
+  right: calc(.35cqh + (100% - var(--w, 100%)));
+  border-radius: .7cqh; --w: 100%;
+}
+.plate .ghost { background: rgba(255,255,255,.5); transition: right .12s linear; }
+.plate .fill {
+  --w: 100%;
+  background: linear-gradient(90deg, #c9ff4c 0%, #8ef72f 45%, #27e01f 100%);
+  box-shadow: inset 0 .45cqh 0 rgba(255,255,255,.45), 0 0 1.1cqh rgba(130,240,80,.55);
+  transition: right .1s linear;
+}
+.plate .fill.mid {
+  background: linear-gradient(90deg, #ffee94 0%, #ffc42e 45%, #f09a05 100%);
+  box-shadow: inset 0 .45cqh 0 rgba(255,255,255,.45), 0 0 1.1cqh rgba(255,200,50,.6);
+}
+.plate .fill.low {
+  background: linear-gradient(90deg, #ffab95 0%, #f2532f 45%, #d31a0d 100%);
+  box-shadow: inset 0 .45cqh 0 rgba(255,255,255,.4), 0 0 1.3cqh rgba(255,90,60,.65);
+}
+
+.plate .ball {
+  position: relative; flex: none; width: 3cqh; height: 3cqh; border-radius: 50%; margin-left: -.4cqh;
+  background: linear-gradient(180deg, #fdfdfd 0 46%, #cfd6dd 46% 54%, #fdfdfd 54% 100%);
+  box-shadow: 0 0 0 .42cqh #f7fbff, 0 0 0 .62cqh rgba(6,12,18,.92), inset 0 0 0 .3cqh #8e98a3;
+}
+.plate .ball::after {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 36%; height: 36%;
+  transform: translate(-50%,-50%); border-radius: 50%; background: #fdfdfd;
+  box-shadow: 0 0 0 .26cqh #6c7681;
+}
+.plate .pnum {
+  flex: none; font-size: 2.75cqh; font-weight: 800; letter-spacing: .01em; color: #fff;
+  font-variant-numeric: tabular-nums;
+  -webkit-text-stroke: .42cqh var(--ink); paint-order: stroke fill;
+}
+.plate .pnum:empty { display: none; }
+
+/* ally EXP bar sits under the plate */
+.plate .exptrack {
+  margin-top: .8cqh; height: 1.1cqh; border-radius: .6cqh; overflow: hidden;
+  background: rgba(3,9,16,.9); border: .18cqh solid rgba(2,18,7,.7);
+  box-shadow: inset 0 .15cqh .3cqh rgba(0,0,0,.85);
+}
+.plate .expfill {
+  height: 100%; width: 0%; border-radius: .6cqh;
+  background: linear-gradient(90deg,#7df3ff,#12a6e6);
+  box-shadow: 0 0 .9cqh rgba(90,225,255,.8); transition: width .16s linear;
+}
+
+/* ============================================================== top extras */
+
+#toast {
+  position: absolute; left: 50%; top: 7%; transform: translateX(-50%); max-width: 62cqw;
+  padding: .8cqh 1.6cqw; border-radius: 2cqh; opacity: 0; transition: opacity .2s;
+  background: linear-gradient(180deg, rgba(14,22,36,.94), rgba(4,8,16,.95));
+  border: .2cqh solid rgba(255,255,255,.45); color: #ffe9a0;
+  font-size: 2.4cqh; font-weight: 800; text-align: center;
+}
+#toast.on { opacity: 1; }
+
+/* Z-Move cinematics (owned by effects.js; styled here because they live in #topui) */
+#cinema { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .18s; z-index: 6; }
+#cinema.on { opacity: 1; }
+#cinema.zPose { background: radial-gradient(circle at 50% 55%, rgba(255,255,255,.9) 0%, rgba(60,180,255,.45) 30%, rgba(6,18,48,.92) 75%); }
+#cinema.zStrike { background: radial-gradient(circle at 40% 60%, rgba(255,214,120,.95) 0%, rgba(230,80,10,.85) 35%, rgba(40,6,0,.95) 80%); }
+
+/* while a cinematic runs the plates are already faded out in JS (hud.js reads state.cinematic);
+   this is the belt-and-braces rule if the overlay ever paints without a fade. */
+#topui:has(#cinema.on) .plate { opacity: 0; }
+#topui:has(#cinema.on) #toast { opacity: 0; }
+
+/* ======================================================= bottom screen ==== */
+
+.sc { position: absolute; inset: 0; overflow: hidden; color: #fff; }
+.sc-map {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(64% 50% at 44% 46%, #fdf3c2 0%, rgba(253,243,194,0) 72%),
+    radial-gradient(58% 42% at 8% 4%, #fffae3 0%, rgba(255,250,227,0) 74%),
+    radial-gradient(52% 46% at 96% 94%, #cfe8f6 0%, rgba(207,232,246,0) 70%),
+    linear-gradient(165deg, #fbeebf 0%, #f4dfa4 48%, #ecd394 100%);
+}
+.sc-swirl { position: absolute; border-radius: 50%; border: 1.6cqh solid rgba(255,255,255,.3); }
+.sc-swirl.a { left: -14%; top: 52%; width: 62%; height: 78%; border-color: rgba(180,224,246,.42); }
+.sc-swirl.b { right: -16%; top: -24%; width: 56%; height: 62%; border-color: rgba(255,255,255,.36); }
+.sc-frame {
+  position: absolute; inset: 1cqh; border-radius: 3.2cqw; pointer-events: none;
+  border: .5cqh solid rgba(255,255,255,.6);
+  box-shadow: inset 0 0 3cqh rgba(150,112,30,.16), 0 0 0 .1cqh rgba(176,146,86,.35);
+}
+/* a Z-Move cinematic strips the HUD on the top screen; the bottom screen goes quiet too
+   (status chips and the party strip fade out, the message box keeps the narration) */
+#wchip, #pballs, #zchip { transition: opacity .22s linear; }
+.sc.cine #wchip, .sc.cine #pballs, .sc.cine #zchip { opacity: 0; }
+
+/* --- weather chip ------------------------------------------------------- */
+#wchip {
+  position: absolute; left: 50%; top: 0; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 1cqw; padding: 1.4cqh 3cqw 3.4cqh;
+  background: linear-gradient(180deg, #35496b 0%, #1a2a44 55%, #0d1627 100%);
+  color: #eaf3ff; font-size: 2.5cqh; font-weight: 800; letter-spacing: .05em;
+  clip-path: polygon(0 0, 100% 0, 100% 76%, 62% 76%, 50% 100%, 38% 76%, 0 76%);
+  filter: drop-shadow(0 .5cqh .7cqh rgba(0,0,0,.3));
+}
+#wchip .wico {
+  width: 3.4cqh; height: 3.4cqh; border-radius: 50%;
+  background: radial-gradient(circle, #fffef5 0 34%, #ffe98a 36% 58%, rgba(255,225,120,0) 60%);
+  box-shadow: 0 0 1.4cqh rgba(255,240,180,.9);
+}
+#wchip.wdusk .wico {
+  background: radial-gradient(circle, #fff0d0 0 30%, #ff9a4d 32% 62%, rgba(255,154,77,0) 64%);
+  box-shadow: 0 0 1.2cqh rgba(255,150,70,.85);
+}
+
+/* --- party ball strip (message view) ------------------------------------ */
+#pballs { position: absolute; left: 2.4cqw; top: 1.6cqh; display: flex; gap: 1cqw; }
+.pb {
+  position: relative; width: 3cqh; height: 3cqh; border-radius: 50%;
+  background: linear-gradient(180deg, #ef4234 0 45%, #23252c 45% 55%, #f2f3f5 55% 100%);
+  box-shadow: 0 0 0 .2cqh rgba(255,255,255,.9), 0 0 0 .35cqh rgba(24,30,40,.55), 0 .3cqh .5cqh rgba(0,0,0,.3);
+}
+.pb::after {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 26%; height: 26%;
+  transform: translate(-50%,-50%); border-radius: 50%; background: #f2f3f5;
+  box-shadow: 0 0 0 .2cqh #23252c;
+}
+.pb i { position: absolute; inset: -.75cqh; border-radius: 50%; box-shadow: 0 0 0 .32cqh var(--hc, #6ee24a); }
+.pb.out { filter: grayscale(.85) brightness(.72); }
+.pb.act { transform: scale(1.14); }
+.sc[data-mode="command"] #pballs, .sc[data-mode="moves"] #pballs,
+.sc[data-mode="party"] #pballs, .sc[data-mode="bag"] #pballs { display: none; }
+
+/* --- Z-Ring chip -------------------------------------------------------- */
+#zchip {
+  position: absolute; left: 2.4cqw; top: 1.6cqh; display: none; align-items: center; gap: .7cqw;
+  padding: .75cqh 1.5cqw; border-radius: 1.6cqh; cursor: default;
+  font-size: 2.25cqh; font-weight: 800; letter-spacing: .04em; color: #3a2400;
+  background: linear-gradient(180deg, #ffe98a, #f5b312 60%, #d98a00);
+  border: .25cqh solid #fff6cf;
+  box-shadow: 0 .5cqh 1.1cqh rgba(120,70,0,.35), inset 0 .2cqh 0 rgba(255,255,255,.7);
+}
+.sc[data-mode="command"] #zchip, .sc[data-mode="moves"] #zchip { display: flex; }
+.sc[data-mode="moves"] #zchip { cursor: pointer; }
+#zchip .zg {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 2.7cqh; height: 2.7cqh; border-radius: 50%; background: #241a06; color: #ffd35a;
+  font-size: 1.9cqh; line-height: 1;
+}
+#zchip.zs-armed { background: linear-gradient(180deg,#fff6c4,#ffc400 55%,#ef8a00); animation: zpulse 1s ease-in-out infinite; }
+#zchip.zs-used { background: linear-gradient(180deg,#9aa3b2,#5d6674); color: #232833; border-color: #cfd8e6; filter: saturate(.5); }
+#zchip.zs-used .zg { background: #2a2f3a; color: #9aa6b8; }
+@keyframes zpulse { 50% { transform: translateY(-.25cqh) scale(1.03); } }
+
+/* --- message box -------------------------------------------------------- */
+#msg {
+  position: absolute; left: 3cqw; right: 3cqw; bottom: 3.4cqh; min-height: 21cqh;
+  display: none; padding: 2.4cqh 3cqw 2.6cqh; border-radius: 2.4cqw; cursor: pointer;
+  background: linear-gradient(180deg, rgba(13,95,107,.97) 0%, rgba(17,63,92,.98) 34%, rgba(9,40,74,.99) 68%, rgba(7,22,50,1) 100%);
+  border: .3cqh solid rgba(146,214,232,.55);
+  box-shadow: 0 .9cqh 2.4cqh rgba(0,0,0,.42), inset 0 .3cqh 0 rgba(255,255,255,.22),
+              inset 0 -1.6cqh 2.4cqh rgba(0,0,0,.3);
+  color: #fff; font-size: 3.4cqh; font-weight: 800; line-height: 1.34; letter-spacing: .01em;
+  text-shadow: 0 .25cqh .5cqh rgba(0,0,0,.8);
+}
+.sc[data-mode="wait"] #msg { display: block; }
+#arrow {
+  position: absolute; right: 2.2cqw; bottom: 1.1cqh; font-size: 3cqh; color: #fff; opacity: 0;
+  text-shadow: 0 .2cqh .4cqh rgba(0,0,0,.85);
+}
+#arrow.show { animation: blink 1.05s linear infinite; }
+@keyframes blink { 0%, 58% { opacity: 1 } 58.01%, 100% { opacity: 0 } }
+
+/* ======================================================= command plates ==== */
+
+.menu { position: absolute; inset: 0; display: none; }
+
+/* shared Gen VII plate shell: cream rim, dark inner ring, soft drop */
+.gplate {
+  border: .7cqh solid #fdf6e3; border-radius: 3.2cqw;
+  box-shadow: 0 0 0 .16cqh rgba(58,40,4,.4), 0 1cqh 2.4cqh rgba(70,45,0,.3),
+              inset 0 0 0 .55cqh var(--inner, rgba(0,0,0,.3)),
+              inset 0 .6cqh 0 rgba(255,255,255,.26), inset 0 -1.4cqh 2cqh rgba(0,0,0,.2);
+}
+.cmd, .mv, .pm, .bm {
+  position: absolute; padding: 0; cursor: pointer; color: #fff;
+  font-family: inherit; text-align: left;
+  transition: filter .12s linear, transform .12s ease-out;
+}
+.cmd.sel, .mv.sel, .pm.sel, .bm.sel { filter: saturate(1.14) brightness(1.08) drop-shadow(0 0 1.4cqh rgba(255,240,190,.8)); }
+.cmd:not(.sel):hover, .mv:not(.sel):hover, .bm:not(.sel):hover, .pm:not(.sel):hover { filter: brightness(1.07); }
+
+/* the ▶ cursor: white fill with a red rim, sitting on the selected plate's left edge */
+.cmd.sel::after, .mv.sel::after, .pm.sel::after, .bm.sel::after {
+  content: ''; position: absolute; left: -3.4cqw; top: 50%; width: 0; height: 0;
+  margin-top: -2.4cqh; border-left: 3.4cqw solid #fdfdfd;
+  border-top: 2.4cqh solid transparent; border-bottom: 2.4cqh solid transparent;
+  filter: drop-shadow(0 0 .5cqh #d81e50) drop-shadow(0 0 .5cqh #d81e50)
+          drop-shadow(0 .3cqh .45cqh rgba(0,0,0,.45));
+  animation: curpulse 1.15s ease-in-out infinite;
+}
+@keyframes curpulse { 50% { opacity: .82 } }
+/* POKéMON / BAG bleed off the left edge, so their cursor sits just inside the plate */
+.cmd.pokemon.sel::after, .cmd.bag.sel::after { left: 3.6cqw; margin-top: -2.1cqh;
+  border-left-width: 3cqw; border-top-width: 2.1cqh; border-bottom-width: 2.1cqh; }
+
+/* --- the four command plates (Gen VII single-battle arrangement) --------- */
+#commands { position: absolute; inset: 0; }
+.sc[data-mode="command"] #commands { display: block; }
+
+.cmd { transform: rotate(var(--rot, 0deg)); }
+.cmd.sel { transform: rotate(var(--rot, 0deg)) scale(1.035); }
+
+/* the little dark chevron Gen VII stamps on a plate's edge */
+.cmd::before {
+  content: ''; position: absolute; width: 3.4cqw; height: 4.6cqh;
+  background: var(--notch, rgba(0,0,0,.3));
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.cmd .lbl {
+  position: absolute; font-size: 4.3cqh; font-weight: 800; letter-spacing: .05em; color: #fff;
+  paint-order: stroke fill; -webkit-text-stroke: .8cqh var(--oc, #14300f);
+  filter: drop-shadow(0 .3cqh .35cqh rgba(0,0,0,.4));
+}
+.cmd .emblem { position: absolute; display: block; }
+.cmd .emblem i { position: absolute; display: block; }
+
+.cmd.pokemon {
+  --rot: -3deg; --oc: #12330f; --notch: rgba(9,58,20,.5);
+  left: -2%; top: 15%; width: 30%; height: 32%;
+  background: linear-gradient(165deg,#9bf07f 0%, #4fc44a 38%, #2b9833 100%); --inner: rgba(14,72,22,.5);
+}
+.cmd.pokemon .lbl { left: 1.8cqw; bottom: 7%; }
+.cmd.pokemon::before { right: 0; top: 42%; }
+.cmd.pokemon .emblem { left: 46%; top: 2%; width: 62%; height: 70%; transform: translateX(-50%); }
+
+.cmd.bag {
+  --rot: -2deg; --oc: #4a2c02; --notch: rgba(122,72,0,.45);
+  left: -2%; top: 50%; width: 28%; height: 33%;
+  background: linear-gradient(165deg,#ffef9a 0%, #f6c62f 40%, #dd9610 100%); --inner: rgba(122,72,0,.5);
+}
+.cmd.bag .lbl { left: 1.8cqw; bottom: 7%; }
+.cmd.bag::before { right: 0; top: 40%; }
+.cmd.bag .emblem { left: 46%; top: 4%; width: 58%; height: 66%; transform: translateX(-50%); }
+
+.cmd.fight {
+  --rot: 2deg; --oc: #5c0a12; --notch: rgba(96,10,24,.4);
+  left: 79%; top: 14%; width: 23%; height: 70%;
+  background: linear-gradient(172deg,#ffa24a 0%, #ee4a2c 40%, #c1155b 100%); --inner: rgba(96,10,24,.45);
+}
+.cmd.fight .lbl { left: 0; right: 0; top: 56%; text-align: center; font-size: 4.6cqh; }
+.cmd.fight::before { left: 0; top: 40%; }
+.cmd.fight .emblem { left: 50%; top: 6%; width: 88%; height: 52%; transform: translateX(-50%); }
+
+.cmd.run {
+  --rot: -1deg; --oc: #07304f; --notch: rgba(8,58,98,.45);
+  left: 28.5%; top: 72%; width: 43%; height: 29%;
+  background: linear-gradient(180deg,#8fdcff 0%, #3aabe8 42%, #1f7cc2 100%); --inner: rgba(8,58,98,.45);
+}
+.cmd.run .lbl { left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; }
+.cmd.run::before { left: 50%; top: 0; width: 4cqw; height: 3.2cqh; margin-left: -2cqw;
+  clip-path: polygon(0 0, 100% 0, 50% 100%); }
+.cmd.run .emblem.runl { left: 4%; top: 10%; width: 20%; height: 80%; }
+.cmd.run .emblem.runr { right: 4%; top: 10%; width: 20%; height: 80%; transform: scaleX(-1); }
+
+/* --- command emblems (original CSS art) ---------------------------------- */
+
+/* Poké Ball (POKéMON) */
+.balli {
+  position: absolute; inset: 6% 8%; border-radius: 50%;
+  background: linear-gradient(180deg,#d8ffc4 0 44%, #175f26 44% 56%, #f2fdec 56% 100%);
+  box-shadow: inset 0 0 0 .45cqh rgba(9,58,18,.5), 0 .4cqh .9cqh rgba(0,36,0,.4);
+}
+.balli::before {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 30%; height: 30%;
+  transform: translate(-50%,-50%); border-radius: 50%; background: #eaffdf;
+  box-shadow: 0 0 0 .5cqh #175f26, 0 0 0 .95cqh rgba(255,255,255,.4);
+}
+.balli::after {
+  content: ''; position: absolute; inset: 8% 10% 48% 10%; border-radius: 50% 50% 40% 40%;
+  background: linear-gradient(180deg, rgba(255,255,255,.62), rgba(255,255,255,0));
+}
+
+/* BAG pouch */
+.pouch {
+  position: absolute; left: 16%; right: 16%; top: 30%; bottom: 6%;
+  border-radius: 44% 44% 34% 34% / 26% 26% 42% 42%;
+  background: linear-gradient(180deg,#ffeeb0,#edb62c 56%,#b87a12);
+  box-shadow: inset 0 -.7cqh 1cqh rgba(88,54,0,.4), inset 0 .6cqh 0 rgba(255,255,255,.5);
+}
+.flap {
+  position: absolute; left: 6%; right: 6%; top: 8%; height: 40%;
+  border-radius: 48% 48% 20% 20% / 82% 82% 26% 26%;
+  background: linear-gradient(180deg,#fff9dc,#ffd551);
+  box-shadow: inset 0 -.45cqh 0 rgba(150,96,0,.28);
+}
+.clasp {
+  position: absolute; left: 44%; top: 40%; width: 12%; height: 18%; border-radius: 40%;
+  background: #8a5a0c; box-shadow: inset 0 .2cqh 0 rgba(255,255,255,.4);
+}
+
+/* FIGHT flame */
+.fl {
+  border-radius: 50% 50% 46% 46% / 62% 62% 38% 38%;
+  background: linear-gradient(180deg,#fff6cc 0%, #ffcb43 32%, #f2731b 68%, #d9271c 100%);
+  clip-path: polygon(50% 0%, 68% 20%, 86% 44%, 94% 68%, 74% 100%, 26% 100%, 6% 68%, 14% 44%, 32% 20%);
+  filter: drop-shadow(0 .35cqh .5cqh rgba(110,18,0,.5));
+}
+.fl.f1 { left: 24%; top: 4%; width: 52%; height: 92%; }
+.fl.f2 { left: 2%; top: 36%; width: 36%; height: 60%; transform: rotate(-10deg); opacity: .95; }
+.fl.f3 { right: 2%; top: 36%; width: 36%; height: 60%; transform: rotate(10deg); opacity: .95; }
+
+/* RUN footprints (one sole + toes per side, mirrored) */
+.cmd.run .emblem.runl, .cmd.run .emblem.runr { width: 17%; height: 66%; }
+.sole {
+  position: absolute; left: 16%; right: 16%; bottom: 4%; height: 52%;
+  border-radius: 52% 52% 44% 44% / 62% 62% 38% 38%;
+  background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(202,238,255,.72));
+}
+.sole::before {
+  content: ''; position: absolute; left: 0; top: -52%; width: 26%; height: 34%; border-radius: 50%;
+  background: rgba(255,255,255,.92);
+  box-shadow: 1.05cqh 0 0 0 rgba(255,255,255,.92),
+              2.05cqh .35cqh 0 0 rgba(255,255,255,.88),
+              3cqh .85cqh 0 0 rgba(255,255,255,.82);
+}
+
+/* ================================================== move / party / bag ==== */
+
+#movemenu, #party, #bagmenu { left: 4.5%; right: 4.5%; top: 12.5%; bottom: 5.5%; }
+
+.sc[data-mode="moves"] #movemenu {
+  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 3cqh 3.4cqw;
+}
+
+.mv, .pm, .bm { position: relative; }
+.mv {
+  display: flex; flex-direction: column; justify-content: center; gap: .9cqh;
+  padding: 1.4cqh 3cqw 1.4cqh 5.6cqw;
+  background: linear-gradient(180deg,#fffdf4,#f2e8d0); color: #2a2f3a;
+  --inner: rgba(120,96,44,.35);
+}
+.mv .band {
+  position: absolute; left: 1.5cqw; top: 14%; bottom: 14%; width: 2.6cqw; border-radius: 1.4cqw;
+  background: var(--tc); box-shadow: inset 0 0 0 .28cqh rgba(255,255,255,.55), 0 .2cqh .4cqh rgba(0,0,0,.25);
+}
+.mv .mv-name { font-size: 3.3cqh; font-weight: 800; color: #232936; letter-spacing: .01em; }
+.mv .mv-meta { display: flex; align-items: center; gap: 1.2cqw; }
+.mv .mv-type {
+  font-size: 2.15cqh; font-weight: 800; letter-spacing: .07em; color: #fff;
+  padding: .35cqh 1.2cqw; border-radius: 1cqh; background: var(--tc);
+  text-shadow: 0 .2cqh .3cqh rgba(0,0,0,.45); box-shadow: inset 0 0 0 .2cqh rgba(255,255,255,.35);
+}
+.mv .mv-pp { font-size: 2.4cqh; font-weight: 800; color: #47506a; font-variant-numeric: tabular-nums; }
+.mv .zflag {
+  position: absolute; right: 1.6cqw; top: 1.2cqh; width: 3.4cqh; height: 3.4cqh; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2.2cqh; font-weight: 800; color: #7a4a00;
+  background: radial-gradient(circle at 40% 35%, #fff6c4, #ffc400 60%, #ef8a00);
+  box-shadow: 0 0 0 .3cqh #fff6cf, 0 0 1.2cqh rgba(255,190,40,.9);
+}
+.mv.z {
+  background: linear-gradient(180deg,#fff8d6,#ffe08a 60%,#ffc23d);
+  --inner: rgba(150,96,0,.4);
+  filter: drop-shadow(0 0 1.4cqh rgba(255,190,60,.8));
+}
+.mv.z .mv-name { color: #6b3a00; }
+.mv.z .mv-type { background: linear-gradient(180deg,#ffd75e,#f08a00); color: #4a2a00; }
+.mv.z.sel { filter: drop-shadow(0 0 1.8cqh rgba(255,190,60,.95)) brightness(1.05); }
+
+.sc[data-mode="party"] #party {
+  display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: minmax(0, 27%);
+  gap: 2.4cqh 3cqw; align-content: start;
+}
+.sc[data-mode="bag"] #bagmenu {
+  display: grid; grid-template-columns: 1fr; grid-auto-rows: minmax(0, 23%);
+  gap: 2.4cqh; align-content: start;
+}
+.pm, .bm { position: relative; display: flex; }
+.pm, .bm { background: linear-gradient(180deg,#fffdf4,#f2e8d0); color: #232936; --inner: rgba(120,96,44,.35); }
+
+.pm { flex-direction: column; justify-content: center; gap: 1cqh; padding: 1.4cqh 2.4cqw; }
+.pm .pm-top { display: flex; align-items: baseline; gap: 1cqw; }
+.pm .pm-name { font-size: 2.9cqh; font-weight: 800; }
+.pm .pm-lv { margin-left: auto; font-size: 2.4cqh; font-weight: 800; color: #47506a; }
+.pm .pm-bar {
+  height: 1.9cqh; border-radius: 1cqh; overflow: hidden; background: #10151d;
+  box-shadow: inset 0 .2cqh .35cqh rgba(0,0,0,.8);
+}
+.pm .pm-fill {
+  display: block; height: 100%; border-radius: 1cqh;
+  background: linear-gradient(90deg,#c9ff4c,#27e01f); box-shadow: 0 0 .7cqh rgba(120,235,70,.7);
+}
+.pm .pm-fill.mid { background: linear-gradient(90deg,#ffee94,#f09a05); }
+.pm .pm-fill.low { background: linear-gradient(90deg,#ffab95,#d31a0d); }
+.pm .pm-bot { display: flex; align-items: center; gap: 1cqw; font-size: 2.2cqh; font-weight: 800; color: #47506a; }
+.pm .pm-hp { font-variant-numeric: tabular-nums; }
+.pm .pm-act { color: #1c7a3a; letter-spacing: .06em; }
+.pm .pm-fnt { color: #b0231a; letter-spacing: .06em; }
+.pm.out { filter: grayscale(.75) brightness(.88); }
+.pm.out .pm-name, .pm.out .pm-lv, .pm.out .pm-hp { color: #6d7484; }
+.pm.back, .bm.back { grid-column: 1 / -1; }
+.pm.back .pm-hp { font-weight: 700; color: #6d7484; }
+.pm.back { justify-content: center; }
+
+.bm { align-items: center; gap: 1.6cqw; padding: 1.4cqh 2.4cqw; }
+.bm .bm-name { font-size: 2.9cqh; font-weight: 800; }
+.bm .bm-n { margin-left: auto; font-size: 2.7cqh; font-weight: 800; color: #47506a; }
+.bm .bm-ico { position: relative; flex: none; width: 4.2cqh; height: 4.2cqh; }
+.bm .bm-ico i {
+  position: absolute; left: 18%; right: 18%; bottom: 0; height: 62%;
+  border-radius: 24% 24% 32% 32% / 40% 40% 28% 28%;
+  background: linear-gradient(180deg,#eaf6ff,#9fd4f5 60%,#4f9ed6);
+  box-shadow: inset 0 .25cqh 0 rgba(255,255,255,.8), 0 0 0 .2cqh rgba(30,60,90,.5);
+}
+.bm .bm-ico i::before {
+  content: ''; position: absolute; left: 34%; right: 34%; bottom: 58%; height: 48%;
+  border-radius: 30%; background: #6ea9d6; box-shadow: 0 0 0 .2cqh rgba(30,60,90,.45);
+}
+.bm.out { filter: grayscale(.7) brightness(.9); }
+.bm.back .bm-ico i { background: linear-gradient(180deg,#e9edf3,#b9c2cf); }
+.bm.back .bm-ico i::before { background: #b9c2cf; }
+
+/* a refused (fainted) party row */
+.pm.nope { animation: nope .45s ease-in-out; }
+@keyframes nope {
+  0%, 100% { transform: translateX(0) }
+  20% { transform: translateX(-1.2cqw) }
+  45% { transform: translateX(1.2cqw) }
+  70% { transform: translateX(-.6cqw) }
+}

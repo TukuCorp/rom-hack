@@ -1,0 +1,95 @@
+/* style.css — page + dual-screen console shell. Owned by: Main.
+   Screen *contents* (HUD plates, menus, bottom-screen chrome) live in ui.css. */
+
+* { box-sizing: border-box; }
+:root {
+  --page: #0c1018;
+  --panel: #131a26;
+  --line: #26314a;
+  --ink: #e8eefc;
+  --muted: #93a2bf;
+  --plastic: #23262f;
+}
+html, body { height: 100%; }
+body {
+  margin: 0; background: radial-gradient(120% 90% at 50% 0%, #16203a 0%, var(--page) 60%) fixed;
+  color: var(--ink);
+  font: 14px/1.5 system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+header {
+  display: flex; gap: 12px; align-items: center; padding: 10px 16px;
+  background: rgba(19,26,38,.92); border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 20; backdrop-filter: blur(6px);
+}
+header h1 { font-size: 15px; margin: 0; font-weight: 700; letter-spacing: .2px; }
+header h1 small { font-weight: 400; color: var(--muted); margin-left: 6px; }
+header .spacer { flex: 1; }
+.btn {
+  background: #1d2638; color: var(--ink); border: 1px solid #33405c; border-radius: 8px;
+  padding: 7px 12px; font-size: 13px; text-decoration: none;
+}
+.btn:hover { background: #27334d; }
+
+#app { max-width: 780px; margin: 0 auto; padding: 0 14px 40px; }
+
+/* ---------------------------------------------------------------- console */
+
+#console {
+  width: min(96vw, 720px); margin: 18px auto 6px;
+  background: linear-gradient(180deg, #2c3040 0%, #1b1e27 55%, #14161d 100%);
+  border-radius: 18px; padding: 14px 14px 16px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.08);
+  border: 1px solid #363b4b;
+}
+.bezel {
+  position: relative; background: #05070c; border-radius: 6px; overflow: hidden;
+  box-shadow: inset 0 0 0 2px #0d1017, 0 6px 16px rgba(0,0,0,.6);
+}
+#topwrap { aspect-ratio: 5 / 3; }
+#topwrap::after {           /* glass sheen over the top screen */
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, rgba(255,255,255,.09) 0%, rgba(255,255,255,0) 34%);
+}
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#topui { position: absolute; inset: 0; pointer-events: none; }
+
+.hinge {
+  position: relative; height: 20px; display: flex; align-items: center; justify-content: center;
+  gap: 10px;
+}
+.hinge::before {
+  content: ""; position: absolute; left: 4%; right: 4%; top: 9px; height: 3px;
+  background: linear-gradient(180deg, #0b0d12, #2a2f3c); border-radius: 3px;
+}
+.hinge .cam {
+  width: 7px; height: 7px; border-radius: 50%; background: #0a0c11;
+  box-shadow: inset 0 0 2px #4a5a7a; position: relative; z-index: 1;
+}
+.hinge .led {
+  width: 22px; height: 4px; border-radius: 2px; background: #2bd6ff; margin-left: auto;
+  box-shadow: 0 0 8px #2bd6ff99; position: relative; z-index: 1; margin-right: 6%;
+}
+#bottomwrap { aspect-ratio: 4 / 3; }
+#bottomui { position: absolute; inset: 0; }
+
+.hint { color: var(--muted); font-size: 12.5px; text-align: center; margin: 14px auto 0; max-width: 660px; }
+kbd {
+  background: #1d2638; border: 1px solid #33405c; border-bottom-width: 2px; border-radius: 6px;
+  padding: 1px 6px; font-size: 12px; margin: 0 1px;
+}
+
+/* --------------------------------------------------------- capture modes */
+
+/* ?top=1 — hide everything but the top screen (bar-comparison captures) */
+body.top-only { background: #000; overflow-x: hidden; }
+body.top-only header, body.top-only .hint { display: none; }
+body.top-only #app { max-width: none; padding: 0; margin: 0; }
+body.top-only #console {
+  width: 100vw; margin: 0; padding: 0; border: 0; border-radius: 0; background: #000; box-shadow: none;
+}
+body.top-only .hinge, body.top-only #bottomwrap { display: none; }
+body.top-only #topwrap { border-radius: 0; box-shadow: none; }
+
+/* ?plain=1 — top screen with the UI chrome stripped (pure 3D field) */
+body.plain #topui { display: none; }

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Pokémon Sun &amp; Moon — Battle Scene (browser demo)</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Pokémon Sun &amp; Moon <small>battle scene · original code &amp; art · no ROM assets</small></h1>
+    <div class="spacer"></div>
+    <a class="btn" href="progress.html">Gauntlet progress</a>
+  </header>
+
+  <div id="console">
+    <div class="bezel" id="topwrap">
+      <canvas id="gl" width="800" height="480"></canvas>
+      <div id="topui"></div>
+    </div>
+    <div class="hinge"><span class="cam"></span><span class="led"></span></div>
+    <div class="bezel bottom" id="bottomwrap">
+      <div id="bottomui"></div>
+    </div>
+  </div>
+
+  <p class="hint">
+    <kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> move ·
+    <kbd>Z</kbd> confirm · <kbd>X</kbd> back · <kbd>Enter</kbd> Z-Ring ·
+    mouse &amp; touch also work. Fight, switch Pokémon, use a Potion, run — or fire the Firium Z.
+  </p>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

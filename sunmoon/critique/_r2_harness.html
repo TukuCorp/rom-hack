@@ -1,0 +1,66 @@
+<!doctype html>
+<!-- TEMPORARY R2 hud harness (delete before yield): renders js/hud.js + ui.css against a stub state
+     so plate/plate-glyph work can be iterated while the demo page is mid-edit by a sibling. -->
+<html>
+<head>
+<meta charset="utf-8">
+<title>hud harness</title>
+<link rel="stylesheet" href="../ui.css">
+<style>
+  html, body { margin: 0; background: #101820; }
+  #screen { position: relative; width: 800px; height: 480px; overflow: hidden;
+            background: linear-gradient(180deg, #8ec9ee 0%, #bfe09a 55%, #d8e2a0 100%); }
+  #gl { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #topui, #bottomui { position: absolute; inset: 0; }
+  #bottomwrap { position: relative; width: 800px; height: 600px; background: #222; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="screen"><div id="topui"></div></div>
+  <div id="bottomwrap"><div id="bottomui"></div></div>
+</div>
+<script type="module">
+import * as hud from '../js/hud.js';
+
+const mon = (o = {}) => Object.assign({
+  species: 'x', name: 'X', form: undefined, level: 12, types: ['grass'], ability: 'x',
+  stats: {}, maxHP: 46, hp: 46, moves: [], stages: {}, status: null, fainted: false, exp: 0,
+}, o);
+
+const foeMon = mon({ species: 'alolanExeggutor', name: 'Exeggutor', form: 'Alolan Form', level: 12 });
+const allyMon = mon({ species: 'litten', name: 'Litten', level: 16, maxHP: 42, hp: 42, held: 'firiumZ', types: ['fire'] });
+const popplio = mon({ species: 'popplio', name: 'Popplio', level: 15, maxHP: 41, hp: 41, types: ['water'] });
+
+const state = {
+  t: 0, dt: 1 / 60, frame: 0, auto: true, forced: null, sceneKey: 'exeggutorIsland',
+  text: 'A wild Exeggutor appeared!', zReady: true, zArmed: false, active: 0,
+  party: [allyMon, popplio], bag: [{ key: 'potion', name: 'Potion', count: 2, heal: 20 }],
+  hud: { mode: 'wait', commandIndex: 0, moveIndex: 0, partyIndex: 0, bagIndex: 0, foeNums: false },
+  units: {
+    player: { side: 'player', mon: allyMon, entity: { anim: { name: 'idle', t: 1 } }, focusHeight: 0.4 },
+    foe: { side: 'foe', mon: foeMon, entity: { anim: { name: 'idle', t: 1 } }, focusHeight: 1 },
+  },
+};
+
+hud.init(state, null);
+
+const params = new URLSearchParams(location.search);
+if (params.has('cine')) state.cinematic = params.get('cine');
+if (params.has('mode')) state.hud.mode = params.get('mode');
+if (params.has('nums')) state.hud.foeNums = true;
+
+let n = 0;
+function loop() {
+  state.dt = 1 / 60;
+  state.t += state.dt;
+  n++;
+  if (n === 90) { state.units.foe.shown = 46; state.units.foe.ghost = 46; state.units.player.shown = 42; state.units.player.ghost = 42; }
+  hud.update(state, state.t);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+window.__h = { state, hud };
+</script>
+</body>
+</html>

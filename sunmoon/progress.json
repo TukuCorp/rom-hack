@@ -1,0 +1,76 @@
+{
+ "title": "Sun & Moon Battle \u2014 Gauntlet vs Bulbagarden SM captures",
+ "bar": "sunmoon/bar/",
+ "rounds": [
+  {
+   "round": 1,
+   "piece": "Z-Move cinematic",
+   "win": false,
+   "gap": "Fan panel is a flat, un-outlined, single-light WebGL render: no cel shading, no inverted-hull outlines, flat star-quad palms, hard-edged sea/horizon band, and a near-uniform glow instead of layered fire with internal structure.",
+   "note": "Blind critic called the official Inferno Overdrive frame authentic (high confidence) and picked our Z-Move panel as the fake. Also flagged that the HK plate stays visible during the cinematic.",
+   "critic_pick": "A",
+   "key": "ab-R5-zmove.key.json",
+   "imgs": [
+    "sunmoon/bar/Inferno_Overdrive_VII.png",
+    "sunmoon/critique/zmove-impact.png",
+    "sunmoon/critique/ab-R5-zmove.webp"
+   ]
+  },
+  {
+   "round": 2,
+   "piece": "Bottom-screen command UI",
+   "win": true,
+   "gap": "",
+   "note": "Blind critic (high confidence) called OUR command screen the authentic 3DS capture and the official Battle-Royal bottom screen the mockup - it read the bar's mini arena map + trainer icons as 'black-outlined pixel sprites on a flat 2D field', which is a misreading of the reference, so treat the win as provisional; the genuinely useful signal is that it found no web-mockup tells in our plates, Z-POWER chip or cream container.",
+   "critic_pick": "A",
+   "key": "ab-R3-bottom-commands.key.json",
+   "imgs": [
+    "sunmoon/bar/Battle_interface_harsh_sunlight_SM.png",
+    "sunmoon/critique/bottom-menu.png",
+    "sunmoon/critique/ab-R3-bottom-commands.webp"
+   ]
+  },
+  {
+   "round": 3,
+   "piece": "Top screen: field + battler plates",
+   "win": false,
+   "gap": "Capture was letterboxed to 1.36:1 by a layout overflow, so the foe plate was cut off at the frame edge (name floating, HP bar with no end cap or ball badge); plus: no cel/rim outline on the models, flat gradient sky/sea with a hard horizon, untextured cylinder palms, plain dot instead of a gender glyph, ALL-CAPS 'FIRIUM Z', invented 'Exeggutor A' form suffix, and the opponent's head off-frame with stray frond geometry at the right edge.",
+   "note": "Blind critic picked the official Ember_VII capture (medium confidence). Its two biggest tells were the non-5:3 aspect (my top-only CSS overflow bug, since fixed) and the missing outline pass (since added: toon ramp + inverted-hull outlines). UI vocabulary fixes (gender glyph, title-case item name, no form suffix) are queued for the HUD builder.",
+   "critic_pick": "B",
+   "key": "ab-R1-field-plates.key.json",
+   "imgs": [
+    "sunmoon/bar/Ember_VII.png",
+    "sunmoon/critique/top-idle.png",
+    "sunmoon/critique/ab-R1-field-plates.webp"
+   ]
+  },
+  {
+   "round": 4,
+   "piece": "Move menu",
+   "win": true,
+   "gap": "",
+   "note": "Blind critic (medium confidence) called OUR move menu the authentic capture and praised it specifically: bevel-edged white plates with type-coloured left bars, amber Z-MOVE plate with the corner Z medallion, white-with-pink-outline cursor, softness reading like a native 320x240 capture. Caveat: it again misread the reference (a Battle-Royal bottom screen: mini-map, trainer icons, '+' markers, weather chip) as a fake 2D field, so the win is provisional.",
+   "critic_pick": "A",
+   "key": "ab-R4-move-menu.key.json",
+   "imgs": [
+    "sunmoon/bar/Battle_interface_rain_SM.png",
+    "sunmoon/critique/bottom-moves.png",
+    "sunmoon/critique/ab-R4-move-menu.webp"
+   ]
+  },
+  {
+   "round": 5,
+   "piece": "Battlers on terrain (no UI)",
+   "win": false,
+   "gap": "Litten is off-model (glowing flame tail instead of a fur tuft, white muzzle/chest where the species has red-orange face fur, solid orange crown patch instead of thin red forehead stripes); the foe reads as a 45x17 px white blob; the sand is one flat cream plane with no visible texture (luminance sigma ~1); no Gen VII background defocus; palm trunks are smooth cylinders with painted rings instead of bark.",
+   "note": "Blind critic picked the official Freeze_VII capture (medium confidence). Two engineering-level gaps: no depth-of-field and no visible ground texture. The tail-tuft canon point is correct and is being fixed with official-artwork references added to bar/.",
+   "critic_pick": "A",
+   "key": "ab-R2-terrain-plain.key.json",
+   "imgs": [
+    "sunmoon/bar/Freeze_VII.png",
+    "sunmoon/critique/plain-idle.png",
+    "sunmoon/critique/ab-R2-terrain-plain.webp"
+   ]
+  }
+ ]
+}
