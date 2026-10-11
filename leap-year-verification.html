@@ -159,6 +159,23 @@ footer{margin-top:30px;color:var(--muted);font-size:12.5px;border-top:1px solid 
 <div class="note"><b>The harness corrected my model twice, which is the point.</b> On the first run, 12 of 14 predictions held. Two did not: <code>.msc</code> came back flagged when I had predicted allowed, and <code>meta/sysinfo.txt</code> in a subdirectory satisfied the meta check when I had predicted a missing-meta failure. Both were amended in the model, and the same vectors then passed — followed by five new ordering vectors confirming that the checks short-circuit in the order above (a file that is both missing a data file and carrying an <code>.exe</code> reports 3, never 4).</div>
 <div class="note"><b>Scope.</b> This covers the container contract only. The <code>years.nx1</code> contents are still never parsed, so the date logic in <code>FUN_0042669c</code> is not exercised by any of these 19 vectors.</div>
 <h2>4. Subroutine emulation &amp; DBI</h2>
+<h2>3d. Date validation driven end to end through the emulator</h2>
+<p style="font-size:14px;margin:6px 0 0">The one test that reaches the leap-year logic through a real caller. <code>FUN_004266d8</code> validates a date by indexing the month-length table at <code>0x61cef8</code> with the record chosen by <code>IsLeapYear</code>. Emulating it supplies both an initial <b>register</b> state (EAX/EDX/ECX = year, month, day) and an initial <b>memory</b> state (a stack with the fourth argument, and the out-parameter buffer), then reads the verdict out of <code>AL</code>.</p>
+<table>
+<tr><th style="width:16%">Date</th><th style="width:10%">Model</th><th style="width:10%">Binary</th><th>Why it is in the set</th></tr>
+<tr><td class="n">2024-02-29</td><td class="n">1</td><td class="n ok">1</td><td>ordinary leap year</td></tr>
+<tr><td class="n">2023-02-29</td><td class="n">0</td><td class="n ok">0</td><td>not divisible by 4</td></tr>
+<tr><td class="n"><b>2000</b>-02-29</td><td class="n">1</td><td class="n ok">1</td><td>century that <i>is</i> divisible by 400</td></tr>
+<tr><td class="n"><b>1900</b>-02-29</td><td class="n">0</td><td class="n ok">0</td><td>century that is not &mdash; the case a %4-only rule gets wrong</td></tr>
+<tr><td class="n">2100-02-29</td><td class="n">0</td><td class="n ok">0</td><td>same, different century</td></tr>
+<tr><td class="n">2400-02-29</td><td class="n">1</td><td class="n ok">1</td><td>same, divisible by 400</td></tr>
+<tr><td class="n">2024-02-30</td><td class="n">0</td><td class="n ok">0</td><td>past the month length</td></tr>
+<tr><td class="n">2024-04-31</td><td class="n">0</td><td class="n ok">0</td><td>April has 30 days</td></tr>
+<tr><td class="n">2024-00-15 / 2024-13-15 / 2024-06-00</td><td class="n">0</td><td class="n ok">0</td><td>month and day range guards</td></tr>
+<tr><td class="n">9999-12-31 / 10000-01-01</td><td class="n">1 / 0</td><td class="n ok">1 / 0</td><td>the year range boundary</td></tr>
+</table>
+<p style="font-size:14px;margin:8px 0 0"><b>18 vectors, 0 mismatches.</b> The 1900-versus-2000 pair is the load-bearing one: both are century years, so only the <code>% 400</code> clause separates them. An implementation that tested divisibility by 4 alone &mdash; the classic bug this whole exercise is about &mdash; would have written 29 February 1900 as a valid date. The binary rejects it.</p>
+<div class="note"><b>Why this reaches where the container tests could not.</b> The earlier vectors only ever exercised <code>TestLEAP</code>&#8217;s zip validation, because <code>years.nx1</code> contents are never parsed on those paths. Emulation sidesteps the file format entirely: the table is read out of the program image, the leap flag comes from the real <code>IsLeapYear</code> code, and the answer comes back from real machine code. That is as close to the date logic as this binary allows without a genuine area file.<br><br><b>One limitation, stated.</b> The emulator insists its entry point be a real function, so starting mid-function to emulate a single basic block in isolation is not available here; the three blocks of <code>IsLeapYear</code> are instead covered by inputs that force each path.</div>
 <h2>3c. Runtime flags, verified against the decompilation</h2>
 <p style="font-size:14px;margin:6px 0 0">The metadata check lives in <code>FUN_00611e78</code>. Its decompilation assigns the exit-code global on the missing-meta path &mdash; <code>DAT_0062f060 = 7</code> &mdash; and then guards the message behind <code>if (DAT_0062f532 == 0 &amp;&amp; DAT_0062f530 == 0)</code>. If those globals are the quiet flags, the code should survive their suppression while the text disappears. Tested on a file with no <code>sysinfo.txt</code>:</p>
 <table>
