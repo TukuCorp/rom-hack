@@ -57,5 +57,6 @@ _fm*.leap
 # Going forward, dynamic probes belong under this single ignored directory so a new
 # probe family cannot leak into a commit the way _ext_/_mx_/_fm_ did.
 _probes/
+.venv-frida/
 __pycache__/
 .commit-msg.tmp
