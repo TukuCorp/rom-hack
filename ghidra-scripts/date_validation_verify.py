@@ -39,6 +39,23 @@ def model(y, m, d):
     return 1 if (1 <= d <= dim) else 0
 
 
+def day_number(y, m, d):
+    """The out-parameter value, from the decompiled formula for a valid date."""
+    days_before = sum(MONTH_DAYS[:m - 1])
+    if m > 2 and is_leap(y):
+        days_before += 1
+    k = y - 1
+    return k * 365 + (k >> 2) - (k // 100) + (k // 400) + (days_before + d) - 693594
+
+
+def out_buffer(res):
+    """The 8 bytes written to the out-parameter, read back from emulator memory."""
+    for region in (res.get("memory") or []):
+        raw = bytes.fromhex(region["hex"])
+        return struct.unpack("<d", raw)[0], raw
+    return None, b""
+
+
 def emulate(url, y, m, d):
     stack = struct.pack("<II", 0xDEADBEEF, BUF)
     body = json.dumps({
@@ -95,11 +112,19 @@ def main():
             continue
         al = int(res["registers"]["EAX"], 16) & 0xFF
         predicted = model(y, m, d)
-        ok = (al == predicted)
+        value, raw = out_buffer(res)
+        if predicted == 1:
+            expected = float(day_number(y, m, d))
+            buf_ok = value is not None and abs(value - expected) < 0.5
+            detail = "day=%d" % int(value) if value is not None else "no buffer"
+        else:
+            buf_ok = (raw == b"\x00" * 8)
+            detail = "buffer untouched" if buf_ok else "buffer written on reject"
+        ok = (al == predicted) and buf_ok
         if not ok:
             bad += 1
-        print("%-14s %-6d %-7d %s%s" % ("%d-%d-%d" % (y, m, d), predicted, al,
-                                        "OK   " if ok else "MISMATCH  ", note))
+        print("%-14s %-6d %-7d %-22s %s%s" % ("%d-%d-%d" % (y, m, d), predicted, al,
+                                              detail, "OK   " if ok else "MISMATCH  ", note))
 
     print()
     print("vectors=%d  mismatches=%d" % (len(vectors), bad))
@@ -112,4 +137,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
