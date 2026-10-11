@@ -127,6 +127,19 @@ footer{margin-top:30px;color:var(--muted);font-size:12.5px;border-top:1px solid 
 <tr><td class="n">4294967295</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td>16-bit truncation saves it</td></tr>
 </table>
 <div class="note"><b>The one real defect, and why it is benign.</b> The decompiler typed the return as 4 bytes and rendered it as <code>CONCAT31((int3)(param_1/uVar1 &gt;&gt; 8),1)</code>. The listing shows why: the true path writes <b>only AL</b>, leaving the upper 24 bits holding the quotient from the preceding <code>DIV</code>. So the function does not return 1, it returns <code>0x101</code> for 32004 and <code>0x201</code> for 65532. Both in-tree callers read only the low byte &mdash; one with <code>MOVZX EAX,DL</code>, the other with <code>AND EAX,0x7f</code> &mdash; so nothing in this binary is broken. A caller that tested the full EAX would be.</div>
+<h2>3b. Differential testing at the process level</h2>
+<p style="font-size:14px;margin:6px 0 0">Step 3 applied to the program rather than to a single function. TestLEAP’s container contract was re-implemented in Python and compared against the real binary across 19 crafted <code>.leap</code> inputs. The vectors are new combinations, not the observations the model was built from, so agreement is a prediction confirmed.</p>
+<table>
+<tr><th style="width:8%">Order</th><th style="width:36%">Check</th><th style="width:12%">Code</th><th>Rule as implemented</th></tr>
+<tr><td class="n">1</td><td>ZIP structure</td><td class="n">5</td><td>not a zip archive</td></tr>
+<tr><td class="n">2</td><td>Required data files</td><td class="n">3</td><td>all five <code>.nx1</code> members present by name</td></tr>
+<tr><td class="n">3</td><td>No executables</td><td class="n">4</td><td>no member whose final extension is in the flagged set</td></tr>
+<tr><td class="n">4</td><td>Meta present</td><td class="n">7</td><td>a member whose <i>basename</i> is <code>sysinfo.txt</code>, at any depth</td></tr>
+<tr><td class="n">5</td><td>Otherwise</td><td class="n ok">0</td><td>valid leap file</td></tr>
+</table>
+<p style="font-size:14px;margin:10px 0 0">Flagged extensions, measured one at a time: <b>.exe .com .bat .cmd .vbs .js .msi .msc</b>. Not flagged: <b>.dll .scr .ps1 .jar .wsh .jse .txt .nx1 .emf .zip .py .csv</b>, and no extension at all. Matching is case-insensitive and applies to the final suffix, so <code>a.txt.exe</code> is flagged while <code>a.exe.txt</code> is not.</p>
+<div class="note"><b>The harness corrected my model twice, which is the point.</b> On the first run, 12 of 14 predictions held. Two did not: <code>.msc</code> came back flagged when I had predicted allowed, and <code>meta/sysinfo.txt</code> in a subdirectory satisfied the meta check when I had predicted a missing-meta failure. Both were amended in the model, and the same vectors then passed — followed by five new ordering vectors confirming that the checks short-circuit in the order above (a file that is both missing a data file and carrying an <code>.exe</code> reports 3, never 4).</div>
+<div class="note"><b>Scope.</b> This covers the container contract only. The <code>years.nx1</code> contents are still never parsed, so the date logic in <code>FUN_0042669c</code> is not exercised by any of these 19 vectors.</div>
 <h2>4. Subroutine emulation &amp; DBI</h2>
 <table>
 <tr><th style="width:26%">Technique</th><th style="width:14%">Status</th><th>Evidence</th></tr>

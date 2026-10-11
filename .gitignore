@@ -48,5 +48,9 @@ _leap_probe*/
 _leap_probe*.leap
 _testleap_probe.txt
 testleap.run.*.txt
+_ext_*/
+_ext_*.leap
+_mx_*/
+_mx_*.leap
 __pycache__/
 .commit-msg.tmp
