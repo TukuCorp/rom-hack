@@ -51,6 +51,24 @@ footer{margin-top:30px;color:var(--muted);font-size:12.5px;border-top:1px solid 
 </table>
 <div class="note"><b>Refuted hypothesis.</b> The checklist expects division by 4/100/400 to be replaced by reciprocal multiplication with magic numbers. In this binary that is true only for the mod-4 case, and only as a bitwise AND. The 100 and 400 divides are emitted literally by the Delphi compiler, so any re-implementation must reproduce integer division, not a magic-multiply approximation.</div>
 <h2>The function, as emitted</h2>
+<h2>Types and structures, resolved and applied</h2>
+<p style="font-size:14px;margin:6px 0 0">Checklist item 1.3 asks for generic types to be replaced with real ones. That was applied in Ghidra, not just noted:</p>
+<table>
+<tr><th style="width:30%">Action</th><th style="width:34%">Result</th><th>Basis</th></tr>
+<tr><td>rename <code>FUN_0042669c</code></td><td class="ok">IsLeapYear</td><td>the predicate it implements; confirmed against the callers, which pass a year and use the result to pick a month-length record</td></tr>
+<tr><td>set prototype</td><td class="ok">bool IsLeapYear(ushort Year)</td><td>parameter is 16-bit (<code>MOVZX</code> on <code>CX</code>), result is one byte in <code>AL</code></td></tr>
+<tr><td>create structure</td><td class="ok">LeapMonthLengths &mdash; 12 fields, 24 bytes</td><td>Ghidra reported 24 bytes, matching the <code>* 0x18</code> stride the callers use</td></tr>
+</table>
+<p style="font-size:14px;margin:10px 0 0">The decompilation of the leap-year function after typing, which is what the checklist is aiming at:</p>
+<pre>bool IsLeapYear(ushort Year)
+{
+  if (((Year &amp; 3) == 0) &amp;&amp; ((Year % 100 != 0 || (Year % 400 == 0)))) {
+    return true;
+  }
+  return false;
+}</pre>
+<p style="font-size:14px;margin:6px 0 0">The <code>CONCAT31((int3)(param_1 / uVar1 &gt;&gt; 8),1)</code> artefact and the <code>undefined4</code> signature are both gone. The one blemish left is a <code>WARNING: Unknown calling convention</code>: this is 32-bit Delphi, whose parameter-in-EAX scheme is not one of Ghidra’s named x86 conventions, so the warning is cosmetic and the emulation evidence above (EAX in, AL out) is what actually pins the convention down.</p>
+<div class="note"><b>The structure behind the boolean, resolved from memory.</b> Both callers index a table at <code>0x61cef8</code> as <code>leapFlag * 0x18 + month*2</code>. Reading that memory gives two 24-byte records of twelve <code>ushort</code>s, days per month: <code>31,28,31,30,31,30,31,31,30,31,30,31</code> in the first and <code>31,29,31,30,31,30,31,31,30,31,30,31</code> in the second — February <code>0x1c</code> versus <code>0x1d</code>. So record 0 is the common year and record 1 the leap year, and <code>IsLeapYear</code> exists to choose between them. That is the structure the checklist asks to be defined, and the decompiler’s <code>*(ushort *)(iVar4 + 0x61cef6 + param_2 * 2)</code> is exactly <code>LeapMonthLengths[leap ? 1 : 0].days[month - 1]</code>.</div>
 <pre><span class="cmt">; FUN_0042669c — Boolean IsLeapYear(Word Year), year arriving in EAX</span>
 0042669c  PUSH EBX
 0042669d  PUSH ESI
