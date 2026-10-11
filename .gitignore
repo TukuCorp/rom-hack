@@ -40,5 +40,7 @@ leap/vendor/
 leap-decompiled-retry/
 jstack-*.txt
 gx.*.log
+gx*.log
+leap-year-verification.png
 __pycache__/
 .commit-msg.tmp

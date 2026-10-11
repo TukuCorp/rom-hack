@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Verifying a decompiled LEAP routine</title>
+<style>
+:root{--ink:#12161c;--muted:#5d6875;--line:#e3e7ec;--bg:#f6f7f9;--card:#fff;--ok:#15803d;--no:#b91c1c;--warn:#92400e;--accent:#2f6fb5}
+*{box-sizing:border-box}
+body{margin:0;padding:40px 28px 72px;background:var(--bg);color:var(--ink);font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:1060px;margin:0 auto}
+h1{font-size:28px;margin:0 0 6px;letter-spacing:-.02em}
+.sub{color:var(--muted);font-size:14px;margin-bottom:22px}
+h2{font-size:17px;margin:34px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--line)}
+.verdict{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--ok);border-radius:10px;padding:16px 18px}
+.verdict p{margin:0 0 9px}.verdict p:last-child{margin:0}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13.5px;margin-top:10px}
+th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:#eef1f5;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:#414c59}
+tr:last-child td{border-bottom:none}
+td.n{font-variant-numeric:tabular-nums;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+.ok{color:var(--ok);font-weight:650}.no{color:var(--no);font-weight:650}.nu{color:var(--warn);font-weight:650}
+pre{background:#12161c;color:#e6edf3;border-radius:9px;padding:14px 16px;overflow-x:auto;font-size:12px;line-height:1.5}
+.rep{color:#ff8a8a}.cmt{color:#8ab4f8}
+code{font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+.note{background:#fff8ed;border:1px solid #f3dcb5;border-radius:10px;padding:13px 15px;font-size:14px;margin-top:10px}
+.note b{color:var(--warn)}
+ul{margin:8px 0 0;padding-left:20px}li{margin-bottom:5px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin:18px 0 4px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:13px 14px}
+.kpi .n{font-size:23px;font-weight:650;letter-spacing:-.02em}
+.kpi .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
+footer{margin-top:30px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--line);padding-top:11px}
+</style></head><body><div class="wrap">
+<h1>Verifying a decompiled LEAP routine</h1>
+<div class="sub">The four-step workflow (static audit &middot; runtime &amp; trace &middot; differential I/O &middot; emulation/DBI) applied to a real function out of the LEAP decompilation. Ghidra 12.1.4 + GhidraMCP, 2026-10-12.</div>
+<div class="verdict">
+<p><b>Target.</b> <code>FUN_0042669c</code> in <code>testleap.exe</code> &mdash; the Delphi <code>IsLeapYear</code> predicate: <code>undefined4 FUN_0042669c(uint param_1)</code>. Chosen because it is pure, self-contained, and has two in-tree callers that show how its result is consumed.</p>
+<p><b>Result.</b> Steps 1, 3 and 4 pass with evidence. Step 2 has no surface to intercept on this function, which is a finding rather than a gap. Three checklist expectations were confirmed, one was refuted, and one genuine type error in the decompilation was found and shown to be harmless.</p>
+</div>
+<div class="kpis">
+<div class="kpi"><div class="n">22</div><div class="l">test vectors, 0 mismatches</div></div>
+<div class="kpi"><div class="n">28</div><div class="l">instructions audited</div></div>
+<div class="kpi"><div class="n">4/4</div><div class="l">checklist items resolved</div></div>
+<div class="kpi"><div class="n">2</div><div class="l">callers checked</div></div>
+</div>
+<h2>1. Static assembly &amp; pseudocode audit</h2>
+<table>
+<tr><th style="width:24%">Checklist item</th><th style="width:38%">What the decompiler said</th><th>What the machine code does</th></tr>
+<tr><td><b>Branch conditions &amp; signedness</b><br><span class="sub">JGE vs JAE</span></td><td><code>param_1 % 100</code>, <code>param_1 % 400</code> on a <code>uint</code></td><td><code>DIV ESI</code> / <code>DIV ECX</code> preceded by <code>XOR EDX,EDX</code> &mdash; <b>unsigned</b> division. Branch tests are <code>TEST EDX,EDX</code> with <code>JNZ</code>/<code>JZ</code>, i.e. against zero, so signedness cannot bite. An <code>IDIV</code> here would have been the bug; there is none.</td></tr>
+<tr><td><b>Calling convention</b></td><td>first parameter named <code>param_1</code></td><td>Entry is <code>MOV ECX,EAX</code>: the year arrives in <b>EAX</b>. That is the 32-bit Borland/Delphi <code>register</code> convention &mdash; <b>not</b> SysV (rdi) or Microsoft x64 (rcx) which the checklist names. Both call sites confirm it: <code>MOVZX EAX,word ptr [EBP-0x2]</code> and <code>MOV EAX,EBX</code> immediately before <code>CALL</code>. EBX/ESI are saved and restored.</td></tr>
+<tr><td><b>Types &amp; widths</b></td><td><code>undefined4 FUN_0042669c(uint)</code></td><td>Two real types were lost. The parameter is a <b>16-bit Word</b> (<code>MOVZX EAX,CX</code>, <code>MOVZX EBX,CX</code> &mdash; only the low 16 bits are ever read), and the result is a <b>1-byte Boolean in AL</b>. Correct signature: <code>Boolean IsLeapYear(Word Year)</code>.</td></tr>
+<tr><td><b>Compiler optimizations</b></td><td><code>(param_1 &amp; 3) == 0</code> for the mod-4 test</td><td><code>mod 4</code> <b>is</b> strength-reduced to a bitwise <code>AND EAX,0x3</code>. But <code>mod 100</code> and <code>mod 400</code> are <b>not</b> &mdash; they remain hardware divides (<code>MOV ESI,0x64</code> / <code>MOV ECX,0x190</code> then <code>DIV</code>). No reciprocal-multiplication magic constants appear.</td></tr>
+</table>
+<div class="note"><b>Refuted hypothesis.</b> The checklist expects division by 4/100/400 to be replaced by reciprocal multiplication with magic numbers. In this binary that is true only for the mod-4 case, and only as a bitwise AND. The 100 and 400 divides are emitted literally by the Delphi compiler, so any re-implementation must reproduce integer division, not a magic-multiply approximation.</div>
+<h2>The function, as emitted</h2>
+<pre><span class="cmt">; FUN_0042669c — Boolean IsLeapYear(Word Year), year arriving in EAX</span>
+0042669c  PUSH EBX
+0042669d  PUSH ESI
+0042669e  MOV  ECX,EAX          <span class="cmt">; year in, kept in CX</span>
+004266a0  MOVZX EAX,CX          <span class="cmt">; 16-bit truncation (Word)</span>
+004266a3  AND  EAX,0x3          <span class="cmt">; mod 4 -> bitwise AND</span>
+004266a6  TEST EAX,EAX
+004266a8  JNZ  0x004266cb       <span class="cmt">; not divisible by 4 -> return 0</span>
+004266aa  MOVZX EBX,CX
+004266ad  MOV  EAX,EBX
+004266af  MOV  ESI,0x64         <span class="cmt">; 100</span>
+004266b4  XOR  EDX,EDX          <span class="cmt">; unsigned DIV, not IDIV</span>
+004266b6  DIV  ESI
+004266b8  TEST EDX,EDX
+004266ba  JNZ  0x004266d0       <span class="cmt">; not a century -> true</span>
+004266bc  MOV  EAX,EBX
+004266be  MOV  ECX,0x190        <span class="cmt">; 400 — literal divide, no magic number</span>
+004266c3  XOR  EDX,EDX
+004266c5  DIV  ECX
+004266c7  TEST EDX,EDX
+004266c9  JZ   0x004266d0       <span class="cmt">; divisible by 400 -> true</span>
+004266cb  XOR  EAX,EAX          <span class="cmt">; false: whole EAX cleared</span>
+004266cd  POP  ESI
+004266ce  POP  EBX
+004266cf  RET
+004266d0  <span class="rep">MOV  AL,0x1</span>           <span class="cmt">; true: ONLY AL written</span>
+004266d2  POP  ESI
+004266d3  POP  EBX
+004266d4  RET</pre>
+<h2>2. Dynamic runtime &amp; trace verification</h2>
+<table>
+<tr><th style="width:26%">Technique</th><th style="width:14%">Status</th><th>Evidence</th></tr>
+<tr><td>API / syscall tracing<br><span class="sub">ProcMon, dtrace, Frida</span></td><td class="nu">N/A &mdash; nothing to intercept</td><td>The function contains <b>no CALL instruction</b> and <b>no memory operand</b>: every operand is a register or an immediate. There is no API call, no syscall and no buffer for a tracer to observe. This is verified from the listing above, not assumed.</td></tr>
+<tr><td>Interactive debugging<br><span class="sub">x64dbg, Ghidra Debugger</span></td><td class="nu">Partly &mdash; emulated, not attached</td><td>Ghidra’s emulator single-stepped all 18 instructions to a clean return (<code>stop_reason=return</code>, <code>hit_return=true</code>), giving the register state that a breakpoint at the return would show. I did <b>not</b> attach a live debugger to <code>testleap.exe</code>; for a pure register function that would add nothing, but it is the step that matters for a real LEAP routine that touches files or the network.</td></tr>
+</table>
+<h2>3. Differential input/output testing</h2>
+<p style="font-size:14px;margin:6px 0 0">A re-implementation transcribed from the pseudo-code &mdash; including the 16-bit truncation and the “only AL is written” behaviour &mdash; run against the emulated binary on identical vectors. Compared at <b>byte</b> and at <b>full register</b> level.</p>
+<table>
+<tr><th>input</th><th>binary AL</th><th>python AL</th><th>binary EAX</th><th>python EAX</th><th>note</th></tr>
+<tr><td class="n">0</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td>zero is a leap year by this algorithm</td></tr>
+<tr><td class="n">1</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td></td></tr>
+<tr><td class="n">4</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td></td></tr>
+<tr><td class="n">100</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td>century, not 400</td></tr>
+<tr><td class="n">400</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td></td></tr>
+<tr><td class="n">1600</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td></td></tr>
+<tr><td class="n">1700</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td>century, not 400</td></tr>
+<tr><td class="n">1800</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td>century, not 400</td></tr>
+<tr><td class="n">1900</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td>the classic century case</td></tr>
+<tr><td class="n">1996</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td></td></tr>
+<tr><td class="n">2000</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td>400-year case</td></tr>
+<tr><td class="n">2023</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td></td></tr>
+<tr><td class="n">2024</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td></td></tr>
+<tr><td class="n">2100</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td>century, not 400</td></tr>
+<tr><td class="n">2400</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td></td></tr>
+<tr><td class="n">32004</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x101</td><td class="n">0x101</td><td><b>upper bytes are division leftovers</b></td></tr>
+<tr><td class="n">65532</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x201</td><td class="n">0x201</td><td><b>upper bytes are division leftovers</b></td></tr>
+<tr><td class="n">65535</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td>Word maximum</td></tr>
+<tr><td class="n">65536</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td>truncates to 0</td></tr>
+<tr><td class="n">65537</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td>truncates to 1</td></tr>
+<tr><td class="n">131072</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td class="n">0x1</td><td>truncates to 0</td></tr>
+<tr><td class="n">4294967295</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td class="n">0x0</td><td>16-bit truncation saves it</td></tr>
+</table>
+<div class="note"><b>The one real defect, and why it is benign.</b> The decompiler typed the return as 4 bytes and rendered it as <code>CONCAT31((int3)(param_1/uVar1 &gt;&gt; 8),1)</code>. The listing shows why: the true path writes <b>only AL</b>, leaving the upper 24 bits holding the quotient from the preceding <code>DIV</code>. So the function does not return 1, it returns <code>0x101</code> for 32004 and <code>0x201</code> for 65532. Both in-tree callers read only the low byte &mdash; one with <code>MOVZX EAX,DL</code>, the other with <code>AND EAX,0x7f</code> &mdash; so nothing in this binary is broken. A caller that tested the full EAX would be.</div>
+<h2>4. Subroutine emulation &amp; DBI</h2>
+<table>
+<tr><th style="width:26%">Technique</th><th style="width:14%">Status</th><th>Evidence</th></tr>
+<tr><td>Isolated subroutine emulation<br><span class="sub">Unicorn / angr equivalent</span></td><td class="ok">Done</td><td>Ghidra’s emulator executed the routine in isolation with controlled register inputs, bounded by <code>max_steps=10000</code> and terminating on return (18 steps). This is what supplied the ground truth for step 3: real machine code, not a reading of the listing.</td></tr>
+<tr><td>DBI hooking<br><span class="sub">Frida, QBDI</span></td><td class="nu">Not run</td><td>Would require installing new tooling and running <code>testleap.exe</code> as a live process. Emulation already covers the same question for a function with no external side effects, so I did not add that dependency unasked.</td></tr>
+</table>
+<h2>Scope and limits</h2>
+<ul>
+<li><b>One function, deliberately.</b> This is <code>FUN_0042669c</code> of the 7,647 functions in <code>testleap.exe</code> &mdash; and the 168.5 MB main binary <code>leap.exe</code> has 168,840 more. The workflow is demonstrated end-to-end here, not applied fleet-wide; reading 168k decompiled functions by hand is not what any of these four steps is for.</li>
+<li><b>Why this function.</b> A search of the whole decompilation for the leap-year tells (<code>% 400</code>, <code>% 100</code>, <code>% 4</code>, <code>IsLeapYear</code>) returns nothing in <code>leap.exe</code> and exactly this cluster in <code>testleap.exe</code>. It is the only leap-year routine across both binaries.</li>
+<li><b>Step 2 is thin on purpose.</b> For a pure register function there is no runtime surface to trace. Applying step 2 meaningfully means picking a LEAP routine that touches the filesystem or the embedded Python runtime, where API tracing has something to say.</li>
+<li><b>Parameters arrive in EAX, not RCX.</b> <code>testleap.exe</code> is 32-bit (<code>x86:LE:32:default</code>, <code>borlanddelphi</code>), so the ABI checklist items phrased around <code>rdi</code>/<code>rcx</code> do not apply as written.</li>
+</ul>
+<h2>Reproduce</h2>
+<pre>.\start-ghidra-mcp-headless.ps1 -Port 8089 -Project .\ghidra-bench
+python ghidra-scripts\leapyear_verify.py        <span class="cmt"># 22 vectors vs the emulated binary</span></pre>
+<footer>Evidence sources: GhidraMCP endpoints <code>/disassemble_function</code>, <code>/get_xrefs_to</code> and <code>/emulate_function</code> against project <code>BenchSmall</code>; the export <code>leap-decomp-test\chunk-00005.c</code>. Harness: <code>ghidra-scripts\leapyear_verify.py</code>.</footer>
+</div></body></html>
