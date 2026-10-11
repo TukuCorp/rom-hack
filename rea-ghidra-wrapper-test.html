@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>REA as a Ghidra wrapper &mdash; LEAP</title>
+<style>
+  :root{--ink:#12161c;--muted:#5d6875;--line:#e3e7ec;--bg:#f6f7f9;--card:#fff;
+        --ghidra:#2f6fb5;--rea:#c2410c;--ok:#15803d;--warn:#92400e}
+  *{box-sizing:border-box}
+  body{margin:0;padding:40px 28px 72px;background:var(--bg);color:var(--ink);
+       font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1060px;margin:0 auto}
+  h1{font-size:29px;margin:0 0 6px;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:14px;margin-bottom:24px}
+  h2{font-size:17px;margin:36px 0 12px;padding-bottom:7px;border-bottom:2px solid var(--line)}
+  .verdict{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--ok);
+           border-radius:10px;padding:18px 20px}
+  .verdict p{margin:0 0 10px} .verdict p:last-child{margin:0}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0 4px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 15px}
+  .kpi .n{font-size:23px;font-weight:650;letter-spacing:-.02em;line-height:1.15;font-variant-numeric:tabular-nums}
+  .kpi .l{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:5px}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);
+        border-radius:10px;overflow:hidden;font-size:14px;margin-top:10px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#eef1f5;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#414c59}
+  tr:last-child td{border-bottom:none}
+  td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .ok{color:var(--ok);font-weight:600} .r{color:var(--rea);font-weight:600}
+  pre{background:#12161c;color:#e6edf3;border-radius:9px;padding:14px 16px;overflow-x:auto;
+      font-size:12px;line-height:1.5;margin:10px 0 0}
+  code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12.5px}
+  .chain{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-top:10px;
+         font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;line-height:1.7;overflow-x:auto}
+  .chain .n{color:var(--rea);font-weight:700}
+  .chain .g{color:var(--ghidra);font-weight:700}
+  .note{background:#fff8ed;border:1px solid #f3dcb5;border-radius:10px;padding:14px 16px;font-size:14px;margin-top:12px}
+  .note b{color:var(--warn)}
+  ul{margin:8px 0 0;padding-left:20px} li{margin-bottom:5px}
+  footer{margin-top:32px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--line);padding-top:12px}
+</style>
+</head>
+<body><div class="wrap">
+
+<h1>REA as a Ghidra wrapper, tested on LEAP</h1>
+<div class="sub">2026-10-10 &middot; Windows 11 x64 &middot; Ghidra 12.1.4 PUBLIC &middot; REA 6.3.0 &middot;
+provider <code>ghidra</code> &middot; targets: <code>testleap.exe</code> (2.38&nbsp;MB) and <code>leap.exe</code> (168.5&nbsp;MB)</div>
+
+<div class="verdict">
+  <p><b>Confirmed: REA is a wrapper around the Ghidra install, and it works on LEAP.</b>
+  It shells out to our own <code>support\analyzeHeadless.bat</code>, imports an immutable copy of the
+  target into an ephemeral read-only project, and injects its own Java post-script
+  (<code>ReaGhidraBridge.java</code>) that serves the results back over an authenticated loopback socket.</p>
+  <p>The strongest single check: REA's decompiler output for <code>entry</code> @ <code>0x61a848</code> is
+  <b>byte-identical</b> to Ghidra's own &mdash; 26,938 characters, 540 lines, same SHA-256
+  <code>F47A361E&hellip;D1E647</code>. REA adds an evidence layer on top; it does not add analysis.</p>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="n">6</div><div class="l">native ops exercised</div></div>
+  <div class="kpi"><div class="n">100%</div><div class="l">decompile text identical</div></div>
+  <div class="kpi"><div class="n">0</div><div class="l">failing Ghidra doctor checks</div></div>
+  <div class="kpi"><div class="n">2/2</div><div class="l">LEAP targets driven</div></div>
+</div>
+
+<h2>1. The process chain, captured live</h2>
+<div class="chain">
+<span class="n">node.exe</span> ...\rea-agents\scripts\rea.mjs <b>decompile</b> "C:\Program Files\LEAP\testleap.exe" 0x61a848 --provider ghidra --json<br>
+&nbsp;&nbsp;&#9492;&#9472; <span class="n">cmd.exe</span> /c "<span class="g">C:\Users\tukum\Downloads\rom-hack\<b>ghidra_12.1.4_PUBLIC</b>\support\analyzeHeadless.bat</span>"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;tmp&gt;\project <b>rea-project</b> -import &lt;tmp&gt;\<b>target-1fdc5d0378a0.exe</b> <b>-readOnly -deleteProject</b><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-scriptPath "&hellip;\rea-agents\bridge\ghidra" <b>-postScript</b> "&hellip;\<b>ReaGhidraBridge.java</b>" &lt;tmp&gt;\session.json<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#9492;&#9472; <span class="g">java</span> -Djava.system.class.loader=<b>ghidra.GhidraClassLoader</b> -Duser.home=&lt;tmp&gt;\home <b>-Xmx2G</b><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-cp "&hellip;\<b>ghidra_12.1.4_PUBLIC</b>\Ghidra\Framework\Utility\lib\Utility.jar"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>ghidra.Ghidra ghidra.app.util.headless.AnalyzeHeadless</b> &hellip;
+</div>
+
+<h2>2. REA labels its own upstream</h2>
+<table>
+  <tr><th style="width:38%">Field REA reports</th><th>Value</th></tr>
+  <tr><td><code>analysis_profile.parameters<br>.upstream_analysis_profile.provider</code></td>
+      <td class="num"><code>{"id":"ghidra","name":"Ghidra","version":"12.1.4"}</code></td></tr>
+  <tr><td><code>&hellip;.parameters.process_launch</code></td><td class="num"><code>official-headless-script-v1</code></td></tr>
+  <tr><td><code>&hellip;.parameters.analyzer_preset</code></td><td class="num"><code>ghidra-default</code></td></tr>
+  <tr><td><code>&hellip;.parameters.import_mode</code></td><td class="num"><code>ephemeral-source-immutable</code></td></tr>
+  <tr><td><code>native_api.provenance</code></td><td class="num"><code>ghidra-high-function</code></td></tr>
+  <tr><td><code>native_value_flow.provenance</code></td><td class="num"><code>ghidra-high-pcode</code></td></tr>
+</table>
+
+<h2>3. Cross-validation against Ghidra directly</h2>
+<table>
+  <tr><th style="width:28%">Check</th><th style="width:26%">REA (via Ghidra)</th><th style="width:26%">Ghidra, direct</th><th>Verdict</th></tr>
+  <tr><td>Decompile <code>entry</code> @ 0x61a848</td><td class="num">26,938 chars / 540 lines</td>
+      <td class="num">26,938 chars / 540 lines</td><td class="ok">identical, same SHA-256</td></tr>
+  <tr><td>Search <code>"ShortInt"</code></td><td class="num">0x40106a, 0x43a3b4</td>
+      <td class="num">0x40106a, 0x43a3b4</td><td class="ok">identical</td></tr>
+  <tr><td>Xrefs to 0x61a848</td><td class="num">0x400128</td>
+      <td class="num">00400128 (DATA)</td><td class="ok">same edge</td></tr>
+  <tr><td>&nbsp;&nbsp;&nbsp;&nbsp;extra in Ghidra</td><td class="r">omitted by contract</td>
+      <td class="num">"Entry Point" (EXTERNAL)</td><td>synthetic ref, dropped on purpose</td></tr>
+  <tr><td>Procedures / strings / segments</td><td class="num">7,647 / 5,172 / 12</td>
+      <td class="num">7,647 / 4,786 / 12</td><td>functions &amp; segments identical; string counting differs</td></tr>
+  <tr><td>Assembly for <code>entry</code></td><td class="num">727 entries</td>
+      <td class="num">731 instructions</td><td>body-boundary difference, not a data difference</td></tr>
+</table>
+
+<h2>4. Native operations exercised on the LEAP binary</h2>
+<table>
+  <tr><th style="width:22%">Operation</th><th style="width:14%">Exit</th><th style="width:16%">Wall time</th><th>What came back</th></tr>
+  <tr><td><code>inspect</code></td><td class="num ok">0</td><td class="num">474.5 s</td><td>binary_overview: 12 segments, 7,647 procedures, 5,172 strings</td></tr>
+  <tr><td><code>search</code></td><td class="num ok">0</td><td class="num">270.8 s</td><td>complete matching string inventory</td></tr>
+  <tr><td><code>decompile</code></td><td class="num ok">0</td><td class="num">275.5 s</td><td>pseudocode, 60 KB envelope</td></tr>
+  <tr><td><code>xrefs</code></td><td class="num ok">0</td><td class="num">496.2 s</td><td>bounded reference list</td></tr>
+  <tr><td><code>function</code></td><td class="num ok">0</td><td class="num">551.1 s</td><td>8.2 MB dossier: 97 basic blocks, 27 callees, 530 outgoing refs, 455 names, 52 strings, 3,000 p-code ops</td></tr>
+  <tr><td><code>trace</code></td><td class="num ok">0</td><td class="num">423.2 s</td><td>composed: string &rarr; xref &rarr; containing procedure, with <code>not_in_procedure</code> reported</td></tr>
+</table>
+
+<h2>5. What the wrapper adds over raw Ghidra</h2>
+<ul>
+  <li><b>Provenance envelope.</b> Every result carries the subject's SHA-256, the provider identity, an
+      analysis-profile digest, a confidence word (<code>observed</code> / <code>derived</code>) and a
+      <code>limitations</code> list.</li>
+  <li><b>Typed contracts.</b> <code>analyze_function</code> returns basic blocks, callers/callees,
+      referenced names and strings, and a bounded p-code def-use graph &mdash; layers GhidraMCP exposes
+      only as separate endpoints.</li>
+  <li><b>Composition.</b> <code>trace</code> chains search &rarr; references &rarr; containing procedure
+      in one call and names its own gap when an address sits outside any function.</li>
+  <li><b>Stated omissions.</b> Synthetic entry-point references are dropped deliberately, and the reason
+      is written in the result rather than left as a silent gap.</li>
+</ul>
+
+<h2>6. The large target: leap.exe</h2>
+<table>
+  <tr><th style="width:30%">Observation</th><th>Detail</th></tr>
+  <tr><td>Wrapper engaged</td><td>same chain, launched against <code>leap.exe</code>; Ghidra's own log reads
+      <code>IMPORTING: &hellip;/target-f22babe1ee6b.exe</code>, <code>Using Loader: Portable Executable (PE)</code>,
+      <code>Using Language/Compiler: x86:LE:64:default:windows</code></td></tr>
+  <tr><td>Immutable snapshot</td><td>168.52 MB copy admitted under a private DACL before Ghidra sees it</td></tr>
+  <tr><td>Ephemeral project</td><td>full runtime under one temp dir; the JVM reached 1.24 GB RSS within minutes</td></tr>
+  <tr><td>Why it cannot finish here</td><td>raw Ghidra had not completed this same binary after 2 hours
+      (170,603 functions and still going) on a host whose commit charge sat at 14.6&ndash;15.8 GB of 16.9 GB</td></tr>
+</table>
+<div class="note">
+  <b>Reading this correctly.</b> REA engaged Ghidra on <code>leap.exe</code> exactly as designed; the
+  limit is the target against the host, not the wrapper. Because REA serves nothing until auto-analysis
+  completes and deletes its project on close, a 169&nbsp;MB binary means hours <i>per session</i> here.
+  I stopped the run rather than let a 4&nbsp;GB-heap JVM starve the machine you are working on.
+</div>
+
+<h2>7. Caveats</h2>
+<ul>
+  <li>Every CLI invocation is a fresh process, so each of the six operations above paid full
+      import&nbsp;+&nbsp;analysis again &mdash; 4.5 to 9 minutes each. An MCP session holding
+      <code>open_binary</code> would pay that once.</li>
+  <li>The <code>--snapshot</code> cache was written (4.5 KB, with <code>binding</code>,
+      <code>entries</code>, <code>workflow_entries</code>) but replaying the identical query still cost
+      367.9 s against 496.2 s cold &mdash; it did not skip provider startup in this configuration.</li>
+  <li>Absolute wall times are inflated by this machine's memory pressure and by a second resident
+      Ghidra server. The identity checks (hashes, addresses, counts) are the load-bearing evidence,
+      not the seconds.</li>
+  <li>Only the Ghidra provider could be tested: Hopper needs macOS and IDA was not configured.</li>
+</ul>
+
+<footer>
+  Artifacts in <code>C:\Users\tukum\Downloads\rom-hack</code>: <code>rea-testleap.json</code>,
+  <code>rea-decompile-entry.json</code>, <code>rea-xrefs.json</code>, <code>rea-function.json</code>,
+  <code>rea-trace.json</code>, <code>rea-snapshot.json</code>, <code>rea-leap.json</code>, <code>rea-doctor.json</code>.
+  Process lines captured from <code>Win32_Process.CommandLine</code>; Ghidra-side numbers from the
+  GhidraMCP headless server on <code>127.0.0.1:8089</code>.
+</footer>
+
+</div></body></html>

@@ -1,0 +1,77 @@
+run,branch,parameter,value,unit,basis_year,territory,gpc_ref,source,status
+A,Key Assumptions|GRDP,GRDP growth rate,15.2,percent_per_yr,,merged,,ver1 PV1 formulas (1+0.152)^5 e.g. D45 D47 D49 D55; PV2 D4 note 15.2pct_per_yr,hang
+B,Key Assumptions|GRDP,GRDP growth rate,15.2,percent_per_yr,,merged,,Same as Run A per Steering(2): 15.2 stays the GRDP driver; correction is elasticity not the rate,hang
+A,Key Assumptions|Elasticity,Emissions elasticity to GRDP (all sectors),1.0,fraction,,merged,,Implicit in ver1: sectors grow at GRDP itself (PV1/PV2 formulas),hang
+B,Key Assumptions|Elasticity,Other-industry elasticity to GRDP (central; low 0.6 high 0.8),0.7,fraction,,merged,,forecast-calc brief Synthesis (inference from 70-75pct utilisation; NOT directly sourced for HP),judgement
+B,Key Assumptions|Elasticity,TBD-driver rule (transport and any driver still TBD),GRDPx0.7,rule,,merged,,Steering(2): use GRDP x 0.7 and label judgement-placeholder; do not stall,judgement-placeholder
+A,Key Assumptions|Population,Total population 2025,5000000,persons,2025,merged,,ver1 PV1 D150 (urban 2500000) + E150 (rural 2500000),hang
+B,Key Assumptions|Population,Total population 2025,5000000,persons,2025,merged,,Kept Hang value per Steering(2); r3 flags 5.0M not confirmed; list as open inventory question,hang-carried-open-question
+B,Key Assumptions|Population,Population growth (central; low 0.5 high 1.0),0.8,percent_per_yr,,merged,,Evidence driver table: NSO projections S10 + 2019 census deep study S11 (national under 1pct_per_yr),corrected
+A,Key Assumptions|Grid,Grid emission factor (flat all years),0.6592,tCO2e_per_MWh,,merged,,ver1 PV2 H3 with source I3 (Cong van 1726 2023); applied flat in C3:C8 formulas,hang
+A,Key Assumptions|Grid,Scope 2 uplift multiplier,1.15,fraction,,merged,,ver1 PV2 B3:B7 formulas (x1.15 no source; flagged r3),hang
+B,Key Assumptions|Grid,Grid emission factor 2023,0.6592,tCO2e_per_MWh,2023,merged,,MONRE Cong van 1726 (C2); series 2021 0.7221 2022 0.6766 (QUACERT C3),corrected
+B,Key Assumptions|Grid,Grid emission factor 2030 (central; low 0.50 high 0.60),0.55,tCO2e_per_MWh,2030,merged,,Evidence driver table inference from PDP8 renewable share; no official 2030 factor exists; NO x1.15 uplift,corrected
+A,Demand|Industry|Steel (1A2a),Base-year fuel activity,0,various,2025,merged,I.3.x,ver1 1A2 sheet rows empty (r3: link into M47:P59); summary Energy C3 excludes 1A2,hang
+B,Demand|Industry|Steel (1A2a),2025 emissions by industry,4.73,MtCO2e,2025,merged,I.3.x,r3 section 1: measured+scaled 1A2a share of 9.4 Mt; rows sum 9.37,corrected
+B,Demand|Industry|Non-metallic minerals (1A2f),2025 emissions,2.55,MtCO2e,2025,merged,I.3.x,r3 section 1 (cement clinker lime bricks); bricks 0.9 on 2bn/yr kiln-capacity surrogate,corrected
+B,Demand|Industry|Chemicals (1A2c),2025 emissions,0.27,MtCO2e,2025,merged,I.3.x,r3 section 1,corrected
+B,Demand|Industry|Textiles and leather (1A2l),2025 emissions,0.27,MtCO2e,2025,merged,I.3.x,r3 section 1,corrected
+B,Demand|Industry|Other 1A2 rows (g h e b d j i m),2025 emissions,0.27,MtCO2e,2025,merged,I.3.x,r3 section 1,corrected
+B,Demand|Industry|Firms with no product line,2025 emissions,1.28,MtCO2e,2025,merged,I.3.x,r3 section 1 (allocated by firm industry code); total 9.4 band 8.9-10.0,corrected
+B,Demand|Industry|Steel (1A2a),Activity entered in Run B,1802173,tonnes_coal,2025,merged,I.3.1,"4.73 Mt / (98.3 tCO2 per TJ x 26.7 TJ per Gg = 2.62461 tCO2 per t coal, ver1 1A2 sheet T3/T7); Run B Interp(2025,1802173,2030,1802173,2050,1802173) capacity cap; all-coal placeholder",judgement-placeholder
+B,Demand|Industry|Non-metallic minerals (1A2f),Activity entered in Run B,971573,tonnes_coal,2025,merged,I.3.1,2.55 Mt / 2.62461; flat through the horizon (capacity),judgement-placeholder
+B,Demand|Industry|Other 1A2 rows,Activity entered in Run B,796309,tonnes_coal,2025,merged,I.3.1,2.09 Mt / 2.62461; GRDP x 0.7 = 10.64pct_per_yr to 2030 (Interp 2025/2030/2050),judgement-placeholder
+A,Non-energy|Scope2|Elec_Households,Activity 2025 (MWh),5009135,MWh,2025,merged,I.1.2,"ver1 PV2 B6 literal; Run A Interp(2025,5009135,2030,10613357.52,2050,..) = her cell, x1.15 from 2026; factor = Key Assumptions\GridEF",hang
+A,Non-energy|Scope2|Elec_Commercial,Activity 2025 (MWh),491889,MWh,2025,merged,I.2.2,ver1 PV2 B5 literal (10.9%/yr; 2030 948904.88),hang
+A,Non-energy|Scope2|Elec_Agriculture,Activity 2025 (MWh),178668,MWh,2025,merged,I.5.2,ver1 PV2 B3 literal (2%/yr; 2030 226853.50),hang
+A,Non-energy|Scope2|Elec_IndustryElec,Activity 2025 (MWh),11423637,MWh,2025,merged,I.3.2,ver1 PV2 B4 literal (15.2%/yr; 2030 26654137.28),hang
+A,Non-energy|Scope2|Elec_OtherElec,Activity 2025 (MWh),391391,MWh,2025,merged,I.6.2,ver1 PV2 B7 literal (13%/yr; 2030 829279.43),hang
+A,Non-energy|Scope2|all rows,Grid factor,0.6592,tCO2e_per_MWh,2023,merged,,"ver1 PV2 H3 = Cong van 1726; flat in Run A; Run B uses Key Assumptions GridEF = Interp(2023,0.6592,2030,band)",hang
+B,Non-energy|Scope2|all rows,Demand growth to 2030 (Scope2 band rate),8/10/11,percent_per_yr,,merged,,Band parameter (PDP8): the Scope2 activity rate in each B scenario; no x1.15 uplift in Run B,corrected
+A,Non-energy|IPPU,Steel output base (2C1 activity),5185608,tonnes_steel,2025,merged,,ver1 PV1 D55 formula base (=5185608x(1.152)^5; 2030 gives 10521122.55 t),hang
+A,Non-energy|IPPU,Steel process factor (EAF route),0.06,tCO2_per_t_steel,,merged,,ver1 2C1 sheet M3 (source note: QD 2626); 2030 T54 631267.35 tCO2e,hang
+B,Non-energy|IPPU,Steel output cap (central; low 2.0 Mt),2.5,Mt_per_yr,,hd_legacy,,Hoa Phat Hai Duong designed 2500000 t/yr BF (S06); GEM capacity 2525 kt (plant brief); 2024 output 1.53 Mt at 1.90 t/t (Climate TRACE via plant brief),corrected
+B,Non-energy|IPPU,Steel process factor (BF-BOF route),1.46,tCO2_per_t_steel,,hd_legacy,,r3 section 4: BF-BOF on 2.5 Mt gives +3.3 Mt in 2C1; move BF coke out of 1A2a same step,corrected
+A,Non-energy|IPPU,Cement output base (2A1 activity),9867911,tonnes_cement,2025,merged,,ver1 PV1 D45 formula base (2030 gives 20021085.45 t); 2030 T44 8724187.99 tCO2e,hang
+A,Non-energy|IPPU,Lime output base (2A2),377162,tonnes,2025,merged,,ver1 PV1 D47 formula base (2030 765227.07 t; T46 576215.98 tCO2e),hang
+A,Non-energy|IPPU,Glass output base (2A3),586101,tonnes,2025,merged,,ver1 PV1 D49 formula base (2030 1189145.12 t; T48 199776.38 tCO2e),hang
+B,Non-energy|IPPU,Clinker capacity cap (merged city),10.18,Mt_per_yr,,merged,,Plant brief: Hoang Thach 3.50 + Phuc Son 1.83 + Phu Tan 0.47 + Chinfon 2.92 + Vicem HP 1.46 (GEM Q),corrected
+B,Non-energy|IPPU,Cement kiln utilisation (central 72.5; low 65 high 80),72.5,percent,,merged,,Evidence driver table central 72.5pct (midpoint of 70-75); MOIT market review S08,corrected
+B,Non-energy|IPPU,Clinker ratio ceiling / CO2 intensity ceiling,65_pct_and_650_kg_per_t,limits,,merged,,Decision 1266 S09 (clinker <=65pct; direct CO2 <=650 kg/t cement; cement cap <=125 Mt 2025),corrected
+B,Non-energy|IPPU,Lime and glass drivers,GRDPx0.7,rule,,merged,,No plant caps in hand; Steering(2) TBD rule,judgement-placeholder
+A,Transformation|Coal plants (1A1),Anthracite base,5070185,tonnes,2025,merged,I.4.1,ver1 PV1 D7 formula (=5070185x1.05); NCV 26.7 TJ/Gg (1A1 sheet O6); EF 98300 kg/TJ (O3),hang
+A,Transformation|Coal plants (1A1),Sub-bituminous base,4036716,tonnes,2025,merged,I.4.1,ver1 PV1 E7 formula (=4036716x1.05); NCV 18.9 (P6); EF 96100 (P3),hang
+A,Transformation|Coal plants (1A1),Diesel DO base,1155,thousand_litres,2025,merged,I.4.1,ver1 PV1 G7 formula (=1155x1.05),hang
+A,Transformation|Coal plants (1A1),2025 emissions (3 plants together),20.7,MtCO2e,2025,merged,I.4.1,Oct review section 2 (ver1 Energy C3 22.2 Mt includes 1A1+1A3+1A4),hang
+B,Transformation|Coal plants (1A1),Plant capacities HP TPP / HD TPP / Pha Lai,1200_1200_1040,MW,,merged,I.4.1,Evidence D5/D6/D7: HP Thuy Nguyen 4x300 (hp_legacy); HD Kinh Mon 2x600 (hd_legacy); Pha Lai Chi Linh 4x110+2x300 (hd_legacy); total 3440 MW (capacities span both legacy territories; the split is in this note),corrected
+B,Transformation|Coal plants (1A1),Plant fuel split rule,by_capacity_share,rule,,merged,I.4.1,Plant-level fuel use not in hand; split workbook coal by 1200:1200:1040 shares,judgement-placeholder
+B,Transformation|Coal plants (1A1),Coal trajectory to 2030,flat_at_capacity,rule,,merged,I.4.1,PDP8 S01: coal 31055 MW kept to 2030; conversion only after 20 yrs operation; KH 4729 adds no new coal; do not pre-retire,corrected
+A,Demand|Transport|Road (1A3b),Gasoline 2030,66102.83,thousand_litres,2030,merged,II.1.1,ver1 PV1 D30 (2030 col); base-year literal now dumped from the formula (D30 = 39406*(1.109)^5); r3 flags road gasoline low (39 ML),hang-carried-open-question
+A,Demand|Transport|Road (1A3b),Diesel 2030,463588.78,thousand_litres,2030,merged,II.1.1,ver1 PV1 E30 (2030 col) = 276360*(1.109)^5,hang
+A,Demand|Transport|Road (1A3b),FO 2030,3306.32,thousand_litres,2030,merged,II.1.1,ver1 PV1 F30 (2030 col) = 1971*(1.109)^5,hang
+A,Demand|Transport|Waterborne (1A3dii),Fuels 2030 gasoline_diesel_FO,1845.23_291098.39_79544.49,thousand_litres,2030,merged,II.3.1,ver1 PV1 D33_E33_F33 (2030 col); T33 1029842.34 tCO2,hang
+A,Demand|Transport|Road (1A3b),Gasoline base 2025,39406,thousand_litres,2025,merged,II.1.1,ver1 PV1 D30 formula literal; entered on the fuel child as 39406000 litre,hang
+A,Demand|Transport|Road (1A3b),Diesel base 2025,276360,thousand_litres,2025,merged,II.1.1,ver1 PV1 E30 formula literal; entered on the fuel child as 276360000 litre,hang
+A,Demand|Transport|Road (1A3b),FO base 2025,1971,thousand_litres,2025,merged,II.1.1,ver1 PV1 F30 formula literal; entered on the fuel child as 1971000 litre,hang
+A,Demand|Transport|Waterborne (1A3dii),Gasoline base 2025,1100,thousand_litres,2025,merged,II.3.1,ver1 PV1 D33 formula literal; entered on the fuel child as 1100000 litre,hang
+A,Demand|Transport|Waterborne (1A3dii),Diesel base 2025,173533,thousand_litres,2025,merged,II.3.1,ver1 PV1 E33 formula literal; entered on the fuel child as 173533000 litre,hang
+A,Demand|Transport|Waterborne (1A3dii),FO base 2025,47419,thousand_litres,2025,merged,II.3.1,ver1 PV1 F33 formula literal; entered on the fuel child as 47419000 litre,hang
+B,Demand|Transport|All 1A3,Activity driver,GRDPx0.7,rule,,merged,,Stock-x-intensity data not in hand; Steering(2) TBD rule (peer S13: 565 motos/1000 near saturation),judgement-placeholder
+A,Non-energy|AFOLU,Rice area (2 seasons),117808,ha,2025,merged,,ver1 PV1 E125+F125 (58904+58904); 2030 W124 1213558.16 tCO2e (U124 43341.36 t CH4),hang-carried-open-question
+B,Non-energy|AFOLU,Rice area driver (central flat; low -1 high +0.5),flat,percent_per_yr,,merged,,Evidence driver table (near flat nationally); 0.62-vs-1.21 Mt dispute has no fixing doc so Hang area kept both runs per Steering(2),corrected
+A,Non-energy|AFOLU,Livestock heads cattle_buffalo_pigs_poultry,25000_8700_710000_28500000,heads,2025,merged,,ver1 PV1 D73 D74 D80 D93 (3A1 W70 76193.6; 3A2 W82 116657.54 tCO2e),hang
+B,Non-energy|AFOLU,Livestock driver,flat,rule,,merged,,Forecast brief Q3: stable-to-declining cattle/buffalo; near-flat AFOLU,corrected
+A,Non-energy|AFOLU,Urea applied,24640,tonnes,2025,merged,,ver1 PV1 D120 (T119 18069.33 tCO2 2030),hang
+A,Non-energy|AFOLU,Liming,1500,tonnes,2025,merged,,ver1 PV1 D117 (T117 668.25 tCO2 2030),hang
+A,Non-energy|AFOLU|Forest and land (3B),All rows,0,emissions,,merged,,ver1 PV1 R96-R114 zeros (r3: fill from QD 588; no new file),hang-gap
+A,Non-energy|Waste,MSW to managed landfill 2025,1204135,tonnes,2025,merged,,ver1 PV1 L136 in 2005-2030 series (2030 Q136 1446405.32 t); 4A1 W129 752905.74 tCO2e 2030,hang
+A,Non-energy|Waste,Biological treatment,29200,tonnes,2025,merged,,ver1 PV1 D143 (W142 5127.52 tCO2e 2030),hang
+A,Non-energy|Waste,Incineration MSW_hazardous_medical_industrial,117887_63121_10146_764392,tonnes,2025,merged,,ver1 PV1 D146:E146:F146:G146 (W145 609925.23 tCO2e 2030),hang
+A,Non-energy|Waste,Domestic wastewater 2030 CH4_N2O,23542.5_546.23,tonnes_gas,2030,merged,,ver1 PV1 U149_V149 (W149 803940.57 tCO2e); driven by 5.0M pop,hang
+A,Non-energy|Waste,Industrial wastewater activity,linked_to_product_outputs,rule,,merged,,ver1 PV1 R151-R152 (e.g. D152 steel = D55 10521122.55 t); same linkage in LEAP via Key Assumption steel output,hang
+B,Non-energy|Waste,Waste per-capita trend (central; low flat high +2),+1,percent_per_yr,,merged,,Evidence driver table: MOIT S12 (44.4k t/d 2011 to 67877 t/d 2023; urban 56.2pct); population driver above,corrected
+A,Summary,2026 totals Energy_IPPU_AFOLU_Waste_Scope2_Total,22201983.93_4993546.65_1756384.43_2332499.14_11532519.42_42816933.58,tCO2e,2026,merged,,ver1 Summary sheet C3_C4_C5_C6_C7_C8 (note: base column is 2026 not 2025),hang
+A,Summary,2030 totals Energy_IPPU_AFOLU_Waste_Scope2_Total,24234300.55_10131447.7_1425146.89_3041962.49_25888453.5_64721311.13,tCO2e,2030,merged,,ver1 Summary E3:E8 (E3=PV1!W3 E4=PV1!W42 E5=PV1!W68 E6=PV1!W128 E7=PV2!C8); F9 =E9/E8 flagged should be =E9/C8 (r3),hang
+B,Summary,2025 territorial total plants_1A2_other,20.7_9.4_10.6,MtCO2e,2025,merged,,Oct review section 2 (r3): territorial 40.7 Mt; GPC BASIC+ 31.5 (1A2 9.4 + other 10.6 + grid 11.5); ver1-as-sent 42.8 double counts,corrected
+B,Summary,GWP set,AR5,,,merged,,r3 sources line (Mt = Mt CO2e AR5); set LEAP pollutant GWPs to AR5 per Decree 06 and flag if tool forces other,corrected
+B,Non-energy|IPPU,Clinker output = capacity x utilisation (central; low 6.62 high 8.14; capped at capacity thereafter),7.38,Mt_per_yr,,merged,,Derived: 10.18 Mt/yr GEM capacity x driver-table utilisation (central 72.5pct = 7.38; low 65pct = 6.62; high 80pct = 8.14); forecast-calc S08 + evidence driver table,corrected

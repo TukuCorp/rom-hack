@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>REA vs Ghidra on LEAP</title>
+<style>
+  :root{
+    --ink:#12161c; --muted:#5d6875; --line:#e3e7ec; --bg:#f6f7f9; --card:#fff;
+    --ghidra:#2f6fb5; --rea:#c2410c; --bad:#b91c1c; --good:#15803d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:40px 28px 72px;background:var(--bg);color:var(--ink);
+       font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1060px;margin:0 auto}
+  h1{font-size:29px;margin:0 0 6px;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:14px;margin-bottom:26px}
+  .sub code{background:#eceff3;padding:1px 5px;border-radius:4px;font-size:12.5px}
+  h2{font-size:17px;margin:38px 0 12px;padding-bottom:7px;border-bottom:2px solid var(--line)}
+  .verdict{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--ghidra);
+           border-radius:10px;padding:18px 20px;margin-bottom:8px}
+  .verdict p{margin:0 0 10px}
+  .verdict p:last-child{margin-bottom:0}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:22px 0 6px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 15px}
+  .kpi .n{font-size:25px;font-weight:650;letter-spacing:-.02em;line-height:1.15}
+  .kpi .l{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:5px}
+  .kpi.win .n{color:var(--ghidra)} .kpi.lose .n{color:var(--rea)} .kpi.bad .n{color:var(--bad)}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);
+        border-radius:10px;overflow:hidden;font-size:14px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#eef1f5;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#414c59}
+  tr:last-child td{border-bottom:none}
+  td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .g{color:var(--ghidra);font-weight:600} .r{color:var(--rea);font-weight:600}
+  .ev{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11.5px;color:var(--muted)}
+  .chart{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-top:12px}
+  .row{display:grid;grid-template-columns:250px 1fr;align-items:center;gap:12px;margin-bottom:11px}
+  .row .lab{font-size:13.5px}
+  .row .lab small{display:block;color:var(--muted);font-size:11.5px}
+  .track{position:relative;height:24px;background:#f0f2f5;border-radius:5px;overflow:hidden}
+  .bar{position:absolute;left:0;top:0;bottom:0;border-radius:5px;display:flex;align-items:center;
+       justify-content:flex-end;padding-right:8px;color:#fff;font-size:12px;font-weight:600}
+  .b-ghidra{background:var(--ghidra)} .b-rea{background:var(--rea)} .b-fail{background:repeating-linear-gradient(45deg,#b91c1c,#b91c1c 7px,#d94a4a 7px,#d94a4a 14px)}
+  .mark{position:absolute;top:-3px;bottom:-3px;width:2px;background:#111;opacity:.55}
+  .axis{display:flex;justify-content:space-between;color:var(--muted);font-size:11.5px;
+        border-top:1px solid var(--line);padding-top:6px;margin-left:262px}
+  .note{background:#fff8ed;border:1px solid #f3dcb5;border-radius:10px;padding:14px 16px;font-size:14px;margin-top:12px}
+  .note b{color:#92400e}
+  ul{margin:8px 0 0;padding-left:20px} li{margin-bottom:5px}
+  code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12.5px}
+  pre{background:#12161c;color:#e6edf3;border-radius:9px;padding:14px 16px;overflow-x:auto;font-size:12.5px;line-height:1.5}
+  footer{margin-top:34px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--line);padding-top:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>REA vs Ghidra on LEAP</h1>
+<div class="sub">
+  Measured 2026-10-10 on this workstation (Windows 11 x64, 8&nbsp;GB RAM, JDK&nbsp;21.0.10).
+  Ghidra 12.1.4 PUBLIC &middot; GhidraMCP 7.0.0 &middot; REA 6.3.0
+  (<code>morluto/rea</code>) with its <code>ghidra</code> provider.
+</div>
+
+<div class="verdict">
+  <p><b>On Windows, REA is a wrapper over Ghidra, not a competing engine.</b> It shells out to
+  <code>analyzeHeadless</code> from the same install, so it inherits Ghidra's analysis and produces the
+  same substantive results &mdash; the procedure count and the string-search hits came back
+  <i>identical</i>.</p>
+  <p>The differences are real but sit in the session layer. REA adds a provenance envelope, typed
+  contracts and explicit limitations. Ghidra, driven through a persistent GhidraMCP session, answers
+  repeat queries about <b>1000&times; faster</b> and can serve partial results while analysis is still
+  running. REA refuses to serve anything until auto-analysis completes, and its 330&nbsp;s default
+  startup deadline is too short for even a 2.4&nbsp;MB LEAP binary on this host.</p>
+  <p><b>For reverse-engineering LEAP here: drive Ghidra directly.</b> Use REA when you want its evidence
+  contracts or its agent workflow, and raise its deadline first.</p>
+</div>
+
+<div class="kpis">
+  <div class="kpi win"><div class="n">7,647</div><div class="l">procedures &mdash; both tools</div></div>
+  <div class="kpi win"><div class="n">0.5&nbsp;s</div><div class="l">Ghidra, query on open session</div></div>
+  <div class="kpi lose"><div class="n">271&nbsp;s</div><div class="l">REA, same query (re-analysis)</div></div>
+  <div class="kpi bad"><div class="n">330&nbsp;s</div><div class="l">REA default deadline &mdash; fired</div></div>
+</div>
+
+<h2>Time to a first answer</h2>
+<div class="chart">
+  <div class="row">
+    <div class="lab">Ghidra &mdash; engine analysis<small>analyzeHeadless, self-reported</small></div>
+    <div class="track"><div class="bar b-ghidra" style="width:57.6%">288 s</div></div>
+  </div>
+  <div class="row">
+    <div class="lab">Ghidra &mdash; end to end<small>project create &rarr; import succeeded</small></div>
+    <div class="track"><div class="bar b-ghidra" style="width:78.2%">391 s</div></div>
+  </div>
+  <div class="row">
+    <div class="lab">REA &mdash; default deadline<small>330,000 ms, unmodified</small></div>
+    <div class="track"><div class="bar b-fail" style="width:66%;color:#fff">344 s &mdash; provider_timeout</div></div>
+  </div>
+  <div class="row">
+    <div class="lab">REA &mdash; end to end<small>deadline raised to 1.5e6 ms</small></div>
+    <div class="track"><div class="bar b-rea" style="width:94.9%">474 s</div></div>
+  </div>
+  <div class="row">
+    <div class="lab">REA &mdash; one more query<small>2nd CLI call, full re-analysis</small></div>
+    <div class="track"><div class="bar b-rea" style="width:54.2%">271 s</div></div>
+  </div>
+  <div class="axis"><span>0</span><span>125 s</span><span>250 s</span><span>375 s</span><span>500 s</span></div>
+</div>
+
+<h2>Measured head to head</h2>
+<table>
+  <tr>
+    <th style="width:30%">Metric</th>
+    <th style="width:20%">Ghidra</th>
+    <th style="width:20%">REA 6.3.0</th>
+    <th>Evidence</th>
+  </tr>
+  <tr>
+    <td>Target</td>
+    <td colspan="2" class="num">testleap.exe &mdash; 2.38&nbsp;MB, x86 PE, <code>borlanddelphi</code>, base <code>0x400000</code></td>
+    <td class="ev">shipped inside C:\Program Files\LEAP</td>
+  </tr>
+  <tr>
+    <td>Procedures found</td>
+    <td class="num g">7,647</td>
+    <td class="num r">7,647</td>
+    <td class="ev">/get_metadata vs REA procedure_count &mdash; exact match</td>
+  </tr>
+  <tr>
+    <td>Strings</td>
+    <td class="num">4,786</td>
+    <td class="num">5,172</td>
+    <td class="ev">/list_strings total vs REA string_count (+386)</td>
+  </tr>
+  <tr>
+    <td>Segments / memory blocks</td>
+    <td class="num g">12</td>
+    <td class="num r">12</td>
+    <td class="ev">REA segments vs /get_metadata memory_blocks</td>
+  </tr>
+  <tr>
+    <td>Symbols</td>
+    <td class="num">22,442</td>
+    <td>&mdash;</td>
+    <td class="ev">not surfaced in REA's binary_overview</td>
+  </tr>
+  <tr>
+    <td>String search &ldquo;ShortInt&rdquo;</td>
+    <td class="num">0x40106a, 0x43a3b4</td>
+    <td class="num">0x40106a, 0x43a3b4</td>
+    <td class="ev">/search_strings vs rea search &mdash; identical hits</td>
+  </tr>
+  <tr>
+    <td>Marginal query cost</td>
+    <td class="num g">0.5&ndash;0.7 s</td>
+    <td class="num r">270.8 s</td>
+    <td class="ev">open session vs rea search wall_seconds</td>
+  </tr>
+  <tr>
+    <td>Partial results mid-analysis</td>
+    <td class="g">yes</td>
+    <td class="r">no</td>
+    <td class="ev">REA: serves only after auto-analysis completes</td>
+  </tr>
+  <tr>
+    <td>Result envelope</td>
+    <td>raw JSON</td>
+    <td>evidence record</td>
+    <td class="ev">REA carries sha256 subject, provider, profile digest, confidence, limitations</td>
+  </tr>
+  <tr>
+    <td>Project lifetime</td>
+    <td>persistent project</td>
+    <td>ephemeral, deleted on close</td>
+    <td class="ev">REA <code>-readOnly -deleteProject</code></td>
+  </tr>
+  <tr>
+    <td>Write access</td>
+    <td>rename/comment/type via MCP</td>
+    <td>read-only (Windows P0)</td>
+    <td class="ev">REA writes session metadata only</td>
+  </tr>
+</table>
+
+<h2>The target you actually asked about: leap.exe</h2>
+<table>
+  <tr><th style="width:30%">Fact</th><th>Value</th></tr>
+  <tr><td>Binary</td><td class="num">168.5&nbsp;MB &middot; 176,701,048 bytes &middot; x86-64 PE &middot; image base <code>0x400000</code></td></tr>
+  <tr><td>Functions at import</td><td class="num">166,343 before auto-analysis</td></tr>
+  <tr><td>After 2 h of analysis</td><td class="num">170,603 &mdash; <b>still running, never completed</b></td></tr>
+  <tr><td>Why</td><td>host commit charge hit 15.8&nbsp;GB of a 16.9&nbsp;GB limit; 369&nbsp;MB free; 1,200&ndash;2,000 page-ins/s</td></tr>
+</table>
+<div class="note">
+  <b>What this means for REA on leap.exe.</b> REA cannot serve a single query until auto-analysis
+  finishes, and its default deadline is 330&nbsp;s &mdash; against a target where raw Ghidra had not
+  finished after 120&nbsp;minutes. Making REA usable here means raising
+  <code>REA_GHIDRA_STARTUP_TIMEOUT_MS</code> into the hours, and it pays that analysis cost again for
+  each new session because the project is ephemeral. Ghidra pays it once and keeps the project.
+</div>
+
+<h2>Method</h2>
+<pre># REA setup (it drives our existing Ghidra 12.1.4 install)
+$env:GHIDRA_INSTALL_DIR = "C:\Users\tukum\Downloads\rom-hack\ghidra_12.1.4_PUBLIC"
+$env:JAVA_HOME          = "C:\Program Files\Eclipse Adoptium\jdk-21.0.10.7-hotspot"
+$env:REA_ANALYSIS_PROVIDER = "ghidra"
+npm install --global rea-agents          # 6.3.0, bundles the Windows native addon
+rea doctor --json                        # 0 failing ghidra checks; version 12.1.4 detected
+
+# Ghidra baseline, raw
+analyzeHeadless.bat ghidra-bench BenchSmall -import "C:\Program Files\LEAP\testleap.exe"
+
+# REA, same target (default deadline first, then raised)
+rea inspect "C:\Program Files\LEAP\testleap.exe" --provider ghidra --json
+$env:REA_GHIDRA_STARTUP_TIMEOUT_MS = "1500000"
+rea search  "C:\Program Files\LEAP\testleap.exe" "ShortInt" --provider ghidra --json</pre>
+
+<h2>Limits of this comparison</h2>
+<ul>
+  <li>One host, one small target, one run each. The absolute seconds are inflated by this machine's
+      memory pressure; the <i>ratios</i> are the portable part.</li>
+  <li>REA was measured through its CLI, where every invocation is a fresh process. An MCP session with
+      <code>open_binary</code> holds the analysis open, which removes the per-query re-analysis cost
+      &mdash; I measured the CLI path, so treat 271&nbsp;s as the worst case, not the intended one.</li>
+  <li>The 386-string gap is a counting difference between the two interfaces, not proof that either
+      engine sees more. Both read the same Ghidra program.</li>
+  <li>Hopper and IDA providers were unavailable on Windows, so REA was only ever tested against the
+      engine Ghidra also uses.</li>
+</ul>
+
+<footer>
+  Artifacts: <code>rea-testleap.json</code>, <code>rea-search-shortint.json</code>,
+  <code>rea-pilot-testleap.json</code> (the timeout), <code>rea-doctor.json</code>.
+  Ghidra-side numbers come from the GhidraMCP headless server and
+  <code>%APPDATA%\ghidra\ghidra_12.1.4_PUBLIC\application.log</code>.
+</footer>
+
+</div>
+</body>
+</html>

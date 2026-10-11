@@ -1,0 +1,297 @@
+scenario,branch,unit,year,activity_expected,factor,intensity_tj_per_unit
+A_Hang_AsFiled,Demand\Transport\Road_1A3b\Gasoline,litre,2025,39406000.00000000,1.0,3.3047e-05
+A_Hang_AsFiled,Demand\Transport\Road_1A3b\Gasoline,litre,2030,66102834.69035749,1.0,3.3047e-05
+A_Hang_AsFiled,Demand\Transport\Road_1A3b\Diesel,litre,2025,276360000.00000000,1.0,3.612e-05
+A_Hang_AsFiled,Demand\Transport\Road_1A3b\Diesel,litre,2030,463588778.23243153,1.0,3.612e-05
+A_Hang_AsFiled,Demand\Transport\Road_1A3b\FuelOil,litre,2025,1971000.00000000,1.0,4.0036e-05
+A_Hang_AsFiled,Demand\Transport\Road_1A3b\FuelOil,litre,2030,3306315.97154481,1.0,4.0036e-05
+A_Hang_AsFiled,Demand\Transport\Waterborne_1A3dii\Gasoline,litre,2025,1100000.00000000,1.0,3.3047e-05
+A_Hang_AsFiled,Demand\Transport\Waterborne_1A3dii\Gasoline,litre,2030,1845229.61374900,1.0,3.3047e-05
+A_Hang_AsFiled,Demand\Transport\Waterborne_1A3dii\Diesel,litre,2025,173533000.00000000,1.0,3.612e-05
+A_Hang_AsFiled,Demand\Transport\Waterborne_1A3dii\Diesel,litre,2030,291098391.42064166,1.0,3.612e-05
+A_Hang_AsFiled,Demand\Transport\Waterborne_1A3dii\FuelOil,litre,2025,47419000.00000000,1.0,4.0036e-05
+A_Hang_AsFiled,Demand\Transport\Waterborne_1A3dii\FuelOil,litre,2030,79544493.68578546,1.0,4.0036e-05
+A_Hang_AsFiled,Demand\Plants1A1\Coal_HP_TPP\Anthracite,tonne,2025,1768669.18600000,1.0,0.0267
+A_Hang_AsFiled,Demand\Plants1A1\Coal_HP_TPP\Anthracite,tonne,2030,1857102.64530000,1.0,0.0267
+A_Hang_AsFiled,Demand\Plants1A1\Coal_HP_TPP\SubBituminous,tonne,2025,1408156.74420000,1.0,0.0189
+A_Hang_AsFiled,Demand\Plants1A1\Coal_HP_TPP\SubBituminous,tonne,2030,1478564.58140000,1.0,0.0189
+A_Hang_AsFiled,Demand\Plants1A1\Coal_HP_TPP\DieselDO,tonne,2025,402906.97670000,1.0,3.612e-05
+A_Hang_AsFiled,Demand\Plants1A1\Coal_HP_TPP\DieselDO,tonne,2030,423052.32560000,1.0,3.612e-05
+A_Hang_AsFiled,Demand\Plants1A1\Coal_HD_TPP\Anthracite,tonne,2025,1768669.18600000,1.0,0.0267
+A_Hang_AsFiled,Demand\Plants1A1\Coal_HD_TPP\Anthracite,tonne,2030,1857102.64530000,1.0,0.0267
+A_Hang_AsFiled,Demand\Plants1A1\Coal_HD_TPP\SubBituminous,tonne,2025,1408156.74420000,1.0,0.0189
+A_Hang_AsFiled,Demand\Plants1A1\Coal_HD_TPP\SubBituminous,tonne,2030,1478564.58140000,1.0,0.0189
+A_Hang_AsFiled,Demand\Plants1A1\Coal_HD_TPP\DieselDO,tonne,2025,402906.97670000,1.0,3.612e-05
+A_Hang_AsFiled,Demand\Plants1A1\Coal_HD_TPP\DieselDO,tonne,2030,423052.32560000,1.0,3.612e-05
+A_Hang_AsFiled,Demand\Plants1A1\Coal_PhaLai\Anthracite,tonne,2025,1532846.62790000,1.0,0.0267
+A_Hang_AsFiled,Demand\Plants1A1\Coal_PhaLai\Anthracite,tonne,2030,1609488.95930000,1.0,0.0267
+A_Hang_AsFiled,Demand\Plants1A1\Coal_PhaLai\SubBituminous,tonne,2025,1220402.51160000,1.0,0.0189
+A_Hang_AsFiled,Demand\Plants1A1\Coal_PhaLai\SubBituminous,tonne,2030,1281422.63720000,1.0,0.0189
+A_Hang_AsFiled,Demand\Plants1A1\Coal_PhaLai\DieselDO,tonne,2025,349186.04650000,1.0,3.612e-05
+A_Hang_AsFiled,Demand\Plants1A1\Coal_PhaLai\DieselDO,tonne,2030,366645.34880000,1.0,3.612e-05
+A_Hang_AsFiled,Non Energy\IPPU\2A1_cement,tonne,2025,4299942.21825000,0.43575,
+A_Hang_AsFiled,Non Energy\IPPU\2A1_cement,tonne,2030,8724187.98696988,0.43575,
+A_Hang_AsFiled,Non Energy\IPPU\2A2_lime,tonne,2025,284002.98600000,0.753,
+A_Hang_AsFiled,Non Energy\IPPU\2A2_lime,tonne,2030,576215.98453319,0.753,
+A_Hang_AsFiled,Non Energy\IPPU\2A3_glass,tonne,2025,98464.96800000,0.168,
+A_Hang_AsFiled,Non Energy\IPPU\2A3_glass,tonne,2030,199776.38009112,0.168,
+A_Hang_AsFiled,Non Energy\IPPU\2C1_steel,tonne,2025,311136.48000000,0.06,
+A_Hang_AsFiled,Non Energy\IPPU\2C1_steel,tonne,2030,631267.35275731,0.06,
+A_Hang_AsFiled,Non Energy\AFOLU\Rice_3C7,ha,2025,1213563.76960000,10.3012,
+A_Hang_AsFiled,Non Energy\AFOLU\Rice_3C7,ha,2030,1213563.76960000,10.3012,
+A_Hang_AsFiled,Non Energy\AFOLU\Livestock_3A,head,2025,192832.95780000,0.006594,
+A_Hang_AsFiled,Non Energy\AFOLU\Livestock_3A,head,2030,192832.95780000,0.006594,
+A_Hang_AsFiled,Non Energy\AFOLU\Urea_3C3,tonne,2025,18068.51200000,0.7333,
+A_Hang_AsFiled,Non Energy\AFOLU\Urea_3C3,tonne,2030,18068.51200000,0.7333,
+A_Hang_AsFiled,Non Energy\AFOLU\Liming_3C2,tonne,2025,668.25000000,0.4455,
+A_Hang_AsFiled,Non Energy\AFOLU\Liming_3C2,tonne,2030,668.25000000,0.4455,
+A_Hang_AsFiled,Non Energy\Waste\MSW_4A1,tonne,2025,626776.35020000,0.52052,
+A_Hang_AsFiled,Non Energy\Waste\MSW_4A1,tonne,2030,752892.33833397,0.52052,
+A_Hang_AsFiled,Non Energy\Waste\Biological_4B,tonne,2025,3270.40000000,0.112,
+A_Hang_AsFiled,Non Energy\Waste\Biological_4B,tonne,2030,3270.40000000,0.112,
+A_Hang_AsFiled,Non Energy\Waste\Biological_4B_N2O,tonne,2025,1857.12000000,0.0636,
+A_Hang_AsFiled,Non Energy\Waste\Biological_4B_N2O,tonne,2030,1857.12000000,0.0636,
+A_Hang_AsFiled,Non Energy\Waste\Incineration_4C1,tonne,2025,607889.69882000,0.63617,
+A_Hang_AsFiled,Non Energy\Waste\Incineration_4C1,tonne,2030,607889.69882000,0.63617,
+A_Hang_AsFiled,Non Energy\Waste\Incineration_4C1_CH4,tonne,2025,32.10634560,3.36e-05,
+A_Hang_AsFiled,Non Energy\Waste\Incineration_4C1_CH4,tonne,2030,32.10634560,3.36e-05,
+A_Hang_AsFiled,Non Energy\Waste\Incineration_4C1_N2O,tonne,2025,2076.40145800,0.002173,
+A_Hang_AsFiled,Non Energy\Waste\Incineration_4C1_N2O,tonne,2030,2076.40145800,0.002173,
+A_Hang_AsFiled,Non Energy\Waste\Wastewater_4D_CH4,person,2025,659190.00000000,0.131838,
+A_Hang_AsFiled,Non Energy\Waste\Wastewater_4D_CH4,person,2030,659190.00000000,0.131838,
+A_Hang_AsFiled,Non Energy\Waste\Wastewater_4D_N2O,person,2025,144822.50000000,0.0289645,
+A_Hang_AsFiled,Non Energy\Waste\Wastewater_4D_N2O,person,2030,144822.50000000,0.0289645,
+A_Hang_AsFiled,Non Energy\Waste\Wastewater_4D2_industrial,person,2025,870063.42864000,0.17401268572800002,
+A_Hang_AsFiled,Non Energy\Waste\Wastewater_4D2_industrial,person,2030,870063.42864000,0.17401268572800002,
+A_Hang_AsFiled,Non Energy\Scope2\Elec_Households,tCO2e,2025,3302021.79200000,0.6592,
+A_Hang_AsFiled,Non Energy\Scope2\Elec_Households,tCO2e,2030,6996325.27718400,0.6592,
+A_Hang_AsFiled,Non Energy\Scope2\Elec_Commercial,tCO2e,2025,324253.22880000,0.6592,
+A_Hang_AsFiled,Non Energy\Scope2\Elec_Commercial,tCO2e,2030,625518.09689600,0.6592,
+A_Hang_AsFiled,Non Energy\Scope2\Elec_Agriculture,tCO2e,2025,117777.94560000,0.6592,
+A_Hang_AsFiled,Non Energy\Scope2\Elec_Agriculture,tCO2e,2030,149541.82720000,0.6592,
+A_Hang_AsFiled,Non Energy\Scope2\Elec_IndustryElec,tCO2e,2025,7530461.51040000,0.6592,
+A_Hang_AsFiled,Non Energy\Scope2\Elec_IndustryElec,tCO2e,2030,17570407.29497600,0.6592,
+A_Hang_AsFiled,Non Energy\Scope2\Elec_OtherElec,tCO2e,2025,258004.94720000,0.6592,
+A_Hang_AsFiled,Non Energy\Scope2\Elec_OtherElec,tCO2e,2030,546661.00025600,0.6592,
+B_low,Demand\Transport\Road_1A3b\Gasoline,litre,2025,39406000.00000000,1.0,3.3047e-05
+B_low,Demand\Transport\Road_1A3b\Gasoline,litre,2030,64661537.93275221,1.0,3.3047e-05
+B_low,Demand\Transport\Road_1A3b\Diesel,litre,2025,276360000.00000000,1.0,3.612e-05
+B_low,Demand\Transport\Road_1A3b\Diesel,litre,2030,453480754.78595650,1.0,3.612e-05
+B_low,Demand\Transport\Road_1A3b\FuelOil,litre,2025,1971000.00000000,1.0,4.0036e-05
+B_low,Demand\Transport\Road_1A3b\FuelOil,litre,2030,3234225.53076827,1.0,4.0036e-05
+B_low,Demand\Transport\Waterborne_1A3dii\Gasoline,litre,2025,1100000.00000000,1.0,3.3047e-05
+B_low,Demand\Transport\Waterborne_1A3dii\Gasoline,litre,2030,1804996.49104267,1.0,3.3047e-05
+B_low,Demand\Transport\Waterborne_1A3dii\Diesel,litre,2025,173533000.00000000,1.0,3.612e-05
+B_low,Demand\Transport\Waterborne_1A3dii\Diesel,litre,2030,284751323.70918870,1.0,3.612e-05
+B_low,Demand\Transport\Waterborne_1A3dii\FuelOil,litre,2025,47419000.00000000,1.0,4.0036e-05
+B_low,Demand\Transport\Waterborne_1A3dii\FuelOil,litre,2030,77810116.91704759,1.0,4.0036e-05
+B_low,Demand\Plants1A1\Coal_HP_TPP\Anthracite,tonne,2025,1768669.18604651,1.0,0.0267
+B_low,Demand\Plants1A1\Coal_HP_TPP\Anthracite,tonne,2030,1768669.18604651,1.0,0.0267
+B_low,Demand\Plants1A1\Coal_HP_TPP\SubBituminous,tonne,2025,1408156.74418605,1.0,0.0189
+B_low,Demand\Plants1A1\Coal_HP_TPP\SubBituminous,tonne,2030,1408156.74418605,1.0,0.0189
+B_low,Demand\Plants1A1\Coal_HP_TPP\DieselDO,tonne,2025,402906.97674419,1.0,3.612e-05
+B_low,Demand\Plants1A1\Coal_HP_TPP\DieselDO,tonne,2030,402906.97674419,1.0,3.612e-05
+B_low,Demand\Plants1A1\Coal_HD_TPP\Anthracite,tonne,2025,1768669.18604651,1.0,0.0267
+B_low,Demand\Plants1A1\Coal_HD_TPP\Anthracite,tonne,2030,1768669.18604651,1.0,0.0267
+B_low,Demand\Plants1A1\Coal_HD_TPP\SubBituminous,tonne,2025,1408156.74418605,1.0,0.0189
+B_low,Demand\Plants1A1\Coal_HD_TPP\SubBituminous,tonne,2030,1408156.74418605,1.0,0.0189
+B_low,Demand\Plants1A1\Coal_HD_TPP\DieselDO,tonne,2025,402906.97674419,1.0,3.612e-05
+B_low,Demand\Plants1A1\Coal_HD_TPP\DieselDO,tonne,2030,402906.97674419,1.0,3.612e-05
+B_low,Demand\Plants1A1\Coal_PhaLai\Anthracite,tonne,2025,1532846.62790698,1.0,0.0267
+B_low,Demand\Plants1A1\Coal_PhaLai\Anthracite,tonne,2030,1532846.62790698,1.0,0.0267
+B_low,Demand\Plants1A1\Coal_PhaLai\SubBituminous,tonne,2025,1220402.51162791,1.0,0.0189
+B_low,Demand\Plants1A1\Coal_PhaLai\SubBituminous,tonne,2030,1220402.51162791,1.0,0.0189
+B_low,Demand\Plants1A1\Coal_PhaLai\DieselDO,tonne,2025,349186.04651163,1.0,3.612e-05
+B_low,Demand\Plants1A1\Coal_PhaLai\DieselDO,tonne,2030,349186.04651163,1.0,3.612e-05
+B_low,Non Energy\IPPU\2A1_cement,tonne,2025,3442400.00000000,0.52,
+B_low,Non Energy\IPPU\2A1_cement,tonne,2030,3442400.00000000,0.52,
+B_low,Non Energy\IPPU\2A2_lime,tonne,2025,284002.98600000,0.753,
+B_low,Non Energy\IPPU\2A2_lime,tonne,2030,434190.52653989,0.753,
+B_low,Non Energy\IPPU\2A3_glass,tonne,2025,98464.96800000,0.168,
+B_low,Non Energy\IPPU\2A3_glass,tonne,2030,150535.58733236,0.168,
+B_low,Non Energy\IPPU\2C1_steel,tonne,2025,2920000.00000000,1.46,
+B_low,Non Energy\IPPU\2C1_steel,tonne,2030,2920000.00000000,1.46,
+B_low,Non Energy\AFOLU\Rice_3C7,ha,2025,1213563.76960000,10.3012,
+B_low,Non Energy\AFOLU\Rice_3C7,ha,2030,1154087.06980874,10.3012,
+B_low,Non Energy\AFOLU\Livestock_3A,head,2025,192832.95780000,0.006594,
+B_low,Non Energy\AFOLU\Livestock_3A,head,2030,192832.95780000,0.006594,
+B_low,Non Energy\AFOLU\Urea_3C3,tonne,2025,18068.51200000,0.7333,
+B_low,Non Energy\AFOLU\Urea_3C3,tonne,2030,18068.51200000,0.7333,
+B_low,Non Energy\AFOLU\Liming_3C2,tonne,2025,668.25000000,0.4455,
+B_low,Non Energy\AFOLU\Liming_3C2,tonne,2030,668.25000000,0.4455,
+B_low,Non Energy\Waste\MSW_4A1,tonne,2025,626776.35020000,0.52052,
+B_low,Non Energy\Waste\MSW_4A1,tonne,2030,626776.35020000,0.52052,
+B_low,Non Energy\Waste\Biological_4B,tonne,2025,3270.40000000,0.112,
+B_low,Non Energy\Waste\Biological_4B,tonne,2030,3270.40000000,0.112,
+B_low,Non Energy\Waste\Biological_4B_N2O,tonne,2025,1857.12000000,0.0636,
+B_low,Non Energy\Waste\Biological_4B_N2O,tonne,2030,1857.12000000,0.0636,
+B_low,Non Energy\Waste\Incineration_4C1,tonne,2025,607889.69882000,0.63617,
+B_low,Non Energy\Waste\Incineration_4C1,tonne,2030,607889.69882000,0.63617,
+B_low,Non Energy\Waste\Incineration_4C1_CH4,tonne,2025,32.10634560,3.36e-05,
+B_low,Non Energy\Waste\Incineration_4C1_CH4,tonne,2030,32.10634560,3.36e-05,
+B_low,Non Energy\Waste\Incineration_4C1_N2O,tonne,2025,2076.40145800,0.002173,
+B_low,Non Energy\Waste\Incineration_4C1_N2O,tonne,2030,2076.40145800,0.002173,
+B_low,Non Energy\Waste\Wastewater_4D_CH4,person,2025,659190.00000000,0.131838,
+B_low,Non Energy\Waste\Wastewater_4D_CH4,person,2030,675835.37354953,0.131838,
+B_low,Non Energy\Waste\Wastewater_4D_N2O,person,2025,144822.50000000,0.0289645,
+B_low,Non Energy\Waste\Wastewater_4D_N2O,person,2030,148479.44960615,0.0289645,
+B_low,Non Energy\Waste\Wastewater_4D2_industrial,person,2025,870063.42864000,0.17401268572800002,
+B_low,Non Energy\Waste\Wastewater_4D2_industrial,person,2030,892033.62051411,0.17401268572800002,
+B_low,Non Energy\Scope2\Elec_Households,tCO2e,2025,3302021.79200000,0.6592,
+B_low,Non Energy\Scope2\Elec_Households,tCO2e,2030,2567810.96791897,0.5,
+B_low,Non Energy\Scope2\Elec_Commercial,tCO2e,2025,324253.22880000,0.6592,
+B_low,Non Energy\Scope2\Elec_Commercial,tCO2e,2030,376005.80704666,0.5,
+B_low,Non Energy\Scope2\Elec_Agriculture,tCO2e,2025,117777.94560000,0.6592,
+B_low,Non Energy\Scope2\Elec_Agriculture,tCO2e,2030,136575.94606387,0.5,
+B_low,Non Energy\Scope2\Elec_IndustryElec,tCO2e,2025,7530461.51040000,0.6592,
+B_low,Non Energy\Scope2\Elec_IndustryElec,tCO2e,2030,8392535.29163566,0.5,
+B_low,Non Energy\Scope2\Elec_OtherElec,tCO2e,2025,258004.94720000,0.6592,
+B_low,Non Energy\Scope2\Elec_OtherElec,tCO2e,2030,299183.93951846,0.5,
+B_central,Demand\Transport\Road_1A3b\Gasoline,litre,2025,39406000.00000000,1.0,3.3047e-05
+B_central,Demand\Transport\Road_1A3b\Gasoline,litre,2030,64661537.93275221,1.0,3.3047e-05
+B_central,Demand\Transport\Road_1A3b\Diesel,litre,2025,276360000.00000000,1.0,3.612e-05
+B_central,Demand\Transport\Road_1A3b\Diesel,litre,2030,453480754.78595650,1.0,3.612e-05
+B_central,Demand\Transport\Road_1A3b\FuelOil,litre,2025,1971000.00000000,1.0,4.0036e-05
+B_central,Demand\Transport\Road_1A3b\FuelOil,litre,2030,3234225.53076827,1.0,4.0036e-05
+B_central,Demand\Transport\Waterborne_1A3dii\Gasoline,litre,2025,1100000.00000000,1.0,3.3047e-05
+B_central,Demand\Transport\Waterborne_1A3dii\Gasoline,litre,2030,1804996.49104267,1.0,3.3047e-05
+B_central,Demand\Transport\Waterborne_1A3dii\Diesel,litre,2025,173533000.00000000,1.0,3.612e-05
+B_central,Demand\Transport\Waterborne_1A3dii\Diesel,litre,2030,284751323.70918870,1.0,3.612e-05
+B_central,Demand\Transport\Waterborne_1A3dii\FuelOil,litre,2025,47419000.00000000,1.0,4.0036e-05
+B_central,Demand\Transport\Waterborne_1A3dii\FuelOil,litre,2030,77810116.91704759,1.0,4.0036e-05
+B_central,Demand\Plants1A1\Coal_HP_TPP\Anthracite,tonne,2025,1768669.18604651,1.0,0.0267
+B_central,Demand\Plants1A1\Coal_HP_TPP\Anthracite,tonne,2030,1768669.18604651,1.0,0.0267
+B_central,Demand\Plants1A1\Coal_HP_TPP\SubBituminous,tonne,2025,1408156.74418605,1.0,0.0189
+B_central,Demand\Plants1A1\Coal_HP_TPP\SubBituminous,tonne,2030,1408156.74418605,1.0,0.0189
+B_central,Demand\Plants1A1\Coal_HP_TPP\DieselDO,tonne,2025,402906.97674419,1.0,3.612e-05
+B_central,Demand\Plants1A1\Coal_HP_TPP\DieselDO,tonne,2030,402906.97674419,1.0,3.612e-05
+B_central,Demand\Plants1A1\Coal_HD_TPP\Anthracite,tonne,2025,1768669.18604651,1.0,0.0267
+B_central,Demand\Plants1A1\Coal_HD_TPP\Anthracite,tonne,2030,1768669.18604651,1.0,0.0267
+B_central,Demand\Plants1A1\Coal_HD_TPP\SubBituminous,tonne,2025,1408156.74418605,1.0,0.0189
+B_central,Demand\Plants1A1\Coal_HD_TPP\SubBituminous,tonne,2030,1408156.74418605,1.0,0.0189
+B_central,Demand\Plants1A1\Coal_HD_TPP\DieselDO,tonne,2025,402906.97674419,1.0,3.612e-05
+B_central,Demand\Plants1A1\Coal_HD_TPP\DieselDO,tonne,2030,402906.97674419,1.0,3.612e-05
+B_central,Demand\Plants1A1\Coal_PhaLai\Anthracite,tonne,2025,1532846.62790698,1.0,0.0267
+B_central,Demand\Plants1A1\Coal_PhaLai\Anthracite,tonne,2030,1532846.62790698,1.0,0.0267
+B_central,Demand\Plants1A1\Coal_PhaLai\SubBituminous,tonne,2025,1220402.51162791,1.0,0.0189
+B_central,Demand\Plants1A1\Coal_PhaLai\SubBituminous,tonne,2030,1220402.51162791,1.0,0.0189
+B_central,Demand\Plants1A1\Coal_PhaLai\DieselDO,tonne,2025,349186.04651163,1.0,3.612e-05
+B_central,Demand\Plants1A1\Coal_PhaLai\DieselDO,tonne,2030,349186.04651163,1.0,3.612e-05
+B_central,Non Energy\IPPU\2A1_cement,tonne,2025,3837600.00000000,0.52,
+B_central,Non Energy\IPPU\2A1_cement,tonne,2030,3837600.00000000,0.52,
+B_central,Non Energy\IPPU\2A2_lime,tonne,2025,284002.98600000,0.753,
+B_central,Non Energy\IPPU\2A2_lime,tonne,2030,466022.17561422,0.753,
+B_central,Non Energy\IPPU\2A3_glass,tonne,2025,98464.96800000,0.168,
+B_central,Non Energy\IPPU\2A3_glass,tonne,2030,161571.74702784,0.168,
+B_central,Non Energy\IPPU\2C1_steel,tonne,2025,3650000.00000000,1.46,
+B_central,Non Energy\IPPU\2C1_steel,tonne,2030,3650000.00000000,1.46,
+B_central,Non Energy\AFOLU\Rice_3C7,ha,2025,1213563.76960000,10.3012,
+B_central,Non Energy\AFOLU\Rice_3C7,ha,2030,1213563.76960000,10.3012,
+B_central,Non Energy\AFOLU\Livestock_3A,head,2025,192832.95780000,0.006594,
+B_central,Non Energy\AFOLU\Livestock_3A,head,2030,192832.95780000,0.006594,
+B_central,Non Energy\AFOLU\Urea_3C3,tonne,2025,18068.51200000,0.7333,
+B_central,Non Energy\AFOLU\Urea_3C3,tonne,2030,18068.51200000,0.7333,
+B_central,Non Energy\AFOLU\Liming_3C2,tonne,2025,668.25000000,0.4455,
+B_central,Non Energy\AFOLU\Liming_3C2,tonne,2030,668.25000000,0.4455,
+B_central,Non Energy\Waste\MSW_4A1,tonne,2025,626776.35020000,0.52052,
+B_central,Non Energy\Waste\MSW_4A1,tonne,2030,658748.24322520,0.52052,
+B_central,Non Energy\Waste\Biological_4B,tonne,2025,3270.40000000,0.112,
+B_central,Non Energy\Waste\Biological_4B,tonne,2030,3437.22326785,0.112,
+B_central,Non Energy\Waste\Biological_4B_N2O,tonne,2025,1857.12000000,0.0636,
+B_central,Non Energy\Waste\Biological_4B_N2O,tonne,2030,1951.85178424,0.0636,
+B_central,Non Energy\Waste\Incineration_4C1,tonne,2025,607889.69882000,0.63617,
+B_central,Non Energy\Waste\Incineration_4C1,tonne,2030,638898.18281208,0.63617,
+B_central,Non Energy\Waste\Incineration_4C1_CH4,tonne,2025,32.10634560,3.36e-05,
+B_central,Non Energy\Waste\Incineration_4C1_CH4,tonne,2030,33.74409190,3.36e-05,
+B_central,Non Energy\Waste\Incineration_4C1_N2O,tonne,2025,2076.40145800,0.002173,
+B_central,Non Energy\Waste\Incineration_4C1_N2O,tonne,2030,2182.31880040,0.002173,
+B_central,Non Energy\Waste\Wastewater_4D_CH4,person,2025,659190.00000000,0.131838,
+B_central,Non Energy\Waste\Wastewater_4D_CH4,person,2030,685982.87017461,0.131838,
+B_central,Non Energy\Waste\Wastewater_4D_N2O,person,2025,144822.50000000,0.0289645,
+B_central,Non Energy\Waste\Wastewater_4D_N2O,person,2030,150708.83086191,0.0289645,
+B_central,Non Energy\Waste\Wastewater_4D2_industrial,person,2025,870063.42864000,0.17401268572800002,
+B_central,Non Energy\Waste\Wastewater_4D2_industrial,person,2030,905427.27895209,0.17401268572800002,
+B_central,Non Energy\Scope2\Elec_Households,tCO2e,2025,3302021.79200000,0.6592,
+B_central,Non Energy\Scope2\Elec_Households,tCO2e,2030,2867002.59775733,0.55,
+B_central,Non Energy\Scope2\Elec_Commercial,tCO2e,2025,324253.22880000,0.6592,
+B_central,Non Energy\Scope2\Elec_Commercial,tCO2e,2030,443928.95949124,0.55,
+B_central,Non Energy\Scope2\Elec_Agriculture,tCO2e,2025,117777.94560000,0.6592,
+B_central,Non Energy\Scope2\Elec_Agriculture,tCO2e,2030,161247.55653081,0.55,
+B_central,Non Energy\Scope2\Elec_IndustryElec,tCO2e,2025,7530461.51040000,0.6592,
+B_central,Non Energy\Scope2\Elec_IndustryElec,tCO2e,2030,10118834.89367850,0.55,
+B_central,Non Energy\Scope2\Elec_OtherElec,tCO2e,2025,258004.94720000,0.6592,
+B_central,Non Energy\Scope2\Elec_OtherElec,tCO2e,2030,353229.69081284,0.55,
+B_high,Demand\Transport\Road_1A3b\Gasoline,litre,2025,39406000.00000000,1.0,3.3047e-05
+B_high,Demand\Transport\Road_1A3b\Gasoline,litre,2030,64661537.93275221,1.0,3.3047e-05
+B_high,Demand\Transport\Road_1A3b\Diesel,litre,2025,276360000.00000000,1.0,3.612e-05
+B_high,Demand\Transport\Road_1A3b\Diesel,litre,2030,453480754.78595650,1.0,3.612e-05
+B_high,Demand\Transport\Road_1A3b\FuelOil,litre,2025,1971000.00000000,1.0,4.0036e-05
+B_high,Demand\Transport\Road_1A3b\FuelOil,litre,2030,3234225.53076827,1.0,4.0036e-05
+B_high,Demand\Transport\Waterborne_1A3dii\Gasoline,litre,2025,1100000.00000000,1.0,3.3047e-05
+B_high,Demand\Transport\Waterborne_1A3dii\Gasoline,litre,2030,1804996.49104267,1.0,3.3047e-05
+B_high,Demand\Transport\Waterborne_1A3dii\Diesel,litre,2025,173533000.00000000,1.0,3.612e-05
+B_high,Demand\Transport\Waterborne_1A3dii\Diesel,litre,2030,284751323.70918870,1.0,3.612e-05
+B_high,Demand\Transport\Waterborne_1A3dii\FuelOil,litre,2025,47419000.00000000,1.0,4.0036e-05
+B_high,Demand\Transport\Waterborne_1A3dii\FuelOil,litre,2030,77810116.91704759,1.0,4.0036e-05
+B_high,Demand\Plants1A1\Coal_HP_TPP\Anthracite,tonne,2025,1768669.18604651,1.0,0.0267
+B_high,Demand\Plants1A1\Coal_HP_TPP\Anthracite,tonne,2030,1768669.18604651,1.0,0.0267
+B_high,Demand\Plants1A1\Coal_HP_TPP\SubBituminous,tonne,2025,1408156.74418605,1.0,0.0189
+B_high,Demand\Plants1A1\Coal_HP_TPP\SubBituminous,tonne,2030,1408156.74418605,1.0,0.0189
+B_high,Demand\Plants1A1\Coal_HP_TPP\DieselDO,tonne,2025,402906.97674419,1.0,3.612e-05
+B_high,Demand\Plants1A1\Coal_HP_TPP\DieselDO,tonne,2030,402906.97674419,1.0,3.612e-05
+B_high,Demand\Plants1A1\Coal_HD_TPP\Anthracite,tonne,2025,1768669.18604651,1.0,0.0267
+B_high,Demand\Plants1A1\Coal_HD_TPP\Anthracite,tonne,2030,1768669.18604651,1.0,0.0267
+B_high,Demand\Plants1A1\Coal_HD_TPP\SubBituminous,tonne,2025,1408156.74418605,1.0,0.0189
+B_high,Demand\Plants1A1\Coal_HD_TPP\SubBituminous,tonne,2030,1408156.74418605,1.0,0.0189
+B_high,Demand\Plants1A1\Coal_HD_TPP\DieselDO,tonne,2025,402906.97674419,1.0,3.612e-05
+B_high,Demand\Plants1A1\Coal_HD_TPP\DieselDO,tonne,2030,402906.97674419,1.0,3.612e-05
+B_high,Demand\Plants1A1\Coal_PhaLai\Anthracite,tonne,2025,1532846.62790698,1.0,0.0267
+B_high,Demand\Plants1A1\Coal_PhaLai\Anthracite,tonne,2030,1532846.62790698,1.0,0.0267
+B_high,Demand\Plants1A1\Coal_PhaLai\SubBituminous,tonne,2025,1220402.51162791,1.0,0.0189
+B_high,Demand\Plants1A1\Coal_PhaLai\SubBituminous,tonne,2030,1220402.51162791,1.0,0.0189
+B_high,Demand\Plants1A1\Coal_PhaLai\DieselDO,tonne,2025,349186.04651163,1.0,3.612e-05
+B_high,Demand\Plants1A1\Coal_PhaLai\DieselDO,tonne,2030,349186.04651163,1.0,3.612e-05
+B_high,Non Energy\IPPU\2A1_cement,tonne,2025,4232800.00000000,0.52,
+B_high,Non Energy\IPPU\2A1_cement,tonne,2030,4232800.00000000,0.52,
+B_high,Non Energy\IPPU\2A2_lime,tonne,2025,284002.98600000,0.753,
+B_high,Non Energy\IPPU\2A2_lime,tonne,2030,500187.48657395,0.753,
+B_high,Non Energy\IPPU\2A3_glass,tonne,2025,98464.96800000,0.168,
+B_high,Non Energy\IPPU\2A3_glass,tonne,2030,173416.99660688,0.168,
+B_high,Non Energy\IPPU\2C1_steel,tonne,2025,3650000.00000000,1.46,
+B_high,Non Energy\IPPU\2C1_steel,tonne,2030,3650000.00000000,1.46,
+B_high,Non Energy\AFOLU\Rice_3C7,ha,2025,1213563.76960000,10.3012,
+B_high,Non Energy\AFOLU\Rice_3C7,ha,2030,1244207.77553329,10.3012,
+B_high,Non Energy\AFOLU\Livestock_3A,head,2025,192832.95780000,0.006594,
+B_high,Non Energy\AFOLU\Livestock_3A,head,2030,192832.95780000,0.006594,
+B_high,Non Energy\AFOLU\Urea_3C3,tonne,2025,18068.51200000,0.7333,
+B_high,Non Energy\AFOLU\Urea_3C3,tonne,2030,18068.51200000,0.7333,
+B_high,Non Energy\AFOLU\Liming_3C2,tonne,2025,668.25000000,0.4455,
+B_high,Non Energy\AFOLU\Liming_3C2,tonne,2030,668.25000000,0.4455,
+B_high,Non Energy\Waste\MSW_4A1,tonne,2025,626776.35020000,0.52052,
+B_high,Non Energy\Waste\MSW_4A1,tonne,2030,692011.73615558,0.52052,
+B_high,Non Energy\Waste\Biological_4B,tonne,2025,3270.40000000,0.112,
+B_high,Non Energy\Waste\Biological_4B,tonne,2030,3610.78585879,0.112,
+B_high,Non Energy\Waste\Biological_4B_N2O,tonne,2025,1857.12000000,0.0636,
+B_high,Non Energy\Waste\Biological_4B_N2O,tonne,2030,2050.41054124,0.0636,
+B_high,Non Energy\Waste\Incineration_4C1,tonne,2025,607889.69882000,0.63617,
+B_high,Non Energy\Waste\Incineration_4C1,tonne,2030,671159.34693019,0.63617,
+B_high,Non Energy\Waste\Incineration_4C1_CH4,tonne,2025,32.10634560,3.36e-05,
+B_high,Non Energy\Waste\Incineration_4C1_CH4,tonne,2030,35.44799984,3.36e-05,
+B_high,Non Energy\Waste\Incineration_4C1_N2O,tonne,2025,2076.40145800,0.002173,
+B_high,Non Energy\Waste\Incineration_4C1_N2O,tonne,2030,2292.51498951,0.002173,
+B_high,Non Energy\Waste\Wastewater_4D_CH4,person,2025,659190.00000000,0.131838,
+B_high,Non Energy\Waste\Wastewater_4D_CH4,person,2030,692815.31492542,0.131838,
+B_high,Non Energy\Waste\Wastewater_4D_N2O,person,2025,144822.50000000,0.0289645,
+B_high,Non Energy\Waste\Wastewater_4D_N2O,person,2030,152209.90298061,0.0289645,
+B_high,Non Energy\Waste\Wastewater_4D2_industrial,person,2025,870063.42864000,0.17401268572800002,
+B_high,Non Energy\Waste\Wastewater_4D2_industrial,person,2030,914445.40772510,0.17401268572800002,
+B_high,Non Energy\Scope2\Elec_Households,tCO2e,2025,3302021.79200000,0.6592,
+B_high,Non Energy\Scope2\Elec_Households,tCO2e,2030,3158790.73638460,0.6,
+B_high,Non Energy\Scope2\Elec_Commercial,tCO2e,2025,324253.22880000,0.6592,
+B_high,Non Energy\Scope2\Elec_Commercial,tCO2e,2030,519790.42766130,0.6,
+B_high,Non Energy\Scope2\Elec_Agriculture,tCO2e,2025,117777.94560000,0.6592,
+B_high,Non Energy\Scope2\Elec_Agriculture,tCO2e,2030,188802.58783870,0.6,
+B_high,Non Energy\Scope2\Elec_IndustryElec,tCO2e,2025,7530461.51040000,0.6592,
+B_high,Non Energy\Scope2\Elec_IndustryElec,tCO2e,2030,11549695.61265126,0.6,
+B_high,Non Energy\Scope2\Elec_OtherElec,tCO2e,2025,258004.94720000,0.6592,
+B_high,Non Energy\Scope2\Elec_OtherElec,tCO2e,2030,413591.87799032,0.6,

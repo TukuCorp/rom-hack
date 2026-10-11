@@ -6,3 +6,39 @@
 *.gci
 *.savestate
 tmp-e2e/
+
+# Ghidra reverse-engineering workspace: machine-local and large (install ~0.9 GB,
+# projects, server logs). Keep the LEAP analysis out of this repo.
+ghidra_12.1.4_PUBLIC/
+ghidra_12.1.4_PUBLIC_*.zip
+ghidra-projects/
+ghidra-mcp/
+ghidra-mcp-headless.*.log
+
+# REA comparison (morluto/rea clone, benchmark project, run artifacts)
+rea/
+ghidra-bench/
+gmb.*.log
+rea-*.json
+rea-*.png
+
+# Decompilation run: analysis logs, the export itself, and script build output
+leap-decompiled/
+leap-decomp-test/
+leap-*.log
+watch.*.log
+ghidra-scripts/_build/
+gl.*.log
+
+# Vendored LEAP installer (196 MB). The ignore that covered this in the source repo
+# did not travel with the copy, so it has to be excluded here. leap-decompiled/ itself
+# is also deliberately not committed: 136 MB of generated output, reproducible from the
+# analysed project with ghidra-scripts/DecompileAll.java.
+leap/vendor/
+
+# Reverse-engineering debug output
+leap-decompiled-retry/
+jstack-*.txt
+gx.*.log
+__pycache__/
+.commit-msg.tmp
