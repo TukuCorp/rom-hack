@@ -231,13 +231,27 @@ ActiveArea "Gets or sets the active area... Can be set equal to an area name an 
 LEAPArea object". A scratch area built from default data would have given the oracle
 without touching anything of the user's own.
 
-It does not work. Areas.Add and setting ActiveArea are both refused with "LEAP API
-function ... not available when a supporting screen is open". So the obstacle is not the
-permission question it looked like, but a startup screen that gags the area API until it
-is dismissed, and dismissing it needs the GUI or a call that has not been found.
-ShowOverview, Clear, Refresh and a twenty second wait were all tried and none of them
-changed it. Nothing was created: the area count stayed at five, no folder appeared, and no
-lock file was left behind.
+It does not work, and the reason is now settled rather than guessed. The decompilation
+carries the guard: chunk-00295.c line 18375 raises that message when the application is
+not in an automation-clean state, and the predicate behind it, FUN_02d46f50 in
+chunk-00308.c, returns false when the current screen is not the main form and carries a
+flag bit at offset 0x734. Enumerating the windows of a live instance, hidden ones
+included, finds 120 of them and exactly one that is visible: a TAdvMessageForm titled
+Evaluation Mode. Every other form is built and hidden, including TMainfrm, TScriptFrm and
+TCalcProgDialog. LEAP is simply running unlicensed on this machine, and that dialog is
+what gates the area API.
+
+So the oracle needs a licence. It is not a permission question and not a cleverer call,
+and dismissing an evaluation-mode dialog from a script would be defeating the vendor
+licensing, which is out of scope here for the same reason it was when this work started.
+BringToFront, ShowOverview, Minimize, RefreshBranches, Clear, Refresh and a twenty second
+wait were all tried first and none of them moved the gate. Nothing was created along the
+way: the area count stayed at five, no folder appeared in the LEAP Areas directory, no
+lock file was left, and no LEAP process remained.
+
+Two smaller things came out of the same probe, both consequences of no area being open:
+the automation WorkingDirectory is a temp folder, Temp\_LEAPWork\0, and RefreshBranches
+fails with NexusDB: AliasName or AliasPath not set.
 
 ## Out of scope, on purpose
 
