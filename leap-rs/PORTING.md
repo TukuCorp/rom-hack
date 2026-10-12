@@ -36,13 +36,12 @@ hand. The tool drives Ghidra `/emulate_function` on the original image, so every
 vector is output of the original itself rather than a re-derivation of it.
 
 Current corpus: **310** `IS_LEAP_YEAR_VECTORS`, **487** `DAY_NUMBER_VECTORS`, **127**
-`CONTAINER_VECTORS` and **12** `DEFLATE_VECTORS`. The container oracle is captured a
-different way: it runs the real
-`testleap.exe` over generated archives and stores the exact input bytes, the exit code,
-and the whole of stdout for each of the four output modes, CRLF included. That is 127
-archives times four modes, every one of them compared byte for byte. The stdout is kept
-as bytes rather than text, because text mode would translate CRLF to LF and quietly
-weaken the claim.
+`CONTAINER_VECTORS`, **12** `DEFLATE_VECTORS` and **14** `RUN_VECTORS`. The last three
+are captured a different way: they run the real `testleap.exe` and store the exact input
+bytes, the exit code, and the whole of stdout for each of the four output modes, CRLF
+included. The container part alone is 127 archives times four modes, every one of them
+compared byte for byte. Stdout is kept as bytes rather than text, because text mode would
+translate CRLF to LF and quietly weaken the claim.
 
 That corpus is corroborated outside this crate: section 2c of
 `../leap-year-verification.html` records live Frida instrumentation in which the
@@ -100,6 +99,16 @@ rebuilds the expected bytes rather than storing them. Between them they force co
 a one byte distance, copies at a 32000 byte distance, stored blocks, incompressible data
 and four zlib levels, one of which reaches past the 32768 byte window.
 
+The argument loop is ported as well, so the crate reproduces the whole `TestLEAP`
+command line apart from wildcard expansion. `container::run` takes each argument already
+resolved to files, prints in argument order, and adopts the LAST verdict as the exit code
+rather than the worst one, so a bad file followed by a good one exits 0. `/S` suppresses
+the per-file success line while keeping the meta echo and the no-match message, and
+prints a single result line at the very end rather than one per file. An archive whose
+meta step aborts ends the whole run and prints no result line. No arguments at all gives
+the usage text, reproduced verbatim in `container::USAGE` down to its leading bare
+newline, which is the one place the original does not write CRLF.
+
 `container::Flags`: the default prints one message per file, `/S` prints a single
 `Result: <code>` line instead, and `/Q` prints nothing at all. The abort above is the one
 exception, because the runtime prints it even under `/Q` or `/S` and the run never
@@ -117,9 +126,13 @@ binary on 56 of them.
 - The VCL user interface, the TMS `TAdv*` components and TeeChart. The port is
   headless by design.
 - The NexusDB `.nx1` container that a `.leap` file is built from.
-- The parts of the `TestLEAP` command line that are not the verdict: wildcard expansion,
-  the loop over several matched files, the `-1` verdicts for a missing file or an
-  unmatched wildcard, `/C` deletion and `/N` writing a `.meta` file.
+- Wildcard expansion, the one part of the `TestLEAP` command line still not ported. The
+  order a filesystem hands back matching files is not a property of the program, so the
+  caller supplies each argument already resolved.
+- `/C` deletion, since the port performs no filesystem side effects at all. `/N` is
+  modelled for its observable effect on output. Its help text promises that a meta file is
+  otherwise generated, and that promise is not kept on this build: hashing a valid archive
+  before and after a default run shows the bytes unchanged.
 - The embedded CPython 3.13 and the COM automation surface.
 - Anything requiring a LEAP licence. `../GHIDRA-LEAP.md` records that the shipped
   terms forbid reverse engineering and that the licence route is the sanctioned path;

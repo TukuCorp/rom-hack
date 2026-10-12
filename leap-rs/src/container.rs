@@ -47,6 +47,17 @@ pub const CODE_MISSING_REQUIRED: i32 = 3;
 pub const CODE_EXECUTABLE_MEMBER: i32 = 4;
 pub const CODE_NOT_ZIP: i32 = 5;
 pub const CODE_NO_META: i32 = 7;
+/// The verdict for an argument that resolved to no file at all. The original writes
+/// -1 and exits with the same 32-bit value, which Windows reports as 4294967295.
+pub const CODE_NO_MATCH: i32 = -1;
+
+/// What the program prints when it is handed no arguments at all. The leading byte is
+/// a bare newline, not CRLF, which is why it is written out rather than assembled.
+///
+/// The last line promises that a meta file is generated unless `/N` is given. Measured
+/// on this build, it is not: inspecting a valid archive leaves its bytes untouched, so
+/// the port writes nothing either.
+pub const USAGE: &str = "\nTestLEAP Filename or Wildcard [/Q] [/C]\r\n\r\n   /Q  Quiet - no messages on screen.\r\n   /C  Clean - delete any disallowed LEAP files.\r\n   /S  Short - just outputs error codes.\r\n   /N  Nometa - no meta file generated, otherwise writes meta info on leap file.\r\n";
 
 /// The pre-2012 marker. `entry` tests for this first, right after the zip check.
 pub const MASTER_DB: &str = "masterstructure.db";
@@ -446,27 +457,94 @@ pub fn messages(decision: &Decision, name: &str) -> String {
     }
 }
 
+/// One command-line argument, and what the operating system resolved it to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Input<'a> {
+    /// A file the argument resolved to, with its bytes.
+    File { name: &'a str, bytes: &'a [u8] },
+    /// An argument that resolved to no file at all, which is the -1 verdict.
+    NoMatch { as_typed: &'a str },
+}
+
+/// The message an argument that matched nothing produces.
+pub fn no_match_message(as_typed: &str) -> String {
+    format!("No file(s) matching: \"{}\" ({}).\r\n", as_typed, CODE_NO_MATCH)
+}
+
+/// Port of the argument loop in `entry`.
+///
+/// Every resolved file is run through the chain in argument order and its output is
+/// appended in that order, but the exit code is the LAST verdict rather than the worst
+/// one, which the `bad_then_good` and `db_then_bad` vectors pin down. `/S` suppresses
+/// the per-file success messages while leaving the meta echo and the no-match message
+/// alone, and prints one result line at the very end rather than one per file. An
+/// archive whose meta step aborts ends the whole run, printing no result line.
+///
+/// Passing no inputs at all reproduces the usage text. Wildcard expansion is not here:
+/// the order a filesystem hands back matches is not a property of the program, so the
+/// caller supplies each argument already resolved.
+pub fn run(inputs: &[Input<'_>], flags: Flags) -> Report {
+    if inputs.is_empty() {
+        return Report { code: 0, stdout: USAGE.to_string() };
+    }
+
+    let mut stdout = String::new();
+    let mut code = 0;
+    let mut aborted = false;
+
+    for input in inputs {
+        match input {
+            Input::NoMatch { as_typed } => {
+                code = CODE_NO_MATCH;
+                if !flags.quiet {
+                    stdout.push_str(&no_match_message(as_typed));
+                }
+            }
+            Input::File { name, bytes } => {
+                let decision = decide(bytes);
+                code = decision.code();
+                if matches!(decision, Decision::Passed { meta: Meta::NotAtRoot, .. }) {
+                    // The runtime prints the exception itself, so neither flag
+                    // suppresses it, and the abort ends the run before any result line.
+                    if flags.short || flags.quiet {
+                        stdout.push_str(META_NOT_AT_ROOT);
+                    } else {
+                        stdout.push_str(&messages(&decision, name));
+                    }
+                    aborted = true;
+                    break;
+                }
+                // The meta step only runs when every other check passed, so an
+                // archive rejected for the pre-2012 layout, a missing member or a
+                // forbidden extension is never echoed even when it carries meta lines.
+                let reached_meta = matches!(decision, Decision::Passed { .. });
+                let echo = if reached_meta && !flags.nometa {
+                    meta_echo(bytes)
+                } else {
+                    String::new()
+                };
+                if flags.quiet {
+                    // Nothing at all is printed under `/Q`.
+                } else if flags.short {
+                    // `/S` drops the success line but keeps the echoed meta lines.
+                    stdout.push_str(&echo);
+                } else {
+                    stdout.push_str(&messages(&decision, name));
+                    stdout.push_str(&echo);
+                }
+            }
+        }
+    }
+
+    if flags.short && !aborted {
+        stdout.push_str(&format!("Result: {}\r\n", code));
+    }
+    Report { code, stdout }
+}
+
 /// The whole of stdout for one archive, under the given flags.
 pub fn report(bytes: &[u8], name: &str, flags: Flags) -> Report {
-    let decision = decide(bytes);
-    let code = decision.code();
-    let aborted = matches!(decision, Decision::Passed { meta: Meta::NotAtRoot, .. });
-    let echo = if aborted || flags.nometa { String::new() } else { meta_echo(bytes) };
-    let stdout = if !flags.short && !flags.quiet {
-        // Default mode prints the success line, then the echoed meta lines, and the
-        // abort last when there is one, which `messages` already ends with.
-        messages(&decision, name) + &echo
-    } else if aborted {
-        // The runtime prints the exception itself, so neither flag suppresses it, and
-        // the run never reaches the result line.
-        META_NOT_AT_ROOT.to_string()
-    } else if flags.short {
-        // `/S` does not suppress the echo, it just puts the result line after it.
-        echo + &format!("Result: {}\r\n", code)
-    } else {
-        String::new()
-    };
-    Report { code, stdout }
+    run(&[Input::File { name, bytes }], flags)
 }
 
 /// The short-mode report for a caller that has only the bytes, and wants the verdict and
