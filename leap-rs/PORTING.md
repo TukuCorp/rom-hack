@@ -37,9 +37,9 @@ vector is output of the original itself rather than a re-derivation of it.
 
 Current corpus: **310** `IS_LEAP_YEAR_VECTORS`, **487** `DAY_NUMBER_VECTORS` and **113**
 `CONTAINER_VECTORS`. The container oracle is captured a different way: it runs the real
-`testleap.exe` over generated archives with `/S` and stores the exact input bytes, the
-process exit code and the whole of stdout, so its parity test replays whole-process
-behaviour rather than a function result.
+`testleap.exe` over generated archives and stores the exact input bytes, the exit code,
+and the whole of stdout for each of the three output modes. That is 113 archives times
+three modes, every one of them compared byte for byte.
 
 That corpus is corroborated outside this crate: section 2c of
 `../leap-year-verification.html` records live Frida instrumentation in which the
@@ -65,10 +65,11 @@ The container validator is a chain rather than one function, so it names each pi
 
 | original | role | Rust |
 |---|---|---|
-| `0x0061a848` | `entry`, the decision chain and the verdict codes | `container::validate` |
+| `0x0061a848` | `entry`, the decision chain and the verdict codes | `container::decide` |
 | `0x0060df1c` | member lookup asked of the zip library | `container::has_member`, `container::has_pattern` |
 | `0x00610058` | opens the archive; false means not a zip | `container::member_names` |
-| `0x00611e78` | the meta check that sets verdict 7 | inside `container::validate` |
+| `0x00611e78` | the meta check that sets verdict 7 | inside `container::decide` |
+| `0x61b414` | the `Result: %d` line the `/S` flag prints | `container::report` |
 
 Its verdict order is 5 (not a zip), 1 (holds `masterstructure.db`, the pre-2012 layout),
 3 (a required `.nx1` is absent), 4 (a forbidden pattern matches), 7 (no `sysinfo.txt`),
@@ -77,6 +78,14 @@ the goal is equivalence and not a corrected validator. Member lookup is by basen
 case-insensitive, so `sub/years.nx1` satisfies the `years.nx1` requirement. The extension
 test drops exactly one trailing dot first, so `tool.exe.` is flagged while `tool.exe..`
 is not. Vectors pin both.
+
+The original also changes what it prints based on its flags, and the port models that with
+`container::Flags`: the default prints one message per file, `/S` prints a single
+`Result: <code>` line instead, and `/Q` prints nothing at all. The abort above is the one
+exception, because the runtime prints it even under `/Q` or `/S` and the run never
+reaches the result line, which is why a quiet run is not always silent. `/C` and `/N` are
+left out of `Flags` deliberately: the first deletes files and the second decides whether a
+`.meta` file is written, and this port performs no filesystem side effects.
 
 This replaced an earlier behavioural model that assumed eight forbidden extensions and
 had no pre-2012 branch. Run against the same 113 vectors, that model disagreed with the
@@ -88,6 +97,9 @@ binary on 56 of them.
 - The VCL user interface, the TMS `TAdv*` components and TeeChart. The port is
   headless by design.
 - The NexusDB `.nx1` container that a `.leap` file is built from.
+- The parts of the `TestLEAP` command line that are not the verdict: wildcard expansion,
+  the loop over several matched files, the `-1` verdicts for a missing file or an
+  unmatched wildcard, `/C` deletion and `/N` writing a `.meta` file.
 - The embedded CPython 3.13 and the COM automation surface.
 - Anything requiring a LEAP licence. `../GHIDRA-LEAP.md` records that the shipped
   terms forbid reverse engineering and that the licence route is the sanctioned path;

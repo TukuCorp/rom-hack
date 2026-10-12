@@ -19,20 +19,26 @@
 //!   7   no member named `sysinfo.txt`                (`FUN_00611e78`)
 //!   0   otherwise
 //!
-//! Two behaviours here look wrong and are reproduced anyway, because the port aims at
-//! equivalence rather than at a corrected validator. Both are pinned by oracle vectors:
+//! Three behaviours here look wrong and are reproduced anyway, because the port aims at
+//! equivalence rather than at a corrected validator. All are pinned by oracle vectors:
 //!
 //! * Member lookup is by **basename**, compared case-insensitively, so a nested
 //!   `sub/years.nx1` satisfies the `years.nx1` requirement. A file merely containing the
 //!   name does not, so `xyears.nx1` and `years.nx1.bak` both fail.
 //! * The extension test drops **exactly one** trailing `.` before taking the text after
-//!   the last dot. So `tool.exe.` is flagged but `tool.exe..` is not. `tool.exe.txt` is
-//!   not flagged, because the text after the last dot is `.txt`.
+//!   the last dot. So `tool.exe.` is flagged but `tool.exe..` is not, and `tool.exe.txt`
+//!   is not flagged because the text after the last dot is `.txt`.
+//! * A nested `meta/sysinfo.txt` passes the by-basename meta check and then fails the
+//!   extraction that looks the name up at the archive root. The library aborts, the run
+//!   exits 0, and the exception text is the only thing it prints.
 //!
-//! The meta step has a further quirk: the 7-check searches by basename, but the
-//! following extraction looks the name up at the archive root, so `meta/sysinfo.txt`
-//! passes the check and then aborts with the library exception text instead of a result.
-//! The exception is reproduced verbatim in [`Report::stdout`], with exit code 0.
+//! ## Output modes
+//!
+//! The original changes what it prints based on its flags, and the oracle captures all
+//! three: the default prints one message per file, `/S` prints a single `Result: <code>`
+//! line instead, and `/Q` prints nothing at all. The exception above is the exception to
+//! that: the runtime prints it even under `/Q` or `/S`, and the run never reaches the
+//! result line, which is why a quiet run is not always empty.
 
 /// Verdict codes, taken from the assignments in `entry` between 0x61ab08 and 0x61b465.
 pub const CODE_VALID: i32 = 0;
@@ -96,8 +102,7 @@ pub struct Report {
     /// The process exit code. The original stores this in the global at 0x62f060 and
     /// hands it to the exit routine, so the observed exit code is the verdict itself.
     pub code: i32,
-    /// Everything the run writes to stdout under `/S`, which is what the parity test
-    /// compares byte for byte.
+    /// Everything the run writes to stdout for the requested flags.
     pub stdout: String,
 }
 
@@ -105,6 +110,55 @@ pub struct Report {
 /// Captured verbatim from the `meta_meta_sysinfo_txt` vector.
 pub const META_NOT_AT_ROOT: &str =
     "EZFException: File \"sysinfo.txt\" not found - Native error: 00015\n";
+
+/// What the chain decided, before it is turned into text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Decision {
+    NotZip,
+    UnsupportedVersion,
+    MissingRequired,
+    ExecutableMember,
+    /// Everything else passed. Carries the data-file count the success message prints,
+    /// and the outcome of the meta step that runs afterwards.
+    Passed { data_files: usize, meta: Meta },
+}
+
+/// The result of the meta step, which `entry` runs only after everything else passed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Meta {
+    /// The meta file was found by basename and again at the archive root.
+    Ok,
+    /// No member has that basename, so the run reports verdict 7.
+    Missing,
+    /// Found by basename but not at the root, so the library aborts. Verdict stays 0.
+    NotAtRoot,
+}
+
+/// The flags that change what the original prints.
+///
+/// `/C` and `/N` are deliberately absent: the first deletes files and the second decides
+/// whether a `.meta` file gets written, and this port performs no filesystem side effects.
+/// The original also accepts the long spellings `quiet`, `short`, `clean` and `nometa`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Flags {
+    /// `/Q`, suppresses the per-file messages.
+    pub quiet: bool,
+    /// `/S`, suppresses the per-file messages and prints one result line instead.
+    pub short: bool,
+}
+
+impl Decision {
+    pub fn code(&self) -> i32 {
+        match self {
+            Decision::NotZip => CODE_NOT_ZIP,
+            Decision::UnsupportedVersion => CODE_UNSUPPORTED_VERSION,
+            Decision::MissingRequired => CODE_MISSING_REQUIRED,
+            Decision::ExecutableMember => CODE_EXECUTABLE_MEMBER,
+            Decision::Passed { meta: Meta::Missing, .. } => CODE_NO_META,
+            Decision::Passed { .. } => CODE_VALID,
+        }
+    }
+}
 
 fn u16le(b: &[u8], at: usize) -> u16 {
     u16::from_le_bytes([b[at], b[at + 1]])
@@ -200,45 +254,103 @@ pub fn has_pattern(names: &[String], pattern: &str) -> bool {
     names.iter().any(|n| extension_of(n).eq_ignore_ascii_case(wanted))
 }
 
-/// Run the whole chain over an in-memory archive.
+/// Run the chain over an in-memory archive.
 ///
-/// The original receives a filename and reads it from disk. This takes the bytes
-/// instead, so the port stays pure and testable. The `-1` verdicts `entry` produces for
-/// a path that does not exist or matches no wildcard are therefore unreachable here.
-pub fn validate(bytes: &[u8]) -> Report {
-    let verdict = |code: i32| Report { code, stdout: format!("Result: {}\n", code) };
-
+/// The original takes a filename and reads it from disk. This takes the bytes instead so
+/// the port stays pure. Two things `entry` can do are therefore out of reach here: the -1
+/// verdicts for a path that does not exist or matches no wildcard, and the loop that runs
+/// the same chain over every file a wildcard expanded to.
+pub fn decide(bytes: &[u8]) -> Decision {
     let names = match member_names(bytes) {
         Some(names) => names,
-        None => return verdict(CODE_NOT_ZIP),
+        None => return Decision::NotZip,
     };
+    let data_files = names.len();
 
     if has_member(&names, MASTER_DB) {
-        return verdict(CODE_UNSUPPORTED_VERSION);
+        return Decision::UnsupportedVersion;
     }
-
     for required in REQUIRED_NX1 {
         if !has_member(&names, required) {
-            return verdict(CODE_MISSING_REQUIRED);
+            return Decision::MissingRequired;
         }
     }
-
     for pattern in FORBIDDEN_PATTERNS {
         if has_pattern(&names, pattern) {
-            return verdict(CODE_EXECUTABLE_MEMBER);
+            return Decision::ExecutableMember;
         }
     }
 
-    if !has_member(&names, META_FILE) {
-        return verdict(CODE_NO_META);
-    }
+    let meta = if !has_member(&names, META_FILE) {
+        Meta::Missing
+    } else if names.iter().any(|n| n.eq_ignore_ascii_case(META_FILE)) {
+        Meta::Ok
+    } else {
+        Meta::NotAtRoot
+    };
+    Decision::Passed { data_files, meta }
+}
 
-    // The check above searches by basename, but the extraction that follows looks the
-    // name up at the root. When they disagree the library aborts and the run ends with
-    // code 0 and the exception text as its only output.
-    if !names.iter().any(|n| n.eq_ignore_ascii_case(META_FILE)) {
-        return Report { code: CODE_VALID, stdout: META_NOT_AT_ROOT.to_string() };
+/// The per-file messages, in the order the original prints them.
+pub fn messages(decision: &Decision, name: &str) -> String {
+    match decision {
+        Decision::NotZip => format!(
+            "File \"{}\" is not a valid leap file: not valid zip format ({}).\n",
+            name, CODE_NOT_ZIP
+        ),
+        Decision::UnsupportedVersion => format!(
+            "File \"{}\" is from an unsupported version of LEAP (pre-2012) ({}).\n",
+            name, CODE_UNSUPPORTED_VERSION
+        ),
+        Decision::MissingRequired => format!(
+            "File \"{}\" is not valid: missing required data files ({}).\n",
+            name, CODE_MISSING_REQUIRED
+        ),
+        Decision::ExecutableMember => format!(
+            "File \"{}\" is not valid: includes executable files ({}).\n",
+            name, CODE_EXECUTABLE_MEMBER
+        ),
+        Decision::Passed { data_files, meta } => {
+            let mut out = format!(
+                "File \"{}\" is a valid leap file containing {} data files.\n",
+                name, data_files
+            );
+            match meta {
+                Meta::Ok => {}
+                Meta::Missing => out.push_str(&format!(
+                    "File \"{}\" contains no meta information: missing sysinfo.txt.\n",
+                    name
+                )),
+                Meta::NotAtRoot => out.push_str(META_NOT_AT_ROOT),
+            }
+            out
+        }
     }
+}
 
-    verdict(CODE_VALID)
+/// The whole of stdout for one archive, under the given flags.
+pub fn report(bytes: &[u8], name: &str, flags: Flags) -> Report {
+    let decision = decide(bytes);
+    let code = decision.code();
+    let aborted = matches!(decision, Decision::Passed { meta: Meta::NotAtRoot, .. });
+    let stdout = if !flags.short && !flags.quiet {
+        // The default mode prints the success line first and the abort after it, which
+        // `messages` already does.
+        messages(&decision, name)
+    } else if aborted {
+        // The runtime prints the exception itself, so neither flag suppresses it, and
+        // the run never reaches the result line.
+        META_NOT_AT_ROOT.to_string()
+    } else if flags.short {
+        format!("Result: {}\n", code)
+    } else {
+        String::new()
+    };
+    Report { code, stdout }
+}
+
+/// The short-mode report for a caller that has only the bytes, and wants the verdict and
+/// the result line the `/S` flag produces.
+pub fn validate(bytes: &[u8]) -> Report {
+    report(bytes, "", Flags { quiet: false, short: true })
 }

@@ -3,17 +3,24 @@
 
 The decision chain is entry @ 0x0061a848 in testleap.exe, which asks the zip
 library whether the archive contains a member (FUN_0060df1c) and assigns a
-verdict code in this order:
+verdict code in this order, first failing check wins:
 
   5  archive will not open as a zip          (FUN_00610058)
-  1  contains masterstructure.db             (pre-2012 LEAP format)
+  1  contains masterstructure.db             (pre-2012 LEAP layout)
   3  any of the required .nx1 members absent
   4  any of the 27 forbidden patterns present
   7  no sysinfo.txt                          (FUN_00611e78)
   0  valid
 
-Run with /S so the binary prints only "Result: <code>" and nothing else, which
-makes stdout deterministic and path independent. Writes src/oracle_container.rs.
+Three output modes are captured per vector, because they differ:
+
+  default   one message per file, nothing more
+  /S short  no messages, a single "Result: <code>" line
+  /Q quiet  no output at all; only the exit code survives
+
+The file is named <case>.leap and passed as a relative name with the working
+directory set to the temp dir, so the path that appears inside the messages is
+deterministic and reproducible by the port. Writes src/oracle_container.rs.
 """
 
 import argparse
@@ -23,7 +30,7 @@ import sys
 import tempfile
 import zipfile
 
-TESTLEAP = r"C:\Program Files\LEAP\testleap.exe"
+TESTLEAP = "C:/Program Files/LEAP/testleap.exe"
 
 # Order matters: this is the order the chain in entry tests them.
 REQUIRED = ["masterstructure.nx1", "areadata.nx1", "scenariodata.nx1",
@@ -42,40 +49,35 @@ def vectors():
     v.append(("valid", base, True))
     v.append(("empty_zip", [], True))
     v.append(("not_a_zip", None, False))
-    # Every forbidden extension, one at a time, plus an uppercase variant.
     for pat in FORBIDDEN:
         ext = pat[2:]
         v.append(("forbid_" + ext, base + ["tool." + ext], True))
         v.append(("forbid_" + ext + "_upper", base + ["TOOL." + ext.upper()], True))
-    # Near misses that must stay allowed.
     for nm in ("t.wsh", "t.jse", "noextension", "a.exe.txt", "a.txt.exe.note",
                "t.docx", "t.xlsm"):
         v.append(("allow_" + nm.replace(".", "_"), base + [nm], True))
-    # Extension matching on a path that has no extension at all.
     v.append(("forbid_nested_exe", base + ["sub/dir/tool.exe"], True))
     v.append(("forbid_nested_msc", base + ["x/y/tool.msc"], True))
-    # masterstructure.db present is the pre-2012 branch (code 1).
     v.append(("db_present", REQUIRED + ["sysinfo.txt", "masterstructure.db"], True))
     v.append(("db_only", ["masterstructure.db", "sysinfo.txt"], True))
-    # Each required member missing, one at a time.
-    for req in set(REQUIRED):
+    for req in sorted(set(REQUIRED)):
         v.append(("missing_" + req.replace(".", "_"),
                   [r for r in REQUIRED if r != req] + ["sysinfo.txt"], True))
     v.append(("missing_all_nx1", ["sysinfo.txt"], True))
-    # Meta file variants.
-    for nm in ("meta/sysinfo.txt", "deep/a/b/sysinfo.txt", "SYSINFO.TXT",
-               "sysinfo.txt.bak", "sysinfo.txt"):
-        v.append(("meta_" + nm.replace("/", "_").replace(".", "_"),
-                  REQUIRED + [nm], True))
-    # Ordering probes: which failure is reported when several apply.
+    # Names are spelled out rather than derived, because the file name becomes part of
+    # the captured message and two cases differing only in case would collide on a
+    # case-insensitive filesystem.
+    for case, member in (("meta_nested", "meta/sysinfo.txt"),
+                         ("meta_deep_nested", "deep/a/b/sysinfo.txt"),
+                         ("meta_upper", "SYSINFO.TXT"),
+                         ("meta_bak_suffix", "sysinfo.txt.bak"),
+                         ("meta_plain", "sysinfo.txt")):
+        v.append((case, REQUIRED + [member], True))
     v.append(("order_forbid_and_missing",
               [r for r in REQUIRED if r != "years.nx1"] + ["tool.php"], True))
     v.append(("order_forbid_and_nometa", REQUIRED + ["tool.cpl"], True))
     v.append(("order_db_and_forbid", REQUIRED + ["tool.exe", "masterstructure.db"], True))
     v.append(("order_db_and_missing", ["masterstructure.db"], True))
-    # Name-matching probes: is a required member matched by basename, and is the
-    # comparison case-insensitive? The meta check already matched a nested and an
-    # upper-cased sysinfo.txt, so these pin whether the other lookups behave the same.
     req = list(REQUIRED)
     v.append(("name_req_nested",
               ["sub/" + m for m in req] + ["sysinfo.txt"], True))
@@ -97,9 +99,6 @@ def vectors():
     v.append(("name_forbid_double_ext", req + ["sysinfo.txt", "t.exe.exe"], True))
     v.append(("name_forbid_trailing_dot", req + ["sysinfo.txt", "tool.exe."], True))
     v.append(("name_extra_docs", req + ["sysinfo.txt", "a.txt", "b.csv", "c.pdf"], True))
-    # Discriminating probes for the extension rule: does the test use "the text
-    # after the last dot" or "ends with .<ext>"? Windows also strips trailing dots
-    # and spaces from names, which is why tool.exe. above is still flagged.
     v.append(("ext_bare_exe", req + ["sysinfo.txt", "exe"], True))
     v.append(("ext_exe_dot", req + ["sysinfo.txt", "exe."], True))
     v.append(("ext_two_trailing_dots", req + ["sysinfo.txt", "tool.exe.."], True))
@@ -112,13 +111,12 @@ def vectors():
     v.append(("ext_dotdot_exe", req + ["sysinfo.txt", "..exe"], True))
     v.append(("ext_a_b_exe_dot", req + ["sysinfo.txt", "a.b.exe."], True))
     v.append(("ext_dot_only", req + ["sysinfo.txt", "."], True))
-    # Malformed-archive probes, to pin the not-a-zip branch (exit 5). Each is a
-    # raw byte payload written instead of a real zip.
-    v.append(("raw_empty", [], b""))
+    v.append(("raw_empty", [], bytes()))
     v.append(("raw_text", [], b"nope, not an archive"))
-    v.append(("raw_pk_garbage", [], b"PK\x03\x04" + b"\x00" * 40))
-    v.append(("raw_eocd_only", [], b"PK\x05\x06" + b"\x00" * 18))
-    v.append(("raw_eocd_bad_offset", [], b"PK\x05\x06" + b"\x00" * 8 + (999).to_bytes(4, "little") + b"\x00" * 6))
+    v.append(("raw_pk_garbage", [], bytes([80, 75, 3, 4]) + bytes(40)))
+    v.append(("raw_eocd_only", [], bytes([80, 75, 5, 6]) + bytes(18)))
+    v.append(("raw_eocd_bad_offset", [],
+              bytes([80, 75, 5, 6]) + bytes(8) + (999).to_bytes(4, "little") + bytes(6)))
     return v
 
 
@@ -138,9 +136,27 @@ def build(tmpdir, name, members, is_zip):
     return path
 
 
-def run(path):
-    p = subprocess.run([TESTLEAP, path, "/S"], capture_output=True, text=True, timeout=60)
+def run(cwd, args):
+    p = subprocess.run([TESTLEAP] + args, cwd=cwd, capture_output=True, text=True,
+                       timeout=60)
     return p.returncode, (p.stdout or "")
+
+
+def esc(s):
+    bs = chr(92)
+    out = []
+    for ch in s:
+        if ch == bs:
+            out.append(bs + bs)
+        elif ch == chr(34):
+            out.append(bs + chr(34))
+        elif ch == chr(10):
+            out.append(bs + "n")
+        elif ch == chr(13):
+            out.append(bs + "r")
+        else:
+            out.append(ch)
+    return "".join(out)
 
 
 def main():
@@ -155,41 +171,57 @@ def main():
     tmpdir = tempfile.mkdtemp(prefix="leap_containervec_")
     rows = []
     for name, members, is_zip in vectors():
-        path = build(tmpdir, name, members, is_zip)
-        code, out = run(path)
-        with open(path, "rb") as fh:
+        build(tmpdir, name, members, is_zip)
+        arg = name + ".leap"
+        code_d, out_d = run(tmpdir, [arg])
+        code_s, out_s = run(tmpdir, [arg, "/S"])
+        code_q, out_q = run(tmpdir, [arg, "/Q"])
+        if not (code_d == code_s == code_q):
+            print("verdict differs between modes for %s: %d %d %d"
+                  % (name, code_d, code_s, code_q), file=sys.stderr)
+            return 1
+        with open(os.path.join(tmpdir, arg), "rb") as fh:
             payload = fh.read()
-        rows.append((name, payload, code, out, members or [], is_zip))
+        rows.append((name, payload, code_d, out_d, out_s, out_q, members or []))
 
-    def esc(s):
-        return (s.replace("\\", "\\\\").replace(chr(34), chr(92) + chr(34))
-                 .replace(chr(10), chr(92) + "n").replace(chr(13), chr(92) + "r"))
+    q = chr(34)
+    # The file name is part of the captured message, so two cases differing only in case
+    # would silently share one file on Windows and one of the two messages would be wrong.
+    lowered = [row[0].lower() for row in rows]
+    clashes = sorted(set(n for n in lowered if lowered.count(n) > 1))
+    if clashes:
+        print("case names collide case-insensitively: %s" % clashes, file=sys.stderr)
+        return 1
 
     with open(args.out, "w", encoding="utf-8") as fh:
-        fh.write("// GENERATED by tools/capture_container_oracle.py -- do not edit by hand.\n")
-        fh.write("// Ground truth captured by running the original testleap.exe with /S.\n")
-        fh.write("//\n")
-        fh.write("// One vector per line:\n")
-        fh.write("//   (case name, the exact input file bytes as lowercase hex,\n")
-        fh.write("//    expected process exit code, expected stdout)\n")
-        fh.write("//\n")
-        fh.write("// The bytes are stored verbatim so the test replays the exact archives the\n")
-        fh.write("// verdicts were captured from, with nothing reconstructed.\n")
-        fh.write("pub const CONTAINER_VECTORS: &[(&str, &str, i32, &str)] = &[\n")
-        for name, payload, code, out, members, is_zip in rows:
-            fh.write("    // %s\n" % (", ".join(members) if members else "raw payload"))
-            fh.write("    (%s, %s, %d, %s),\n"
-                     % (chr(34) + name + chr(34), chr(34) + payload.hex() + chr(34),
-                        code, chr(34) + esc(out) + chr(34)))
-        fh.write("];\n")
+        fh.write("// GENERATED by tools/capture_container_oracle.py -- do not edit by hand." + chr(10))
+        fh.write("// Ground truth captured by running the original testleap.exe three ways," + chr(10))
+        fh.write("// with the file given as a relative name from the temp dir it sits in." + chr(10))
+        fh.write("//" + chr(10))
+        fh.write("// One vector per line:" + chr(10))
+        fh.write("//   (case name, exact input bytes as lowercase hex, exit code," + chr(10))
+        fh.write("//    default-mode stdout, /S stdout, /Q stdout)" + chr(10))
+        fh.write("//" + chr(10))
+        fh.write("// The bytes are stored verbatim so the test replays the exact archives" + chr(10))
+        fh.write("// the verdicts were captured from, with nothing reconstructed. The path" + chr(10))
+        fh.write("// inside the messages is always <case>.leap." + chr(10))
+        fh.write("pub const CONTAINER_VECTORS: &[(&str, &str, i32, &str, &str, &str)] = &[" + chr(10))
+        for name, payload, code, out_d, out_s, out_q, members in rows:
+            fh.write("    // %s" % (", ".join(members) if members else "raw payload"))
+            fh.write(chr(10))
+            cells = (q + name + q, q + payload.hex() + q, str(code),
+                     q + esc(out_d) + q, q + esc(out_s) + q, q + esc(out_q) + q)
+            fh.write("    (" + ", ".join(cells) + "),")
+            fh.write(chr(10))
+        fh.write("];" + chr(10))
 
     print("wrote %s with %d vectors" % (args.out, len(rows)))
-    codes = {}
-    for name, payload, code, out, members, is_zip in rows:
-        codes[code] = codes.get(code, 0) + 1
-    print("exit-code histogram: %s" % sorted(codes.items()))
-    for name, payload, code, out, members, is_zip in rows[:3]:
-        print("  sample %s -> exit %d stdout %r bytes %d" % (name, code, out, len(payload)))
+    hist = {}
+    for name, payload, code, out_d, out_s, out_q, members in rows:
+        hist[code] = hist.get(code, 0) + 1
+    print("exit-code histogram: %s" % sorted(hist.items()))
+    empty_q = sum(1 for r in rows if r[5] == "")
+    print("vectors with empty /Q output: %d of %d" % (empty_q, len(rows)))
     return 0
 
 
