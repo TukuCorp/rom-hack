@@ -209,6 +209,34 @@ loading it needs memory this machine does not have. So the direct route to the t
 gated on the same resource as everything else on the model, which means both routes now have
 a named, evidence-backed blocker rather than a vague one.
 
+## The disassembly, and the end of the parameter space
+
+What the C could not settle needed a disassembler, so one was put into a scratch directory
+outside the crate and the functions were disassembled straight out of the file. Two things
+are worth writing down for whoever does this next: the image base is `0x400000`, so a
+published address is absolute and the file offset is that address less the base less the
+section offset; and getting that wrong disassembles data, which looks like nonsense rather
+than like an error.
+
+The offsets question is resolved, and not the way it looked. The generator and the key
+schedule both index their S-box from offset `8`, and `FUN_015344c0` fills the array at
+`0x108`. The reconciliation sits in the tail of `FUN_015346a0`: with a key it copies thirty
+two quadwords from `8` to `0x108`, and without a key it copies them back the other way. So
+`0x108` is a saved copy, the live array is at `8`, and the identity fill is the no-key case.
+The RC4 seeding I had written was therefore right, and the discrepancy I suspected of being
+the bug was not one.
+
+The last parameters were varied as well: the byte order of the expanded key, the order of
+its two words, and whether the schedule carries its index forward. That is thirty-six more
+configurations, every one of them between 20 and 25 zero bytes out of 4096 against a
+baseline of 18. Together with the earlier sweep that is over a hundred configurations
+across every parameter the code names, and none is right.
+
+So the error is structural rather than a value, and the surviving candidates are the round
+layout, the key schedule and the chain seeding in some detail that only a line-by-line read
+of the assembly will settle. That is possible, and it is a far larger read than the function
+summaries done so far.
+
 ## What that means
 
 Reading `.nx1` directly means porting the NexusDB block cipher and its dictionary layout out
