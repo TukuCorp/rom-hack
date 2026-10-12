@@ -109,7 +109,7 @@ pub struct Report {
 /// The text the zip library aborts with when the meta file is not at the archive root.
 /// Captured verbatim from the `meta_meta_sysinfo_txt` vector.
 pub const META_NOT_AT_ROOT: &str =
-    "EZFException: File \"sysinfo.txt\" not found - Native error: 00015\n";
+    "EZFException: File \"sysinfo.txt\" not found - Native error: 00015\r\n";
 
 /// What the chain decided, before it is turned into text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -145,6 +145,8 @@ pub struct Flags {
     pub quiet: bool,
     /// `/S`, suppresses the per-file messages and prints one result line instead.
     pub short: bool,
+    /// `/N`, suppresses the echo of the meta lines.
+    pub nometa: bool,
 }
 
 impl Decision {
@@ -168,13 +170,23 @@ fn u32le(b: &[u8], at: usize) -> u32 {
     u32::from_le_bytes([b[at], b[at + 1], b[at + 2], b[at + 3]])
 }
 
-/// The member names of a zip archive, or `None` when it will not open.
+/// One central-directory record: what the archive holds, and where its bytes begin.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Entry {
+    pub name: String,
+    /// Compression method: 0 is stored, 8 is deflated.
+    pub method: u16,
+    /// Offset of this member local header, from the central directory field at +42.
+    pub local_at: usize,
+    pub compressed_size: usize,
+}
+
+/// The central directory of a zip archive, or `None` when it will not open.
 ///
-/// This stands in for `FUN_00610058` plus the zip library underneath it: it reads the
-/// central directory, which is all the validator ever consults. `None` maps to
-/// [`CODE_NOT_ZIP`]. A zero-entry archive is a valid archive, which the
-/// `raw_eocd_only` and `empty_zip` vectors pin down.
-pub fn member_names(bytes: &[u8]) -> Option<Vec<String>> {
+/// This stands in for `FUN_00610058` plus the zip library underneath it: the validator
+/// only ever consults the directory. `None` maps to [`CODE_NOT_ZIP`]. A zero-entry
+/// archive is a valid archive, which the `raw_eocd_only` and `empty_zip` vectors pin down.
+pub fn entries(bytes: &[u8]) -> Option<Vec<Entry>> {
     const EOCD: [u8; 4] = [0x50, 0x4b, 0x05, 0x06];
     const CENTRAL: [u8; 4] = [0x50, 0x4b, 0x01, 0x02];
     const MAX_COMMENT: usize = 65_535;
@@ -187,16 +199,16 @@ pub fn member_names(bytes: &[u8]) -> Option<Vec<String>> {
     let start = len - window;
     let eocd = (start..=len - 22).rev().find(|&i| bytes[i..i + 4] == EOCD)?;
 
-    let entries = u16le(bytes, eocd + 10) as usize;
+    let count = u16le(bytes, eocd + 10) as usize;
     let cd_size = u32le(bytes, eocd + 12) as usize;
     let cd_at = u32le(bytes, eocd + 16) as usize;
     if cd_at.checked_add(cd_size)? > len {
         return None;
     }
 
-    let mut names = Vec::with_capacity(entries);
+    let mut out = Vec::with_capacity(count);
     let mut at = cd_at;
-    for _ in 0..entries {
+    for _ in 0..count {
         if at + 46 > len || bytes[at..at + 4] != CENTRAL {
             return None;
         }
@@ -207,10 +219,41 @@ pub fn member_names(bytes: &[u8]) -> Option<Vec<String>> {
         if from + name_len > len {
             return None;
         }
-        names.push(String::from_utf8_lossy(&bytes[from..from + name_len]).into_owned());
+        out.push(Entry {
+            name: String::from_utf8_lossy(&bytes[from..from + name_len]).into_owned(),
+            method: u16le(bytes, at + 10),
+            local_at: u32le(bytes, at + 42) as usize,
+            compressed_size: u32le(bytes, at + 20) as usize,
+        });
         at = from + name_len + extra_len + comment_len;
     }
-    Some(names)
+    Some(out)
+}
+
+/// The member names, which is all most callers want.
+pub fn member_names(bytes: &[u8]) -> Option<Vec<String>> {
+    Some(entries(bytes)?.into_iter().map(|e| e.name).collect())
+}
+
+/// The bytes of one member, matched at the archive root and case-insensitively, which is
+/// how `FUN_0060d88c` looks a member up. `None` is what makes the meta step abort.
+pub fn read_member(bytes: &[u8], wanted: &str) -> Option<Vec<u8>> {
+    let found = entries(bytes)?;
+    let entry = found.iter().find(|e| e.name.eq_ignore_ascii_case(wanted))?;
+    let header = bytes.get(entry.local_at..entry.local_at + 30)?;
+    if header[0..4] != [0x50, 0x4b, 0x03, 0x04] {
+        return None;
+    }
+    let name_len = u16le(header, 26) as usize;
+    let extra_len = u16le(header, 28) as usize;
+    let from = entry.local_at + 30 + name_len + extra_len;
+    let to = from.checked_add(entry.compressed_size)?;
+    let data = bytes.get(from..to)?;
+    match entry.method {
+        0 => Some(data.to_vec()),
+        8 => crate::deflate::inflate(data),
+        _ => None,
+    }
 }
 
 /// The basename the original ends up comparing against, as observed.
@@ -254,6 +297,81 @@ pub fn has_pattern(names: &[String], pattern: &str) -> bool {
     names.iter().any(|n| extension_of(n).eq_ignore_ascii_case(wanted))
 }
 
+/// The ten meta keys `FUN_00611e78` looks for, from 0x61b5d0 onward. Each keeps its
+/// colon, and a line only has to start with one of them.
+pub const META_KEYS: [&str; 10] = [
+    "Area Name:",
+    "Base Year:",
+    "End Year:",
+    "Scope:",
+    "First Scenario Year:",
+    "Regions:",
+    "Scenarios:",
+    "Scenario Names:",
+    "Time Slices:",
+    "User Variables:",
+];
+
+/// Port of `FUN_00611da8`: does this line begin with one of the meta keys? The compare
+/// is ASCII case-insensitive and the keys keep their colons, which `meta_prefix_only`
+/// shows: `Area Name` without a colon is not echoed.
+pub fn is_meta_line(line: &str) -> bool {
+    let bytes = line.as_bytes();
+    META_KEYS.iter().any(|key| {
+        let key = key.as_bytes();
+        bytes.len() >= key.len() && key.iter().zip(bytes).all(|(k, b)| k.eq_ignore_ascii_case(b))
+    })
+}
+
+/// Split the way the original string list does: on CRLF, on a lone CR, or on a lone LF.
+/// A final line with no terminator still counts, which `meta_no_final_newline` pins.
+fn meta_lines(text: &str) -> Vec<&str> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::new();
+    let mut start = 0;
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'\n' {
+            out.push(&text[start..i]);
+            i += 1;
+            start = i;
+        } else if bytes[i] == b'\r' {
+            out.push(&text[start..i]);
+            i += 1;
+            if i < bytes.len() && bytes[i] == b'\n' {
+                i += 1;
+            }
+            start = i;
+        } else {
+            i += 1;
+        }
+    }
+    if start < bytes.len() {
+        out.push(&text[start..]);
+    }
+    out
+}
+
+/// The meta lines the original echoes, in file order, each trimmed of the whitespace it
+/// trims and terminated with CRLF.
+pub fn meta_echo(bytes: &[u8]) -> String {
+    let data = match read_member(bytes, META_FILE) {
+        Some(data) => data,
+        None => return String::new(),
+    };
+    let text = String::from_utf8_lossy(&data);
+    let mut out = String::new();
+    for line in meta_lines(&text) {
+        // DELPHI Trim strips anything at or below the space character, at both ends.
+        let trimmed = line.trim_matches(|c: char| c <= ' ');
+        if is_meta_line(trimmed) {
+            out.push_str(trimmed);
+            out.push_str("\r\n");
+        }
+    }
+    out
+}
+
 /// Run the chain over an in-memory archive.
 ///
 /// The original takes a filename and reads it from disk. This takes the bytes instead so
@@ -295,30 +413,30 @@ pub fn decide(bytes: &[u8]) -> Decision {
 pub fn messages(decision: &Decision, name: &str) -> String {
     match decision {
         Decision::NotZip => format!(
-            "File \"{}\" is not a valid leap file: not valid zip format ({}).\n",
+            "File \"{}\" is not a valid leap file: not valid zip format ({}).\r\n",
             name, CODE_NOT_ZIP
         ),
         Decision::UnsupportedVersion => format!(
-            "File \"{}\" is from an unsupported version of LEAP (pre-2012) ({}).\n",
+            "File \"{}\" is from an unsupported version of LEAP (pre-2012) ({}).\r\n",
             name, CODE_UNSUPPORTED_VERSION
         ),
         Decision::MissingRequired => format!(
-            "File \"{}\" is not valid: missing required data files ({}).\n",
+            "File \"{}\" is not valid: missing required data files ({}).\r\n",
             name, CODE_MISSING_REQUIRED
         ),
         Decision::ExecutableMember => format!(
-            "File \"{}\" is not valid: includes executable files ({}).\n",
+            "File \"{}\" is not valid: includes executable files ({}).\r\n",
             name, CODE_EXECUTABLE_MEMBER
         ),
         Decision::Passed { data_files, meta } => {
             let mut out = format!(
-                "File \"{}\" is a valid leap file containing {} data files.\n",
+                "File \"{}\" is a valid leap file containing {} data files.\r\n",
                 name, data_files
             );
             match meta {
                 Meta::Ok => {}
                 Meta::Missing => out.push_str(&format!(
-                    "File \"{}\" contains no meta information: missing sysinfo.txt.\n",
+                    "File \"{}\" contains no meta information: missing sysinfo.txt.\r\n",
                     name
                 )),
                 Meta::NotAtRoot => out.push_str(META_NOT_AT_ROOT),
@@ -333,16 +451,18 @@ pub fn report(bytes: &[u8], name: &str, flags: Flags) -> Report {
     let decision = decide(bytes);
     let code = decision.code();
     let aborted = matches!(decision, Decision::Passed { meta: Meta::NotAtRoot, .. });
+    let echo = if aborted || flags.nometa { String::new() } else { meta_echo(bytes) };
     let stdout = if !flags.short && !flags.quiet {
-        // The default mode prints the success line first and the abort after it, which
-        // `messages` already does.
-        messages(&decision, name)
+        // Default mode prints the success line, then the echoed meta lines, and the
+        // abort last when there is one, which `messages` already ends with.
+        messages(&decision, name) + &echo
     } else if aborted {
         // The runtime prints the exception itself, so neither flag suppresses it, and
         // the run never reaches the result line.
         META_NOT_AT_ROOT.to_string()
     } else if flags.short {
-        format!("Result: {}\n", code)
+        // `/S` does not suppress the echo, it just puts the result line after it.
+        echo + &format!("Result: {}\r\n", code)
     } else {
         String::new()
     };
@@ -352,5 +472,5 @@ pub fn report(bytes: &[u8], name: &str, flags: Flags) -> Report {
 /// The short-mode report for a caller that has only the bytes, and wants the verdict and
 /// the result line the `/S` flag produces.
 pub fn validate(bytes: &[u8]) -> Report {
-    report(bytes, "", Flags { quiet: false, short: true })
+    report(bytes, "", Flags { quiet: false, short: true, nometa: false })
 }

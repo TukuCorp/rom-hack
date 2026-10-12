@@ -32,6 +32,10 @@ import zipfile
 
 TESTLEAP = "C:/Program Files/LEAP/testleap.exe"
 
+# Cases whose sysinfo.txt is stored rather than deflated, to exercise both branches of
+# the reader.
+STORED = {"meta_stored"}
+
 # Order matters: this is the order the chain in entry tests them.
 REQUIRED = ["masterstructure.nx1", "areadata.nx1", "scenariodata.nx1",
             "staticdata.nx1", "scenariodata.nx1", "years.nx1"]
@@ -120,7 +124,7 @@ def vectors():
     return v
 
 
-def build(tmpdir, name, members, is_zip):
+def build(tmpdir, name, members, is_zip, sysinfo="x"):
     path = os.path.join(tmpdir, name + ".leap")
     if isinstance(is_zip, (bytes, bytearray)):
         with open(path, "wb") as fh:
@@ -130,16 +134,56 @@ def build(tmpdir, name, members, is_zip):
         with open(path, "wb") as fh:
             fh.write(b"this is not a zip archive at all")
         return path
-    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+    method = zipfile.ZIP_STORED if name in STORED else zipfile.ZIP_DEFLATED
+    with zipfile.ZipFile(path, "w", method) as zf:
         for member in members:
-            zf.writestr(member, "x")
+            zf.writestr(member, sysinfo if member == "sysinfo.txt" else "x")
     return path
 
 
+def meta_vectors():
+    """Vectors whose sysinfo.txt carries meta lines, to exercise the echo.
+
+    The tool prints a line from sysinfo.txt when, after trimming, it starts with one of
+    the ten known keys, case-insensitively. These probes pin the trimming, the case
+    folding, the colon in the key, duplicates, and the line splitting.
+    """
+    keys = ("Area Name:", "Base Year:", "End Year:", "Scope:", "First Scenario Year:",
+            "Regions:", "Scenarios:", "Scenario Names:", "Time Slices:",
+            "User Variables:")
+    out = []
+    out.append(("meta_echo_order", ["Time Slices: 12", "Area Name: VN", "Regions: 1"]))
+    out.append(("meta_no_keys", ["Version: 1", "Comment: hi"]))
+    out.append(("meta_case_fold", ["area name: vn", "BASE YEAR: 2020"]))
+    out.append(("meta_leading_space",
+                ["  Area Name: indented", chr(9) + "Base Year: tabbed"]))
+    out.append(("meta_prefix_only",
+                ["Area Name", "Area Name:", "Area Names: x", "Area Name: ok"]))
+    out.append(("meta_duplicate", ["Area Name: one", "Area Name: two"]))
+    out.append(("meta_empty_value", ["Area Name:", "Base Year: "]))
+    out.append(("meta_cr_only",
+                ["Area Name: vn" + chr(13) + "Base Year: 2020"]))
+    out.append(("meta_no_final_newline",
+                ["Area Name: vn" + chr(10) + "Base Year: 2020"]))
+    out.append(("meta_all_keys", [k + " v" for k in keys]))
+    out.append(("meta_near_keys",
+                ["Area Names: x", "Base Years: y", "Scopes: z", "Region: w"]))
+    out.append(("meta_blank_lines",
+                ["", "Area Name: vn", "", "Base Year: 2020", ""]))
+    # A long, repetitive body so the deflate stream really uses back-references. Without
+    # it the tiny bodies above never exercise the match path of the inflater.
+    out.append(("meta_long",
+                ["Area Name: " + ("sector " * 40) + str(i) for i in range(1, 61)]))
+    # Stored, not deflated, so the uncompressed branch is exercised too.
+    out.append(("meta_stored", ["Area Name: stored", "Base Year: 2021"]))
+    return out
+
+
 def run(cwd, args):
-    p = subprocess.run([TESTLEAP] + args, cwd=cwd, capture_output=True, text=True,
-                       timeout=60)
-    return p.returncode, (p.stdout or "")
+    # Bytes, not text. Text mode translates CRLF to LF, which would quietly weaken the
+    # parity claim, and the original writes CRLF.
+    p = subprocess.run([TESTLEAP] + args, cwd=cwd, capture_output=True, timeout=60)
+    return p.returncode, (p.stdout or b"").decode("latin-1")
 
 
 def esc(s):
@@ -169,20 +213,26 @@ def main():
         return 1
 
     tmpdir = tempfile.mkdtemp(prefix="leap_containervec_")
+    work = [(name, members, is_zip, "x") for name, members, is_zip in vectors()]
+    for name, lines in meta_vectors():
+        work.append((name, list(REQUIRED) + ["sysinfo.txt"], True,
+                     chr(10).join(lines) + chr(10)))
+
     rows = []
-    for name, members, is_zip in vectors():
-        build(tmpdir, name, members, is_zip)
+    for name, members, is_zip, sysinfo in work:
+        build(tmpdir, name, members, is_zip, sysinfo)
         arg = name + ".leap"
         code_d, out_d = run(tmpdir, [arg])
         code_s, out_s = run(tmpdir, [arg, "/S"])
         code_q, out_q = run(tmpdir, [arg, "/Q"])
-        if not (code_d == code_s == code_q):
-            print("verdict differs between modes for %s: %d %d %d"
-                  % (name, code_d, code_s, code_q), file=sys.stderr)
+        code_n, out_n = run(tmpdir, [arg, "/N"])
+        if not (code_d == code_s == code_q == code_n):
+            print("verdict differs between modes for %s: %d %d %d %d"
+                  % (name, code_d, code_s, code_q, code_n), file=sys.stderr)
             return 1
         with open(os.path.join(tmpdir, arg), "rb") as fh:
             payload = fh.read()
-        rows.append((name, payload, code_d, out_d, out_s, out_q, members or []))
+        rows.append((name, payload, code_d, out_d, out_s, out_q, out_n, members or []))
 
     q = chr(34)
     # The file name is part of the captured message, so two cases differing only in case
@@ -195,33 +245,36 @@ def main():
 
     with open(args.out, "w", encoding="utf-8") as fh:
         fh.write("// GENERATED by tools/capture_container_oracle.py -- do not edit by hand." + chr(10))
-        fh.write("// Ground truth captured by running the original testleap.exe three ways," + chr(10))
+        fh.write("// Ground truth captured by running the original testleap.exe four ways," + chr(10))
         fh.write("// with the file given as a relative name from the temp dir it sits in." + chr(10))
         fh.write("//" + chr(10))
         fh.write("// One vector per line:" + chr(10))
         fh.write("//   (case name, exact input bytes as lowercase hex, exit code," + chr(10))
-        fh.write("//    default-mode stdout, /S stdout, /Q stdout)" + chr(10))
+        fh.write("//    default stdout, /S stdout, /Q stdout, /N stdout)" + chr(10))
         fh.write("//" + chr(10))
-        fh.write("// The bytes are stored verbatim so the test replays the exact archives" + chr(10))
-        fh.write("// the verdicts were captured from, with nothing reconstructed. The path" + chr(10))
-        fh.write("// inside the messages is always <case>.leap." + chr(10))
-        fh.write("pub const CONTAINER_VECTORS: &[(&str, &str, i32, &str, &str, &str)] = &[" + chr(10))
-        for name, payload, code, out_d, out_s, out_q, members in rows:
+        fh.write("// The bytes and the stdout are stored verbatim, exactly as produced, with" + chr(10))
+        fh.write("// CRLF preserved. Nothing is reconstructed and nothing is normalised. The" + chr(10))
+        fh.write("// path inside the messages is always <case>.leap." + chr(10))
+        fh.write("pub const CONTAINER_VECTORS: &[(&str, &str, i32, &str, &str, &str, &str)] = &[" + chr(10))
+        for name, payload, code, out_d, out_s, out_q, out_n, members in rows:
             fh.write("    // %s" % (", ".join(members) if members else "raw payload"))
             fh.write(chr(10))
             cells = (q + name + q, q + payload.hex() + q, str(code),
-                     q + esc(out_d) + q, q + esc(out_s) + q, q + esc(out_q) + q)
+                     q + esc(out_d) + q, q + esc(out_s) + q, q + esc(out_q) + q,
+                     q + esc(out_n) + q)
             fh.write("    (" + ", ".join(cells) + "),")
             fh.write(chr(10))
         fh.write("];" + chr(10))
 
     print("wrote %s with %d vectors" % (args.out, len(rows)))
     hist = {}
-    for name, payload, code, out_d, out_s, out_q, members in rows:
+    for _, _, code, _, _, _, _, _ in rows:
         hist[code] = hist.get(code, 0) + 1
     print("exit-code histogram: %s" % sorted(hist.items()))
     empty_q = sum(1 for r in rows if r[5] == "")
     print("vectors with empty /Q output: %d of %d" % (empty_q, len(rows)))
+    echoed = sum(1 for r in rows if r[3].count(chr(13) + chr(10)) > 1)
+    print("vectors whose default output exceeds the File line: %d" % echoed)
     return 0
 
 

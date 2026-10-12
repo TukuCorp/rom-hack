@@ -35,11 +35,13 @@ pieces are bit-for-bit equivalent to the original; it does not mean LEAP has bee
 hand. The tool drives Ghidra `/emulate_function` on the original image, so every
 vector is output of the original itself rather than a re-derivation of it.
 
-Current corpus: **310** `IS_LEAP_YEAR_VECTORS`, **487** `DAY_NUMBER_VECTORS` and **113**
+Current corpus: **310** `IS_LEAP_YEAR_VECTORS`, **487** `DAY_NUMBER_VECTORS` and **127**
 `CONTAINER_VECTORS`. The container oracle is captured a different way: it runs the real
 `testleap.exe` over generated archives and stores the exact input bytes, the exit code,
-and the whole of stdout for each of the three output modes. That is 113 archives times
-three modes, every one of them compared byte for byte.
+and the whole of stdout for each of the four output modes, CRLF included. That is 127
+archives times four modes, every one of them compared byte for byte. The stdout is kept
+as bytes rather than text, because text mode would translate CRLF to LF and quietly
+weaken the claim.
 
 That corpus is corroborated outside this crate: section 2c of
 `../leap-year-verification.html` records live Frida instrumentation in which the
@@ -69,6 +71,8 @@ The container validator is a chain rather than one function, so it names each pi
 | `0x0060df1c` | member lookup asked of the zip library | `container::has_member`, `container::has_pattern` |
 | `0x00610058` | opens the archive; false means not a zip | `container::member_names` |
 | `0x00611e78` | the meta check that sets verdict 7 | inside `container::decide` |
+| `0x00611da8` | the meta-line echo | `container::is_meta_line`, `container::meta_echo` |
+| `0x0060d88c` | member extraction by exact name | `container::read_member` |
 | `0x61b414` | the `Result: %d` line the `/S` flag prints | `container::report` |
 
 Its verdict order is 5 (not a zip), 1 (holds `masterstructure.db`, the pre-2012 layout),
@@ -80,6 +84,15 @@ test drops exactly one trailing dot first, so `tool.exe.` is flagged while `tool
 is not. Vectors pin both.
 
 The original also changes what it prints based on its flags, and the port models that with
+The meta step also echoes the model metadata. `FUN_00611e78` takes the lines of
+`sysinfo.txt` and prints the ones that begin with one of ten keys, which is how the area
+name, base year, scope, regions, scenarios and time slices can be read back out of a
+`.leap` file. The comparison is case-insensitive and keeps the colon, so `Area Name` with
+no colon is not echoed, leading whitespace is trimmed before printing, and `/Q` and `/N`
+suppress the echo while `/S` does not. Reproducing it means reading member contents, and
+the archives are deflated, so `src/deflate.rs` carries a raw DEFLATE decoder written for
+this crate. It stays dependency-free, like the rest of the crate.
+
 `container::Flags`: the default prints one message per file, `/S` prints a single
 `Result: <code>` line instead, and `/Q` prints nothing at all. The abort above is the one
 exception, because the runtime prints it even under `/Q` or `/S` and the run never
