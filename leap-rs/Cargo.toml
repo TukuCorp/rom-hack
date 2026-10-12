@@ -1,0 +1,13 @@
+[package]
+name = "leap-rs"
+version = "0.1.0"
+edition = "2021"
+description = "Function-for-function Rust port of the LEAP computational core, headless, for agentic control"
+
+# Deliberately dependency-free: the parity oracle is generated Rust source, so the
+# crate builds and tests hermetically with no registry access.
+[dependencies]
+
+[profile.release]
+overflow-checks = true
+

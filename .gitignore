@@ -62,5 +62,7 @@ _fm*.leap
 # probe family cannot leak into a commit the way _ext_/_mx_/_fm_ did.
 _probes/
 .venv-frida/
+# Rust build output for the headless LEAP port crate.
+leap-rs/target/
 __pycache__/
 .commit-msg.tmp
