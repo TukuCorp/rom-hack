@@ -187,12 +187,27 @@ pinned:
 3. run the RC4 key schedule over that and reset the running words,
 4. walk the data eight bytes at a time as above.
 
-So the spec is complete, and what remains is not more reading. It is three assumptions to
-test against the empty template: that the password is the literal `nx1xdefault`, that the
-eight bytes at header offset `0x08` are the two chain words stored plainly, and which of the
-two decompiled views of the object offsets is the right one. Any of the three being wrong
-makes the plaintext noise, which is the signal this started with, so the test is cheap and
-decisive either way.
+## The implementation was written, and it does not decode
+
+The whole recipe was then written out and pointed at a block of the empty template, first as
+four candidates and then as a sweep of seventy-two. The sweep varies the password between the
+two spellings and empty, the chain words between three header offsets and two byte orders,
+the block function between its two directions, and whether the RC4 schedule carries its final
+index forward. The best result was 26 zero bytes out of 4096 against a baseline of 18, which
+is what randomness looks like, and nothing else came close.
+
+So the failure is structural rather than parametric: at least one of my readings of the round
+layout, the key schedule, or the chain seeding is wrong in a way that no variation of those
+four things can fix. That is worth stating plainly because it is the boundary of what reading
+the decompiled C alone can settle. The remaining ambiguities are exactly the ones the
+decompiler could not type for me, the `longlong` against `undefined8 *` views of the same
+object and the eight byte disagreement between the S-box offsets, and resolving those needs
+the disassembly rather than the C.
+
+That is available, but not from here: the Ghidra project with `leap.exe` analysed exists, and
+loading it needs memory this machine does not have. So the direct route to the tables is
+gated on the same resource as everything else on the model, which means both routes now have
+a named, evidence-backed blocker rather than a vague one.
 
 ## What that means
 
