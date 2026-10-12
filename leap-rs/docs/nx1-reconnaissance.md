@@ -166,9 +166,33 @@ the counter value must be written into the file, and it is: the file header hold
 at offset `0x08` that look scrambled and are exactly the right size. Those are almost
 certainly the two stored words, and reading them is the first step of any decryption.
 
-So what is left is small and specific: the rest of the Blowfish expansion after the P XORs,
-exactly how the header stores those eight bytes, and the 8 byte offset ambiguity. The recipe
-is otherwise complete.
+## The complete recipe
+
+The Blowfish expansion is standard to the end. `FUN_01533440` XORs each of the eighteen P
+words with four key bytes taken cyclically, then runs nine expansion steps to fill P and
+512 to fill the four S-boxes, each step using the inverse block step and carrying its output
+forward as the next input. So the variant block function exists in both directions, and the
+key schedule is the published one.
+
+The decryption driver is `FUN_01533e30`, and reading it closes the loop. Per eight byte block
+it folds the ciphertext into the running words, undoes the chaining by XORing with the
+previous word pair, applies the inverse block step, XORs with two RC4 words, writes the
+plaintext over the input, and carries the recovered plaintext forward as the next chain
+value. That is the exact inverse of `FUN_01533880`, and between the two the construction is
+pinned:
+
+1. key the P and S words from the password bytes with the Blowfish schedule,
+2. take the two chain words, which for decryption come from the file, and expand them into a
+   256 byte RC4 key with thirty-two inverse block steps over an incrementing counter,
+3. run the RC4 key schedule over that and reset the running words,
+4. walk the data eight bytes at a time as above.
+
+So the spec is complete, and what remains is not more reading. It is three assumptions to
+test against the empty template: that the password is the literal `nx1xdefault`, that the
+eight bytes at header offset `0x08` are the two chain words stored plainly, and which of the
+two decompiled views of the object offsets is the right one. Any of the three being wrong
+makes the plaintext noise, which is the signal this started with, so the test is cheap and
+decisive either way.
 
 ## What that means
 
