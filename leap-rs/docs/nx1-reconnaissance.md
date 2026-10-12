@@ -138,10 +138,37 @@ XORs the buffer against the resulting keystream. So the scheme is self-keying: t
 supplies its own key material, and the password's role is somewhere else again, most likely in
 seeding the Blowfish half.
 
-So the remainder is the Blowfish P and S derivation, wherever the initial chaining words come
-from, and the 8-byte offset ambiguity noted above. That is three specific things rather than a
-search, but they are three more turns of reading before a port can even be attempted, and the
-last two of my six turns on this have produced structure rather than a reader.
+## The key schedule, and where the initial state comes from
+
+Three more reads close most of the gap, and one of them is a genuine surprise.
+
+`FUN_01533440` is the standard Blowfish key expansion: it takes a key and its length from the
+object, and XORs each of the eighteen P words with four consecutive key bytes taken cyclically.
+`FUN_01533580` shuffles the P array, forty-eight bytes, and the four S-boxes, four thousand and
+ninety-six, between the object and a pair of globals, which is how the default constants get
+restored after a keyed table has been used.
+
+`FUN_015335c0` derives the RC4 key. It takes the two chaining words, runs thirty-two
+iterations of the inverse block step over an incrementing counter to expand them into a
+256 byte key, runs the RC4 key schedule over that, zeroes the running words, and seeds two
+more words from the first two RC4 outputs. So the RC4 key is not the password either: it is
+derived from the two chaining words, which is why the key length assertion was for 128 or 256
+bytes rather than the eleven bytes of `nx1xdefault`.
+
+And the surprise is where those two words come from when encrypting. `FUN_01534140` reads
+`QueryPerformanceCounter` into them, transforms them with the block step keyed from the
+password, and only then derives everything else. So a table is seeded from the clock, which
+means the keystream cannot be reproduced from the password alone.
+
+That is not a dead end, because `FUN_015341e0` is the other direction: it takes the two words
+as arguments, stores them at `0x1071` and `0x1075`, and derives the same state from them. So
+the counter value must be written into the file, and it is: the file header holds eight bytes
+at offset `0x08` that look scrambled and are exactly the right size. Those are almost
+certainly the two stored words, and reading them is the first step of any decryption.
+
+So what is left is small and specific: the rest of the Blowfish expansion after the P XORs,
+exactly how the header stores those eight bytes, and the 8 byte offset ambiguity. The recipe
+is otherwise complete.
 
 ## What that means
 
