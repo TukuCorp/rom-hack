@@ -181,6 +181,49 @@ fn u32le(b: &[u8], at: usize) -> u32 {
     u32::from_le_bytes([b[at], b[at + 1], b[at + 2], b[at + 3]])
 }
 
+fn u64le(b: &[u8], at: usize) -> u64 {
+    let mut v = 0u64;
+    for k in 0..8 {
+        v |= (b[at + k] as u64) << (8 * k);
+    }
+    v
+}
+
+/// Pull the real figures out of a zip64 extra field.
+///
+/// `needed` says which of uncompressed size, compressed size, local header offset and
+/// disk number were written as placeholders. The field carries exactly those, in that
+/// order, eight bytes each except the disk number at four.
+fn zip64_values(extra: &[u8], needed: [bool; 4]) -> [u64; 4] {
+    const ZIP64_ID: u16 = 0x0001;
+    let mut out = [0u64; 4];
+    let mut at = 0;
+    while at + 4 <= extra.len() {
+        let id = u16le(extra, at);
+        let size = u16le(extra, at + 2) as usize;
+        let body = match extra.get(at + 4..at + 4 + size) {
+            Some(body) => body,
+            None => break,
+        };
+        if id == ZIP64_ID {
+            let mut read = 0;
+            for (slot, wanted) in needed.iter().enumerate() {
+                let width = if slot == 3 { 4 } else { 8 };
+                if !wanted {
+                    continue;
+                }
+                if read + width > body.len() {
+                    break;
+                }
+                out[slot] = u64le(body, read) & if width == 4 { 0xFFFF_FFFF } else { u64::MAX };
+                read += width;
+            }
+        }
+        at += 4 + size;
+    }
+    out
+}
+
 /// One central-directory record: what the archive holds, and where its bytes begin.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
@@ -210,9 +253,26 @@ pub fn entries(bytes: &[u8]) -> Option<Vec<Entry>> {
     let start = len - window;
     let eocd = (start..=len - 22).rev().find(|&i| bytes[i..i + 4] == EOCD)?;
 
-    let count = u16le(bytes, eocd + 10) as usize;
-    let cd_size = u32le(bytes, eocd + 12) as usize;
-    let cd_at = u32le(bytes, eocd + 16) as usize;
+    let mut count = u16le(bytes, eocd + 10) as usize;
+    let mut cd_size = u32le(bytes, eocd + 12) as usize;
+    let mut cd_at = u32le(bytes, eocd + 16) as usize;
+
+    // The maximum of a field cannot be told apart from "too large to fit", so when any of
+    // these is the maximum the real figures live in a zip64 record. The vendor reads such
+    // archives, and a .leap file large enough to need one is not far fetched, so this does
+    // too rather than calling them invalid.
+    if count == 0xFFFF || cd_size == 0xFFFF_FFFF || cd_at == 0xFFFF_FFFF {
+        const LOCATOR: [u8; 4] = [0x50, 0x4b, 0x06, 0x07];
+        const RECORD: [u8; 4] = [0x50, 0x4b, 0x06, 0x06];
+        let locator = (0..eocd).rev().find(|&i| i + 20 <= eocd && bytes[i..i + 4] == LOCATOR)?;
+        let record = u64le(bytes, locator + 8) as usize;
+        if record + 56 > len || record + 4 > len || bytes[record..record + 4] != RECORD {
+            return None;
+        }
+        count = u64le(bytes, record + 32) as usize;
+        cd_size = u64le(bytes, record + 40) as usize;
+        cd_at = u64le(bytes, record + 48) as usize;
+    }
     if cd_at.checked_add(cd_size)? > len {
         return None;
     }
@@ -230,11 +290,32 @@ pub fn entries(bytes: &[u8]) -> Option<Vec<Entry>> {
         if from + name_len > len {
             return None;
         }
+        let mut local_at = u32le(bytes, at + 42) as usize;
+        let mut compressed_size = u32le(bytes, at + 20) as usize;
+        if local_at == 0xFFFF_FFFF || compressed_size == 0xFFFF_FFFF {
+            let extra_at = from + name_len;
+            let extra = bytes.get(extra_at..extra_at + extra_len)?;
+            let values = zip64_values(
+                extra,
+                [
+                    u32le(bytes, at + 24) == 0xFFFF_FFFF,
+                    compressed_size == 0xFFFF_FFFF,
+                    local_at == 0xFFFF_FFFF,
+                    u16le(bytes, at + 34) == 0xFFFF,
+                ],
+            );
+            if compressed_size == 0xFFFF_FFFF {
+                compressed_size = values[1] as usize;
+            }
+            if local_at == 0xFFFF_FFFF {
+                local_at = values[2] as usize;
+            }
+        }
         out.push(Entry {
             name: String::from_utf8_lossy(&bytes[from..from + name_len]).into_owned(),
             method: u16le(bytes, at + 10),
-            local_at: u32le(bytes, at + 42) as usize,
-            compressed_size: u32le(bytes, at + 20) as usize,
+            local_at,
+            compressed_size,
         });
         at = from + name_len + extra_len + comment_len;
     }

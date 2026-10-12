@@ -17,6 +17,11 @@ import sys
 import tempfile
 import zipfile
 
+# The zip64 shapes need byte surgery, so the sweep borrows the helpers the container
+# capture uses rather than growing a second copy that could drift.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from capture_container_oracle import to_zip64_entry, to_zip64_eocd
+
 REQ = ["masterstructure.nx1", "areadata.nx1", "scenariodata.nx1", "staticdata.nx1",
        "scenariodata.nx1", "years.nx1"]
 ETERNA = ["a.txt", "b.csv", "data", "tool.exe", "x.php", "sub/tool.msc",
@@ -63,6 +68,14 @@ def edge_cases(path_dir):
     add("e_no_local_headers", base)
     add("e_db_and_meta", base + [("masterstructure.db", b"x")])
     add("e_forbidden_and_missing", [("a.txt", b"x"), ("b.php", b"x")])
+
+    # The zip64 shapes, which a normal writer will not produce for a small archive.
+    for name, surgery in (("e_zip64_eocd", to_zip64_eocd),
+                          ("e_zip64_entry", lambda p: to_zip64_entry(p, 6))):
+        filename = name + ".leap"
+        write_zip(os.path.join(path_dir, filename), base)
+        surgery(os.path.join(path_dir, filename))
+        out.append(filename)
     return out
 
 

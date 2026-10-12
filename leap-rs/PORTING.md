@@ -35,7 +35,7 @@ pieces are bit-for-bit equivalent to the original; it does not mean LEAP has bee
 hand. The tool drives Ghidra `/emulate_function` on the original image, so every
 vector is output of the original itself rather than a re-derivation of it.
 
-Current corpus: **310** `IS_LEAP_YEAR_VECTORS`, **487** `DAY_NUMBER_VECTORS`, **130**
+Current corpus: **310** `IS_LEAP_YEAR_VECTORS`, **487** `DAY_NUMBER_VECTORS`, **132**
 `CONTAINER_VECTORS`, **12** `DEFLATE_VECTORS` and **14** `RUN_VECTORS`. The last three
 are captured a different way: they run the real `testleap.exe` and store the exact input
 bytes, the exit code, and the whole of stdout for each of the four output modes, CRLF
@@ -144,9 +144,10 @@ nothing at all.
 `tools/differential_sweep.py` is the broadest check here, and it is a tool rather than a
 test because it needs Python and the vendor binary. It builds archives nobody chose,
 including awkward ones: backslashes and unicode in names, case-variant duplicates, empty
-names, trailing dots and spaces, directory entries, zip64, archive comments, and random
-mixes. Then it runs both programs over 85 argument lists and diffs the exit code and the
-whole of stdout. On the current build it reports 0 divergences over 78 archives.
+names, trailing dots and spaces, directory entries, both zip64 shapes, archive comments,
+and random mixes. Then it runs both programs over 87 argument lists and diffs the exit
+code and the whole of stdout. On the current build it reports 0 divergences over 80
+archives.
 
 Two rules came out of it that no hand-picked vector had reached.
 
@@ -158,6 +159,15 @@ Two rules came out of it that no hand-picked vector had reached.
 * A directory entry, meaning a name ending in a slash, is not counted as a data file. An
   archive of six data members, `sysinfo.txt` and one trailing-slash entry is reported as
   seven. `dup_directory` pins that.
+
+The sweep also caught the reader rejecting zip64 outright while the vendor read it. A
+.leap large enough to need zip64 is not far fetched, so `entries` now resolves the
+figures from the zip64 end-of-directory record, and from the per-entry extra field when a
+central entry carries the maximum value as a placeholder for its size or its local header
+offset. Neither shape occurs in a small archive written normally, so the capture script
+produces both by byte surgery on the written file, and `zip64_eocd` and `zip64_entry` pin
+them. The second one placeholders the `sysinfo.txt` entry, so the member read has to
+resolve the placeholder before it can echo anything.
 
 One divergence is left, and it is deliberate. Give the vendor a member whose basename is
 empty, either a name of `""` or a name of `"/"`, and it dereferences a null and dies with

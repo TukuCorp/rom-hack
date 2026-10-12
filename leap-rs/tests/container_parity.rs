@@ -28,7 +28,7 @@ fn display_name(case: &str) -> String {
 
 #[test]
 fn the_oracle_covers_every_verdict() {
-    assert_eq!(CONTAINER_VECTORS.len(), 130);
+    assert_eq!(CONTAINER_VECTORS.len(), 132);
     assert_eq!(FORBIDDEN_PATTERNS.len(), 27);
     assert_eq!(META_KEYS.len(), 10);
     let mut seen: Vec<i32> = CONTAINER_VECTORS.iter().map(|v| v.2).collect();

@@ -25,6 +25,7 @@ deterministic and reproducible by the port. Writes src/oracle_container.rs.
 
 import argparse
 import os
+import struct
 import subprocess
 import sys
 import tempfile
@@ -45,6 +46,71 @@ FORBIDDEN = ["*.exe", "*.com", "*.bat", "*.js", "*.cgi", "*.asp", "*.aspx",
              "*.php", "*.vbs", "*.htm", "*.html", "*.cmd", "*.sql", "*.vb",
              "*.vbscript", "*.wsf", "*.ws", "*.paf", "*.pif", "*.msi", "*.msp",
              "*.mst", "*.msc", "*.inf", "*.ins", "*.cpl", "*.command"]
+
+
+# Archives that need byte surgery after zlib and zipfile have written them, because a
+# normal writer will not produce the zip64 shapes for a small archive. Both helpers are
+# shared with tools/differential_sweep.py so the two cannot drift apart.
+ZIP64_EOCD = {"zip64_eocd", "zip64_entry"}
+ZIP64_ENTRY = {"zip64_entry"}
+ZIP64_ENTRY_INDEX = 6
+
+
+def to_zip64_eocd(path):
+    """Move the end of central directory figures into a zip64 record and leave the
+    maximum values behind as placeholders."""
+    raw = bytearray(open(path, "rb").read())
+    at = raw.rfind(bytes([0x50, 0x4b, 5, 6]))
+    if at < 0:
+        raise SystemExit("no end of central directory in " + path)
+    entries = struct.unpack_from("<H", raw, at + 10)[0]
+    cd_size = struct.unpack_from("<I", raw, at + 12)[0]
+    cd_at = struct.unpack_from("<I", raw, at + 16)[0]
+    del raw[at:]
+
+    record = bytearray()
+    record += struct.pack("<I", 0x06064B50)
+    record += struct.pack("<Q", 44)
+    record += struct.pack("<HH", 45, 45)
+    record += struct.pack("<II", 0, 0)
+    record += struct.pack("<QQ", entries, entries)
+    record += struct.pack("<QQ", cd_size, cd_at)
+    record_at = len(raw)
+    raw += record
+    raw += struct.pack("<IIQI", 0x07064B50, 0, record_at, 1)
+    raw += struct.pack("<IHHHHIIH", 0x06054B50, 0, 0, 0xFFFF, 0xFFFF,
+                       0xFFFFFFFF, 0xFFFFFFFF, 0)
+    open(path, "wb").write(bytes(raw))
+
+
+def to_zip64_entry(path, index):
+    """Rewrite one central entry so its compressed size and local header offset become
+    the zip64 placeholders, with the real values moved into a zip64 extra field."""
+    raw = bytearray(open(path, "rb").read())
+    eocd = raw.rfind(bytes([0x50, 0x4b, 5, 6]))
+    cd_size = struct.unpack_from("<I", raw, eocd + 12)[0]
+    at = struct.unpack_from("<I", raw, eocd + 16)[0]
+    for _ in range(index):
+        name_len = struct.unpack_from("<H", raw, at + 28)[0]
+        extra_len = struct.unpack_from("<H", raw, at + 30)[0]
+        comment_len = struct.unpack_from("<H", raw, at + 32)[0]
+        at += 46 + name_len + extra_len + comment_len
+
+    name_len = struct.unpack_from("<H", raw, at + 28)[0]
+    extra_len = struct.unpack_from("<H", raw, at + 30)[0]
+    compressed = struct.unpack_from("<I", raw, at + 20)[0]
+    local = struct.unpack_from("<I", raw, at + 42)[0]
+
+    extra = struct.pack("<HHQQ", 0x0001, 16, compressed, local)
+    insert_at = at + 46 + name_len + extra_len
+    raw[insert_at:insert_at] = extra
+    struct.pack_into("<H", raw, at + 30, extra_len + 20)
+    struct.pack_into("<I", raw, at + 20, 0xFFFFFFFF)
+    struct.pack_into("<I", raw, at + 42, 0xFFFFFFFF)
+
+    eocd += 20
+    struct.pack_into("<I", raw, eocd + 12, cd_size + 20)
+    open(path, "wb").write(bytes(raw))
 
 
 def vectors():
@@ -136,6 +202,11 @@ def duplicate_vectors():
         ("dup_last_is_plain", list(REQUIRED) + ["sysinfo.txt", "SYSINFO.TXT"], meta),
         ("dup_last_is_meta", list(REQUIRED) + ["SYSINFO.TXT", "sysinfo.txt"], meta),
         ("dup_directory", list(REQUIRED) + ["sysinfo.txt", "adir/"], "x"),
+        # The two zip64 shapes. The first moves the end of central directory figures into
+        # a zip64 record; the second also makes the sysinfo.txt entry use per-entry
+        # placeholders, so the member read has to resolve them to echo anything.
+        ("zip64_eocd", list(REQUIRED) + ["sysinfo.txt"], "x"),
+        ("zip64_entry", list(REQUIRED) + ["sysinfo.txt"], meta),
     ]
 
 
@@ -153,6 +224,10 @@ def build(tmpdir, name, members, is_zip, sysinfo="x"):
     with zipfile.ZipFile(path, "w", method) as zf:
         for member in members:
             zf.writestr(member, sysinfo if member == "sysinfo.txt" else "x")
+    if name in ZIP64_ENTRY:
+        to_zip64_entry(path, ZIP64_ENTRY_INDEX)
+    if name in ZIP64_EOCD:
+        to_zip64_eocd(path)
     return path
 
 
