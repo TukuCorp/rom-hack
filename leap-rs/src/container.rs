@@ -471,6 +471,43 @@ pub fn no_match_message(as_typed: &str) -> String {
     format!("No file(s) matching: \"{}\" ({}).\r\n", as_typed, CODE_NO_MATCH)
 }
 
+/// Port of the command-line scan: which arguments set a flag, and which are files.
+///
+/// The two halves use different tests, which the probes pinned down:
+///
+/// * A flag is recognised when, after dropping exactly one leading slash or dash, the
+///   rest matches `q`/`quiet`, `s`/`short`, `c`/`clean` or `n`/`nometa` ignoring case.
+///   So `/Q`, `/q`, `-Q` and `/quiet` all set quiet, while `Q`, `--quiet` and `/X` do not.
+/// * An argument leaves the file list only when its FIRST character is a slash. A dash
+///   does not count, so `-S` sets short and is then also treated as a filename, which the
+///   vendor really does: it answers `No file(s) matching: "-S" (-1)` for it.
+///
+/// `clean` needs no field here. Its only effect is to delete the file, and this port
+/// deletes nothing. It is still recognised, so `/C` is dropped from the file list the
+/// same way the vendor drops it.
+pub fn parse_arguments<'a>(args: &[&'a str]) -> (Flags, Vec<&'a str>) {
+    let mut flags = Flags::default();
+    let mut files = Vec::new();
+    for arg in args.iter().copied() {
+        match arg.strip_prefix('/').or_else(|| arg.strip_prefix('-')) {
+            Some(body) if body.eq_ignore_ascii_case("q") || body.eq_ignore_ascii_case("quiet") => {
+                flags.quiet = true;
+            }
+            Some(body) if body.eq_ignore_ascii_case("s") || body.eq_ignore_ascii_case("short") => {
+                flags.short = true;
+            }
+            Some(body) if body.eq_ignore_ascii_case("n") || body.eq_ignore_ascii_case("nometa") => {
+                flags.nometa = true;
+            }
+            _ => {}
+        }
+        if !arg.starts_with('/') {
+            files.push(arg);
+        }
+    }
+    (flags, files)
+}
+
 /// Port of the argument loop in `entry`.
 ///
 /// Every resolved file is run through the chain in argument order and its output is
@@ -480,14 +517,13 @@ pub fn no_match_message(as_typed: &str) -> String {
 /// alone, and prints one result line at the very end rather than one per file. An
 /// archive whose meta step aborts ends the whole run, printing no result line.
 ///
-/// Passing no inputs at all reproduces the usage text. Wildcard expansion is not here:
+/// An empty input list is not the usage. The vendor prints the usage only when it was
+/// handed no arguments at all, and an argument list made only of flags produces no
+/// output beyond the result line; [`usage`] is that separate report. Wildcard expansion is
+/// not here either:
 /// the order a filesystem hands back matches is not a property of the program, so the
 /// caller supplies each argument already resolved.
 pub fn run(inputs: &[Input<'_>], flags: Flags) -> Report {
-    if inputs.is_empty() {
-        return Report { code: 0, stdout: USAGE.to_string() };
-    }
-
     let mut stdout = String::new();
     let mut code = 0;
     let mut aborted = false;
@@ -540,6 +576,11 @@ pub fn run(inputs: &[Input<'_>], flags: Flags) -> Report {
         stdout.push_str(&format!("Result: {}\r\n", code));
     }
     Report { code, stdout }
+}
+
+/// What the program prints when it is handed no arguments at all.
+pub fn usage() -> Report {
+    Report { code: 0, stdout: USAGE.to_string() }
 }
 
 /// The whole of stdout for one archive, under the given flags.

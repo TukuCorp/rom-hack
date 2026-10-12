@@ -5,7 +5,7 @@
 //! code, what an argument that matches nothing does, and what "/S" does to a run of
 //! several files rather than to a single one.
 
-use leap_rs::container::{run, Flags, Input, USAGE};
+use leap_rs::container::{run, usage, Flags, Input, Report, USAGE};
 use leap_rs::oracle_run::{RUN_ARCHIVES, RUN_USAGE, RUN_USAGE_CODE, RUN_VECTORS};
 
 fn unhex(s: &str) -> Vec<u8> {
@@ -29,9 +29,16 @@ fn the_usage_text_matches_the_original() {
     assert_eq!(RUN_VECTORS.len(), 14);
     assert_eq!(RUN_ARCHIVES.len(), 3);
     assert_eq!(USAGE, RUN_USAGE, "the usage text should be verbatim");
-    let bare = run(&[], Flags::default());
+    let bare = usage();
     assert_eq!(bare.stdout, RUN_USAGE);
     assert_eq!(bare.code, RUN_USAGE_CODE);
+    // An argument list of nothing but flags is not the usage. It reaches the file loop,
+    // finds no files, and prints nothing at all unless /S asks for the result line.
+    assert_eq!(run(&[], Flags::default()), Report { code: 0, stdout: String::new() });
+    assert_eq!(
+        run(&[], Flags { short: true, ..Flags::default() }).stdout,
+        "Result: 0\r\n"
+    );
     // The usage is the leading bare newline then CRLF lines, which is worth stating
     // explicitly because it is the one place the newline is not CRLF.
     assert!(USAGE.starts_with('\n'));

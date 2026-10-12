@@ -99,8 +99,7 @@ rebuilds the expected bytes rather than storing them. Between them they force co
 a one byte distance, copies at a 32000 byte distance, stored blocks, incompressible data
 and four zlib levels, one of which reaches past the 32768 byte window.
 
-The argument loop is ported as well, so the crate reproduces the whole `TestLEAP`
-command line apart from wildcard expansion. `container::run` takes each argument already
+The argument loop is ported as well. `container::run` takes each argument already
 resolved to files, prints in argument order, and adopts the LAST verdict as the exit code
 rather than the worst one, so a bad file followed by a good one exits 0. `/S` suppresses
 the per-file success line while keeping the meta echo and the no-match message, and
@@ -109,16 +108,36 @@ meta step aborts ends the whole run and prints no result line. No arguments at a
 the usage text, reproduced verbatim in `container::USAGE` down to its leading bare
 newline, which is the one place the original does not write CRLF.
 
+`container::parse_arguments` reproduces the vendor scan, which has a wrinkle worth
+naming: a flag is recognised after dropping exactly ONE leading slash or dash, so `/Q`,
+`/q`, `-Q` and `/quiet` all set quiet, but an argument only leaves the file list when its
+first character is a SLASH. A dash does not count, so `-S` sets short and is then also
+treated as a filename, and the vendor really does answer
+`No file(s) matching: "-S" (-1)` for it. The crate also ships a `testleap` binary that
+reads the files and prints, so the port is usable on its own rather than only as a
+library.
+
 `container::Flags`: the default prints one message per file, `/S` prints a single
 `Result: <code>` line instead, and `/Q` prints nothing at all. The abort above is the one
 exception, because the runtime prints it even under `/Q` or `/S` and the run never
-reaches the result line, which is why a quiet run is not always silent. `/C` and `/N` are
-left out of `Flags` deliberately: the first deletes files and the second decides whether a
-`.meta` file is written, and this port performs no filesystem side effects.
+reaches the result line, which is why a quiet run is not always silent. `/C` is absent
+from `Flags` because its only effect is deletion, and this port deletes nothing. `/N` is
+modelled only for the change it makes to the output, because the meta file its help text
+promises is not written at all.
 
 This replaced an earlier behavioural model that assumed eight forbidden extensions and
 had no pre-2012 branch. Run against the same 113 vectors, that model disagreed with the
 binary on 56 of them.
+
+## Do not run the vendor tool with /C
+
+Measured on this build, `testleap /C <files>` deletes every file it inspects whatever the
+verdict: a valid archive that exits 0, one that only lacks its meta file, one that is not
+a zip, and one missing required members all disappear. The help text says it deletes
+disallowed LEAP files, and that is not what it does. If it has ever been pointed at a
+directory of real `.leap` files, they are gone. The port recognises the `/C` spelling only
+so that the argument leaves the file list where the vendor would remove it, and deletes
+nothing at all.
 
 ## Out of scope, on purpose
 
@@ -126,13 +145,11 @@ binary on 56 of them.
 - The VCL user interface, the TMS `TAdv*` components and TeeChart. The port is
   headless by design.
 - The NexusDB `.nx1` container that a `.leap` file is built from.
-- Wildcard expansion, the one part of the `TestLEAP` command line still not ported. The
-  order a filesystem hands back matching files is not a property of the program, so the
-  caller supplies each argument already resolved.
-- `/C` deletion, since the port performs no filesystem side effects at all. `/N` is
-  modelled for its observable effect on output. Its help text promises that a meta file is
-  otherwise generated, and that promise is not kept on this build: hashing a valid archive
-  before and after a default run shows the bytes unchanged.
+- Wildcard expansion inside the library. `container::run` takes each argument already
+  resolved, because the order a filesystem hands back matching files is a property of the
+  filesystem rather than of the program. The `testleap` binary does the expanding, in the
+  current directory, sorted by name.
+- `/C` deletion, deliberately rather than by oversight. See the warning above.
 - The embedded CPython 3.13 and the COM automation surface.
 - Anything requiring a LEAP licence. `../GHIDRA-LEAP.md` records that the shipped
   terms forbid reverse engineering and that the licence route is the sanctioned path;
@@ -154,7 +171,10 @@ To build or test, use the user-local GNU toolchain, which ships the MinGW runtim
     & $env:USERPROFILE\.cargo\bin\cargo.exe +stable-x86_64-pc-windows-gnu test --target x86_64-pc-windows-gnu
 
 The crate is deliberately dependency-free, so all of this is hermetic and needs no
-registry access.
+registry access. `cargo test` also builds the `testleap` binary, and
+`tests/vendor_e2e.rs` runs it against the vendor program over 41 argument lists,
+comparing the exit code and the whole of stdout byte for byte. That suite prints a note
+and passes when the vendor binary is not installed, so the crate still tests elsewhere.
 
 ## Adding a function
 
