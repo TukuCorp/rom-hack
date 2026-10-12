@@ -96,9 +96,33 @@ and each step folds the P word into the same expression as F, as
 `half ^= F(other) ^ P[k]`, instead of the standard separate `half ^= P[i]` at the head of a
 round. It closes with an XOR swap of the two halves. Seventeen F calls, eighteen P words.
 
-So the block step is specified exactly, and the only pieces still missing are the two key
-schedules: how the RC4 S-box is seeded, and how the P and S words are derived from the key.
-Those are the next functions to read, and they are the last of it.
+## The whole per-block recipe
+
+`FUN_01533880` is now read in full, so the construction is known end to end. Its state is six
+words, at `0x1060`, `0x1064`, `0x1071` and `0x1075`, plus a pointer to the RC4 object at
+`0x1058` and a flag byte at `0x1070`. Per eight-byte block it does this:
+
+1. keeps the two input words as they were,
+2. XORs each of them with four RC4 keystream bytes,
+3. applies the Blowfish-variant step above to the pair,
+4. XORs each result with the corresponding word of the PREVIOUS input block, which is
+   plaintext chaining rather than ciphertext chaining,
+5. folds both results into a running XOR in the `0x1060` and `0x1064` words, and writes the
+   output over the input.
+
+The two previous-input words are the state at `0x1071` and `0x1075`, so whatever seeds those
+is the initialisation vector, and the header is the likely source.
+
+## What is left
+
+Almost nothing, structurally. `FUN_015343d0` is the RC4 generator and `FUN_015344c0` is an
+identity fill of a 256 byte array at offset `0x108`, with the two index bytes zeroed. That
+offset is worth a second look, because the generator indexes its S-box from offset 8 instead,
+so the object appears to carry two 256 byte arrays and only one of them is the generator's.
+
+So the remainder is the two key schedules: mixing the key into the RC4 state, and deriving the
+P and S words for the Blowfish step, together with wherever the initial chaining words come
+from. All three are named shapes with addresses, not a search.
 
 ## What that means
 
