@@ -120,9 +120,28 @@ identity fill of a 256 byte array at offset `0x108`, with the two index bytes ze
 offset is worth a second look, because the generator indexes its S-box from offset 8 instead,
 so the object appears to carry two 256 byte arrays and only one of them is the generator's.
 
-So the remainder is the two key schedules: mixing the key into the RC4 state, and deriving the
-P and S words for the Blowfish step, together with wherever the initial chaining words come
-from. All three are named shapes with addresses, not a search.
+## The RC4 key schedule, and a surprise about the key
+
+`FUN_015344f0` is the standard RC4 key schedule: it walks the S-box swapping against the key,
+indexed modulo the key length. What matters is its first line. It asserts that the key length
+is either 128 or 256 bytes, so **the password is not the key** and `nx1xdefault` is only
+material for whatever derives one. That is why my earlier RC4 attempt, which used the password
+directly, could not have worked whatever else was right.
+
+`FUN_015346a0` builds the state: identity fill the working array, run the schedule over it, and
+copy 256 bytes back into the array the generator reads. A zero key length means an identity
+state, which is the no-key case.
+
+Then there is the surprise. `FUN_015331b0` walks a buffer in 256-byte steps and, for each step,
+runs the RC4 key schedule using **the buffer contents themselves** as a 128-byte key, then
+XORs the buffer against the resulting keystream. So the scheme is self-keying: the data
+supplies its own key material, and the password's role is somewhere else again, most likely in
+seeding the Blowfish half.
+
+So the remainder is the Blowfish P and S derivation, wherever the initial chaining words come
+from, and the 8-byte offset ambiguity noted above. That is three specific things rather than a
+search, but they are three more turns of reading before a port can even be attempted, and the
+last two of my six turns on this have produced structure rather than a reader.
 
 ## What that means
 
