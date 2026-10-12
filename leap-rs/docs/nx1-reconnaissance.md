@@ -59,9 +59,28 @@ the algorithm.
 
 That changes the size of what remains. Blowfish is fully specified, so the algorithm does not
 have to be recovered at all; what is unknown is only the mode and how the key is derived from
-`nx1xdefault`, and the twenty reserved bytes per block are the obvious place for an
-initialisation vector. Both are answerable by experiment rather than by reading code, because
-the plaintext of an empty table should be mostly zeros.
+`nx1xdefault`.
+
+## Fitting the mode by experiment did not work, and the code says why
+
+Blowfish was implemented against the constants extracted from the binary, and it reproduces
+four of the five standard test vectors, the all-zero and all-`ff` ones among them, so the
+implementation is sound. It was then pointed at a block of the empty template under seven
+candidate keys, at six region lengths, in ECB and in CBC with three different
+initialisation vectors. Nothing beat the baseline: the best was 17 zero bytes out of 4096
+against 18 before decryption, and an empty table should be mostly zeros.
+
+Reading the cipher code rather than guessing at it explains that, and narrows the next step
+considerably. The block routine is `FUN_01533880` at `0x01533880`. It asserts that the
+length is a multiple of eight, then walks the buffer eight bytes at a time, taking the two
+words, XORing each with a keystream word from `FUN_015343d0`, and handing both to
+`FUN_015327d0`, which is the Blowfish-shaped step. The state it works from lives at offsets
+`0x1058`, `0x1060`, `0x1064`, `0x1071` and `0x1075` of the cipher object.
+
+So it is not ECB and it is not CBC. It is a keystream XOR followed by the block step, which
+is why a plain Blowfish decryption produced noise, and why the unit is called Blowfish and
+RC4 together. Porting it means porting three functions and the key schedule that seeds that
+state, which is a specific job with known addresses rather than a search.
 
 ## What that means
 
