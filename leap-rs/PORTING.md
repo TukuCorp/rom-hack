@@ -35,8 +35,9 @@ pieces are bit-for-bit equivalent to the original; it does not mean LEAP has bee
 hand. The tool drives Ghidra `/emulate_function` on the original image, so every
 vector is output of the original itself rather than a re-derivation of it.
 
-Current corpus: **310** `IS_LEAP_YEAR_VECTORS`, **487** `DAY_NUMBER_VECTORS` and **127**
-`CONTAINER_VECTORS`. The container oracle is captured a different way: it runs the real
+Current corpus: **310** `IS_LEAP_YEAR_VECTORS`, **487** `DAY_NUMBER_VECTORS`, **127**
+`CONTAINER_VECTORS` and **12** `DEFLATE_VECTORS`. The container oracle is captured a
+different way: it runs the real
 `testleap.exe` over generated archives and stores the exact input bytes, the exit code,
 and the whole of stdout for each of the four output modes, CRLF included. That is 127
 archives times four modes, every one of them compared byte for byte. The stdout is kept
@@ -91,7 +92,13 @@ name, base year, scope, regions, scenarios and time slices can be read back out 
 no colon is not echoed, leading whitespace is trimmed before printing, and `/Q` and `/N`
 suppress the echo while `/S` does not. Reproducing it means reading member contents, and
 the archives are deflated, so `src/deflate.rs` carries a raw DEFLATE decoder written for
-this crate. It stays dependency-free, like the rest of the crate.
+this crate. It stays dependency-free, like the rest of the crate, and carries its own
+conformance corpus because the container vectors alone would not test it: their
+sysinfo.txt bodies are tiny. `tools/capture_deflate_oracle.py` compresses 12 plaintexts
+with zlib and stores each stream beside the recipe for its plaintext, so the test
+rebuilds the expected bytes rather than storing them. Between them they force copies at
+a one byte distance, copies at a 32000 byte distance, stored blocks, incompressible data
+and four zlib levels, one of which reaches past the 32768 byte window.
 
 `container::Flags`: the default prints one message per file, `/S` prints a single
 `Result: <code>` line instead, and `/Q` prints nothing at all. The abort above is the one
