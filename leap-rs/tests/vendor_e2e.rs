@@ -46,6 +46,11 @@ const WORKLOAD: &[(&str, &str)] = &[
     ("forbid.leap", "forbid_php"),
     ("echo.leap", "meta_echo_order"),
     ("empty.leap", "empty_zip"),
+    // The reader has to pick between candidates here, so these are the cases where a
+    // wrong rule shows up through the binary rather than only in the library.
+    ("dupplain.leap", "dup_last_is_plain"),
+    ("dupmeta.leap", "dup_last_is_meta"),
+    ("dirdata.leap", "dup_directory"),
 ];
 
 const ARGUMENT_LISTS: &[&[&str]] = &[

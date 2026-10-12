@@ -248,9 +248,14 @@ pub fn member_names(bytes: &[u8]) -> Option<Vec<String>> {
 
 /// The bytes of one member, matched at the archive root and case-insensitively, which is
 /// how `FUN_0060d88c` looks a member up. `None` is what makes the meta step abort.
+///
+/// The LAST match wins, not the first. An archive holding both `sysinfo.txt` and
+/// `SYSINFO.TXT` is read from whichever comes later, which the `dup_last_is_plain` and
+/// `dup_last_is_meta` vectors pin down in opposite directions. A nested name never wins
+/// however late it appears, because the match is on the whole root name.
 pub fn read_member(bytes: &[u8], wanted: &str) -> Option<Vec<u8>> {
     let found = entries(bytes)?;
-    let entry = found.iter().find(|e| e.name.eq_ignore_ascii_case(wanted))?;
+    let entry = found.iter().rev().find(|e| e.name.eq_ignore_ascii_case(wanted))?;
     let header = bytes.get(entry.local_at..entry.local_at + 30)?;
     if header[0..4] != [0x50, 0x4b, 0x03, 0x04] {
         return None;
@@ -394,7 +399,10 @@ pub fn decide(bytes: &[u8]) -> Decision {
         Some(names) => names,
         None => return Decision::NotZip,
     };
-    let data_files = names.len();
+    // Directory entries are not data files. The vendor counts 7 for an archive holding
+    // six data members, sysinfo.txt and one trailing-slash entry, so the count comes from
+    // the entries with something in them rather than from the directory.
+    let data_files = names.iter().filter(|name| !name.ends_with('/')).count();
 
     if has_member(&names, MASTER_DB) {
         return Decision::UnsupportedVersion;

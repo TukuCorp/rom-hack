@@ -35,7 +35,7 @@ pieces are bit-for-bit equivalent to the original; it does not mean LEAP has bee
 hand. The tool drives Ghidra `/emulate_function` on the original image, so every
 vector is output of the original itself rather than a re-derivation of it.
 
-Current corpus: **310** `IS_LEAP_YEAR_VECTORS`, **487** `DAY_NUMBER_VECTORS`, **127**
+Current corpus: **310** `IS_LEAP_YEAR_VECTORS`, **487** `DAY_NUMBER_VECTORS`, **130**
 `CONTAINER_VECTORS`, **12** `DEFLATE_VECTORS` and **14** `RUN_VECTORS`. The last three
 are captured a different way: they run the real `testleap.exe` and store the exact input
 bytes, the exit code, and the whole of stdout for each of the four output modes, CRLF
@@ -138,6 +138,33 @@ disallowed LEAP files, and that is not what it does. If it has ever been pointed
 directory of real `.leap` files, they are gone. The port recognises the `/C` spelling only
 so that the argument leaves the file list where the vendor would remove it, and deletes
 nothing at all.
+
+## The differential sweep
+
+`tools/differential_sweep.py` is the broadest check here, and it is a tool rather than a
+test because it needs Python and the vendor binary. It builds archives nobody chose,
+including awkward ones: backslashes and unicode in names, case-variant duplicates, empty
+names, trailing dots and spaces, directory entries, zip64, archive comments, and random
+mixes. Then it runs both programs over 85 argument lists and diffs the exit code and the
+whole of stdout. On the current build it reports 0 divergences over 78 archives.
+
+Two rules came out of it that no hand-picked vector had reached.
+
+* The member read takes the LAST case-insensitive match at the archive root, not the
+  first. An archive holding both `sysinfo.txt` and `SYSINFO.TXT` is read from whichever
+  was written later, so the meta echo depends on entry order. `dup_last_is_plain` and
+  `dup_last_is_meta` pin it in opposite directions. A nested name never wins, however
+  late it appears, because the match is on the whole root name.
+* A directory entry, meaning a name ending in a slash, is not counted as a data file. An
+  archive of six data members, `sysinfo.txt` and one trailing-slash entry is reported as
+  seven. `dup_directory` pins that.
+
+One divergence is left, and it is deliberate. Give the vendor a member whose basename is
+empty, either a name of `""` or a name of `"/"`, and it dereferences a null and dies with
+`EAccessViolation`. Safe Rust has no equivalent fault to reproduce, so the port treats
+such a name as matching nothing and carries on. The sweep keeps those two archives in a
+directory of their own so the main comparison stays a strict gate, and it fails if the
+vendor ever stops faulting, which would mean the carve-out had gone stale.
 
 ## Out of scope, on purpose
 

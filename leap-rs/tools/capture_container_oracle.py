@@ -124,6 +124,21 @@ def vectors():
     return v
 
 
+def duplicate_vectors():
+    """Archives that make the reader pick between candidates.
+
+    The vendor reads the LAST root match ignoring case, so which of two case-variant
+    sysinfo.txt entries holds the meta lines decides whether anything is echoed. And a
+    trailing-slash entry is a directory, which the data-file count leaves out.
+    """
+    meta = "Area Name: from sysinfo.txt" + chr(10)
+    return [
+        ("dup_last_is_plain", list(REQUIRED) + ["sysinfo.txt", "SYSINFO.TXT"], meta),
+        ("dup_last_is_meta", list(REQUIRED) + ["SYSINFO.TXT", "sysinfo.txt"], meta),
+        ("dup_directory", list(REQUIRED) + ["sysinfo.txt", "adir/"], "x"),
+    ]
+
+
 def build(tmpdir, name, members, is_zip, sysinfo="x"):
     path = os.path.join(tmpdir, name + ".leap")
     if isinstance(is_zip, (bytes, bytearray)):
@@ -217,6 +232,8 @@ def main():
     for name, lines in meta_vectors():
         work.append((name, list(REQUIRED) + ["sysinfo.txt"], True,
                      chr(10).join(lines) + chr(10)))
+    for name, members, sysinfo in duplicate_vectors():
+        work.append((name, members, True, sysinfo))
 
     rows = []
     for name, members, is_zip, sysinfo in work:
