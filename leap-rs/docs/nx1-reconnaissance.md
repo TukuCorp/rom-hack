@@ -252,9 +252,32 @@ expand P and S, which is what Blowfish specifies.
 
 So the round layout and the key schedule are now verified rather than inferred, and the
 chain seeding is the only part still standing unproven. Its callers read the two words from
-fields of a header object at offsets like `0x14` and `0x20c`, which are object offsets rather
-than raw file bytes, so locating them in the file means reading the header code rather than
-guessing at where eight bytes sit.
+fields of a header object, so locating them in the file meant reading the header code rather
+than guessing at where eight bytes sit.
+
+## Where the seed words are, and a checksum that could settle the key
+
+Reading that header code settles it. `chunk-00172.c` around line 4240 seeds the cipher from
+`param_4 + 0x208` and `param_4 + 0x20c`, transforms `0x208` bytes from the start of the same
+buffer, and then calls a getter and compares what it returns against the two words at
+`param_4 + 0x210` and `param_4 + 0x214`. So the seed is not inside the header at all: it sits
+immediately after it, and the header carries a checksum of its own right after that.
+
+For the template tables both seed words are zero, read straight from the file, which is worth
+knowing because every earlier attempt had used bytes from inside the header. Testing with the
+true seed, zero, keyed and unkeyed, as a continuous stream and from three different offsets,
+still gives noise.
+
+The checksum is the interesting part, because it is an oracle that does not need the
+plaintext. If the key and cipher are right, the running XOR the driver accumulates while
+transforming those `0x208` bytes should come out equal to the words at `0x210` and `0x214`.
+A first attempt to shortcut it fails usefully: the plain XOR of the header words as they sit
+in the file is `0x024a5544`, not the stored zero, so the header is not simply plaintext with a
+plain XOR over it, and the checksum has to be computed through the real cipher.
+
+That gives the next attempt a way to know whether the key material is right without needing
+to recognise any plaintext, which is the first real oracle this route has had. It is also a
+good place to stop and take stock, which the section after this does.
 
 ## What that means
 
