@@ -258,7 +258,10 @@ fails with NexusDB: AliasName or AliasPath not set.
 - The remaining 168,838 functions of `leap.exe`.
 - The VCL user interface, the TMS `TAdv*` components and TeeChart. The port is
   headless by design.
-- The NexusDB `.nx1` container that a `.leap` file is built from.
+- The NexusDB `.nx1` tables an area is built from. `docs/nx1-reconnaissance.md` records what
+  reading them would take, and the answer is more than it looks: the payload blocks are
+  obscured with a fixed key baked into the schema code, so it means porting the NexusDB
+  block cipher out of the binary before any model data can be read.
 - Wildcard expansion inside the library. `container::run` takes each argument already
   resolved, because the order a filesystem hands back matching files is a property of the
   filesystem rather than of the program. The `testleap` binary does the expanding, in the
