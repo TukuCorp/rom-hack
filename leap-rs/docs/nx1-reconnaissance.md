@@ -234,8 +234,27 @@ across every parameter the code names, and none is right.
 
 So the error is structural rather than a value, and the surviving candidates are the round
 layout, the key schedule and the chain seeding in some detail that only a line-by-line read
-of the assembly will settle. That is possible, and it is a far larger read than the function
-summaries done so far.
+of the assembly will settle.
+
+## The round functions, checked against the published vectors
+
+One thing had never been checked, and it is the obvious thing to check: whether my reading of
+the two round functions corresponds to the standard algorithm at all. A standard Blowfish was
+written first and confirmed against the published test vectors, and then the vendor rounds
+were run with the same key schedule and compared.
+
+The answer is clean. With a standard key schedule, the function I had been calling the
+inverse step, `FUN_01532e10`, applied to a zero block gives `4ef997456198dd78`, which is the
+published ciphertext for that vector. So `FUN_01532e10` *is* Blowfish encryption, standard to
+the bit, and my direction labels were simply the wrong way round. That also means the
+vendor key schedule is the standard one, because it is the encryption function it uses to
+expand P and S, which is what Blowfish specifies.
+
+So the round layout and the key schedule are now verified rather than inferred, and the
+chain seeding is the only part still standing unproven. Its callers read the two words from
+fields of a header object at offsets like `0x14` and `0x20c`, which are object offsets rather
+than raw file bytes, so locating them in the file means reading the header code rather than
+guessing at where eight bytes sit.
 
 ## What that means
 
