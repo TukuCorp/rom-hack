@@ -203,6 +203,47 @@ fn the_two_programs_agree_on_every_workload() {
     );
 }
 
+/// The vendor ships its own sample areas, each a zip of NexusDB tables. They are real
+/// data rather than something this repo made up: tens of megabytes, hundreds of members,
+/// and one of them carries the nested meta file that makes the vendor abort. Running the
+/// two programs over them tests the reader far past the size of any synthetic vector.
+#[test]
+fn the_two_programs_agree_on_the_vendors_own_datasets() {
+    const SAMPLES: &[&str] = &[
+        "C:\\Program Files\\LEAP\\Freedonia.zip",
+        "C:\\Program Files\\LEAP\\Asiana.zip",
+        "C:\\Program Files\\LEAP\\Transport Exercise.zip",
+        "C:\\Program Files\\LEAP\\Optimization Exercise.zip",
+        "C:\\Program Files\\LEAP\\_defaultNX.zip",
+    ];
+    if !std::path::Path::new(VENDOR).exists() {
+        println!("skipping: {} is not installed", VENDOR);
+        return;
+    }
+
+    let scratch = Scratch::new("samples");
+    let mut checked = 0;
+    for sample in SAMPLES {
+        let argument: &str = sample;
+        if !std::path::Path::new(argument).exists() {
+            continue;
+        }
+        let (vendor_code, vendor_out) = run(VENDOR, &[argument], scratch.path());
+        let (our_code, our_out) = run(OUR_BIN, &[argument], scratch.path());
+        assert_eq!(our_code, vendor_code, "exit code for {}", argument);
+        assert_eq!(
+            String::from_utf8_lossy(&our_out),
+            String::from_utf8_lossy(&vendor_out),
+            "stdout for {}",
+            argument
+        );
+        checked += 1;
+    }
+    if checked == 0 {
+        println!("skipping: none of the vendor datasets are installed");
+    }
+}
+
 #[test]
 fn the_two_programs_agree_with_no_arguments_and_leave_files_alone() {
     if !std::path::Path::new(VENDOR).exists() {

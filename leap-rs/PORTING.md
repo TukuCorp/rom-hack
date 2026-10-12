@@ -195,6 +195,33 @@ such a name as matching nothing and carries on. The sweep keeps those two archiv
 directory of their own so the main comparison stays a strict gate, and it fails if the
 vendor ever stops faulting, which would mean the carve-out had gone stale.
 
+## The sanctioned automation interface
+
+The install ships a COM automation server, `LEAP.LEAPApplication`, and it is the same
+surface SEI's own scripts under `_Scripts` use. It is registered on this machine, an
+instance is created without a licence prompt, it runs with `Visible` false, and it exits
+when the client does, so `tools/leap_api_probe.ps1` can start one, read, and quit without
+leaving anything behind.
+
+This matters more than it may look. What the port verifies so far is a file validator.
+The interface exposes `Calculate`, `ForceCalculation`, `ExportResultsCSV`,
+`ExportResultsXLS`, `ExportExpressions`, `Branch`, `BranchVariable`, `ResultValue` and
+`CompileVarRef`, which is to say the vendor will compute a model and hand back its
+numbers through a supported call. Result-level parity is therefore reachable without
+emulating any of the 168,840 functions, and by the sanctioned route rather than a
+reverse-engineered one. The exemplar is SEI's own `Export Data Values to Excel.vbs`,
+which walks regions, branches and variables and reads `Variable.DataValue(year)`.
+
+Measured so far: version 2026.7.0.3; the per-area collections read empty on a freshly
+created instance even though `ActiveArea` names an area and `Areas` lists five, so the
+open question is how an area is loaded for an externally created instance. Until that is
+answered this is a route rather than an oracle.
+
+One caution worth stating plainly: an instance reports whatever area the user had open
+last, which on this machine is their own `Documents\LEAP Areas\Freedonia`. Anything that
+opens or recalculates an area is working with their data, so that step needs their
+say-so rather than mine.
+
 ## Out of scope, on purpose
 
 - The remaining 168,838 functions of `leap.exe`.
