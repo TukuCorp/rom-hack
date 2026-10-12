@@ -219,11 +219,25 @@ closed dataset`. `Area.Open()` is the method that opens them, and it sits with `
 `Save`, `Active`, `ReadOnly`, `Directory` and `Name`. The whole 209 member surface is
 recorded in `docs/leap-api-surface.txt`.
 
-So one step separates this from being an oracle: opening an area, which is a decision
-rather than more probing. The five areas this machine knows are Asiana, Freedonia,
-HaiPhong_BAU, Optimization Exercise and Transport Exercise. Four are vendor samples and
-the fifth is the user's own work, and opening one writes cache files into it, which is why
-none has been opened.
+So one step separates this from being an oracle: opening an area, and two things are now
+known about it. The second one changes the plan.
+
+The binary carries its own documentation. The type library help strings are embedded in
+it, so the vendor describes its own interface from inside the executable, and reading
+them back answers questions that probing only narrows. Areas.Add "Creates and returns a
+new named area. Optionally copied from another area. If CopyFromArea is blank the new area
+is created from default data". Area.Open "Opens an area (Makes it the active area)".
+ActiveArea "Gets or sets the active area... Can be set equal to an area name an index or a
+LEAPArea object". A scratch area built from default data would have given the oracle
+without touching anything of the user's own.
+
+It does not work. Areas.Add and setting ActiveArea are both refused with "LEAP API
+function ... not available when a supporting screen is open". So the obstacle is not the
+permission question it looked like, but a startup screen that gags the area API until it
+is dismissed, and dismissing it needs the GUI or a call that has not been found.
+ShowOverview, Clear, Refresh and a twenty second wait were all tried and none of them
+changed it. Nothing was created: the area count stayed at five, no folder appeared, and no
+lock file was left behind.
 
 ## Out of scope, on purpose
 

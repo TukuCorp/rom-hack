@@ -19,6 +19,8 @@
 $ErrorActionPreference = 'Continue'
 
 $leap = New-Object -ComObject LEAP.LEAPApplication
+# acStopOnErrors (5), so a refused call raises instead of returning null in silence.
+$leap.Verbose = 5
 'version   : ' + $leap.SoftwareVersion
 try { $leap.Visible = $false } catch { }
 'visible   : ' + $leap.Visible
@@ -41,5 +43,21 @@ foreach ($name in 'Regions', 'Scenarios', 'Branches', 'Areas') {
     try { $count = @($leap.$name).Count } catch { }
     '  {0,-10}: {1}' -f $name, $count
 }
+
+
+# The area API is gated while the instance sits on a startup screen, which is the
+# finding worth reproducing. Nothing is meant to be left behind, and the ActiveArea probe
+# deliberately uses a name that cannot resolve so that it cannot open anything real.
+$probe = 'zz_leap_rs_probe'
+$made = $null
+try { $made = $leap.Areas.Add($probe, '') } catch { 'Areas.Add  : refused -> ' + $_.Exception.Message }
+if ($made -and $made.Directory) {
+    'Areas.Add  : created at ' + $made.Directory
+    try { $leap.Areas.Delete($probe); 'cleanup    : deleted' } catch { 'cleanup    : FAILED, an area is left behind' }
+} elseif ($made) {
+    'Areas.Add  : returned a ' + $made.GetType().Name + ', which is not an area object'
+}
+try { $leap.ActiveArea = 'zz no such area'; 'ActiveArea : accepted' } catch { 'ActiveArea : refused -> ' + $_.Exception.Message }
+'count after: ' + $leap.Areas.Count
 
 try { $leap.Quit(); 'quit      : sent' } catch { 'quit      : ' + $_.Exception.Message }
