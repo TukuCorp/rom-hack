@@ -10,10 +10,10 @@ of a Delphi runtime, and with no user interface.
 `../leap-decompiled/` covers **168,840 of 168,848** functions. Porting all of it
 1:1 is a multi-year body of work, not a session.
 
-What this crate actually is: the pipeline (oracle capture, port, parity test) plus
-the **first two ported functions**. The tally is 2 of 168,840. A passing
-`cargo test` means those two functions are bit-for-bit equivalent to the original;
-it does not mean LEAP has been ported.
+What this crate actually is: the pipeline (oracle capture, port, parity test), the two
+calendar functions, and the `.leap` container validation chain behind `TestLEAP`. That
+is three units of work against 168,840 functions. A passing `cargo test` means those
+pieces are bit-for-bit equivalent to the original; it does not mean LEAP has been ported.
 
 ## Rules the port follows
 
@@ -35,7 +35,11 @@ it does not mean LEAP has been ported.
 hand. The tool drives Ghidra `/emulate_function` on the original image, so every
 vector is output of the original itself rather than a re-derivation of it.
 
-Current corpus: **310** `IS_LEAP_YEAR_VECTORS` and **487** `DAY_NUMBER_VECTORS`.
+Current corpus: **310** `IS_LEAP_YEAR_VECTORS`, **487** `DAY_NUMBER_VECTORS` and **113**
+`CONTAINER_VECTORS`. The container oracle is captured a different way: it runs the real
+`testleap.exe` over generated archives with `/S` and stores the exact input bytes, the
+process exit code and the whole of stdout, so its parity test replays whole-process
+behaviour rather than a function result.
 
 That corpus is corroborated outside this crate: section 2c of
 `../leap-year-verification.html` records live Frida instrumentation in which the
@@ -56,6 +60,27 @@ on success.
 declared 16-bit `Word` parameter itself, exactly as the original does. So 65536
 behaves as year 0 and 65537 as year 1. Those boundary values are in the oracle, and a
 `u16` parameter could not express them.
+
+The container validator is a chain rather than one function, so it names each piece:
+
+| original | role | Rust |
+|---|---|---|
+| `0x0061a848` | `entry`, the decision chain and the verdict codes | `container::validate` |
+| `0x0060df1c` | member lookup asked of the zip library | `container::has_member`, `container::has_pattern` |
+| `0x00610058` | opens the archive; false means not a zip | `container::member_names` |
+| `0x00611e78` | the meta check that sets verdict 7 | inside `container::validate` |
+
+Its verdict order is 5 (not a zip), 1 (holds `masterstructure.db`, the pre-2012 layout),
+3 (a required `.nx1` is absent), 4 (a forbidden pattern matches), 7 (no `sysinfo.txt`),
+then 0. Two of those behaviours are bugs in the original that the port keeps, because
+the goal is equivalence and not a corrected validator. Member lookup is by basename and
+case-insensitive, so `sub/years.nx1` satisfies the `years.nx1` requirement. The extension
+test drops exactly one trailing dot first, so `tool.exe.` is flagged while `tool.exe..`
+is not. Vectors pin both.
+
+This replaced an earlier behavioural model that assumed eight forbidden extensions and
+had no pre-2012 branch. Run against the same 113 vectors, that model disagreed with the
+binary on 56 of them.
 
 ## Out of scope, on purpose
 
@@ -88,9 +113,11 @@ registry access.
 
 ## Adding a function
 
-1. Find it in `../leap-decompiled/index.tsv` and read its chunk.
-2. Add input vectors to `tools/capture_oracle.py`, then regenerate
-   `src/oracle_calendar.rs`.
+1. Find it in `../leap-decompiled/index.tsv` and read its chunk, or in `testleap.exe`
+   through the Ghidra server on port 8089.
+2. Add input vectors to `tools/capture_oracle.py` for a pure function, or to
+   `tools/capture_container_oracle.py` for anything observable through the process, then
+   regenerate the matching `src/oracle_*.rs`.
 3. Write the parity test and watch it fail.
 4. Port the function, keeping its address and name.
 5. Get the suite green again.
