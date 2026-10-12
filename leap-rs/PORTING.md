@@ -108,6 +108,25 @@ meta step aborts ends the whole run and prints no result line. No arguments at a
 the usage text, reproduced verbatim in `container::USAGE` down to its leading bare
 newline, which is the one place the original does not write CRLF.
 
+Turning an argument into files has its own set of measured rules, all pinned by the end
+to end suite rather than guessed:
+
+* The split is on the BACKSLASH only. A subdirectory path searches in that subdirectory
+  and is reported by its bare name, an absolute backslash path works, and a forward slash
+  is not a separator at all.
+* A forward slash anywhere makes the argument contribute nothing whatever: no message, no
+  verdict, not even the no-match one. That reads like a fault rather than a rule, and it is
+  the one place the port reproduces something a user would rather it did not. The library
+  takes each argument already resolved, so a caller that wants forward slashes to work can
+  normalise the path before handing it over.
+* The name reported is the one the filesystem spells, so an upper case argument is
+  reported in the lower case the file actually has, and the directory never appears.
+* An argument that resolves to something unreadable, a directory in the ordinary case,
+  gets its own verdict and its own message. `/S` hides that message while it does not hide
+  the matched-nothing one.
+* A wildcard scan reaches the dot and dot-dot entries, which are then reported as missing
+  files because a directory is not something the vendor can read.
+
 `container::parse_arguments` reproduces the vendor scan, which has a wrinkle worth
 naming: a flag is recognised after dropping exactly ONE leading slash or dash, so `/Q`,
 `/q`, `-Q` and `/quiet` all set quiet, but an argument only leaves the file list when its
@@ -209,7 +228,7 @@ To build or test, use the user-local GNU toolchain, which ships the MinGW runtim
 
 The crate is deliberately dependency-free, so all of this is hermetic and needs no
 registry access. `cargo test` also builds the `testleap` binary, and
-`tests/vendor_e2e.rs` runs it against the vendor program over 41 argument lists,
+`tests/vendor_e2e.rs` runs it against the vendor program over 55 argument lists,
 comparing the exit code and the whole of stdout byte for byte. That suite prints a note
 and passes when the vendor binary is not installed, so the crate still tests elsewhere.
 

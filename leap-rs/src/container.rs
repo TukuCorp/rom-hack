@@ -551,6 +551,9 @@ pub fn messages(decision: &Decision, name: &str) -> String {
 pub enum Input<'a> {
     /// A file the argument resolved to, with its bytes.
     File { name: &'a str, bytes: &'a [u8] },
+    /// An argument that resolved to something which is not a readable file, a directory
+    /// being the ordinary case. This is the other -1 verdict, with its own message.
+    Missing { name: &'a str },
     /// An argument that resolved to no file at all, which is the -1 verdict.
     NoMatch { as_typed: &'a str },
 }
@@ -558,6 +561,12 @@ pub enum Input<'a> {
 /// The message an argument that matched nothing produces.
 pub fn no_match_message(as_typed: &str) -> String {
     format!("No file(s) matching: \"{}\" ({}).\r\n", as_typed, CODE_NO_MATCH)
+}
+
+/// The message for an argument that resolved to something which is not a readable file.
+/// The name is the one found, not the argument as typed.
+pub fn missing_message(name: &str) -> String {
+    format!("Missing file: \"{}\" ({}).\r\n", name, CODE_NO_MATCH)
 }
 
 /// Port of the command-line scan: which arguments set a flag, and which are files.
@@ -621,8 +630,16 @@ pub fn run(inputs: &[Input<'_>], flags: Flags) -> Report {
         match input {
             Input::NoMatch { as_typed } => {
                 code = CODE_NO_MATCH;
+                // Unlike the message below, this one survives `/S`, which the
+                // `missing_only` and `wildcard_matches_nothing` vectors show.
                 if !flags.quiet {
                     stdout.push_str(&no_match_message(as_typed));
+                }
+            }
+            Input::Missing { name } => {
+                code = CODE_NO_MATCH;
+                if !flags.quiet && !flags.short {
+                    stdout.push_str(&missing_message(name));
                 }
             }
             Input::File { name, bytes } => {

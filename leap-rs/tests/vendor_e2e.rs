@@ -95,6 +95,23 @@ const ARGUMENT_LISTS: &[&[&str]] = &[
     &["/Q"],
     &["/S"],
     &["/X"],
+    // Shapes that are about the filesystem rather than the archive: a directory that
+    // looks like one, an empty file, a file one level down, and the several ways of
+    // spelling a path, including the ones the vendor mishandles.
+    &["adir.leap"],
+    &["adir.leap", "/S"],
+    &["zero.leap"],
+    &["sub"],
+    &["sub\\inner.leap"],
+    &["sub\\*.leap"],
+    &["sub/inner.leap"],
+    &["./valid.leap"],
+    &[".\\valid.leap"],
+    &["VALID.LEAP"],
+    &["valid.leap", "adir.leap"],
+    &["*"],
+    &["."],
+    &[".."],
 ];
 
 struct Scratch(PathBuf);
@@ -140,6 +157,14 @@ fn the_two_programs_agree_on_every_workload() {
     for (name, case) in WORKLOAD {
         fs::write(scratch.path().join(name), archive(case)).expect("write archive");
     }
+    // A directory named like an archive, an empty file, and a file one level down. The
+    // vendor treats the first as a missing file rather than as a name that matched
+    // nothing, and the third requires reading a path with a separator.
+    fs::create_dir_all(scratch.path().join("adir.leap")).expect("make directory");
+    fs::write(scratch.path().join("zero.leap"), b"").expect("write empty file");
+    fs::create_dir_all(scratch.path().join("sub")).expect("make subdirectory");
+    fs::write(scratch.path().join("sub").join("inner.leap"), archive("valid"))
+        .expect("write nested archive");
 
     let mut mismatches = Vec::new();
     for args in ARGUMENT_LISTS {

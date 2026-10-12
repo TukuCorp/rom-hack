@@ -1,25 +1,21 @@
 //! testleap, the ported validator, as a headless drop-in for the vendor program.
 //!
-//! Argument handling comes from container::parse_arguments, which mirrors the vendor scan,
-//! including the odd part where a dash does not remove an argument from the file list the
-//! way a slash does.
+//! Argument handling comes from container::parse_arguments, and turning an argument into
+//! files is resolve below. Neither follows the obvious rule, because the vendor does not:
+//! see the comments on resolve for what was measured.
 //!
-//! Two deliberate differences. Wildcard expansion happens here in the current directory
-//! and sorts by name, because the vendor uses the Windows directory API and its order is
-//! a property of the filesystem rather than of the program; a wildcard in a directory part
-//! is left alone rather than expanded wrongly. And nothing is ever written or deleted. The
-//! vendor /C flag deletes the file it just inspected, a valid one included, which is not
-//! behaviour worth reproducing.
+//! Nothing is ever written or deleted. The vendor /C flag deletes the file it just
+//! inspected, a valid one included, which is not behaviour worth reproducing.
 
 use leap_rs::container::{parse_arguments, run, usage, Input};
 use std::env;
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process;
 
 /// Whether a name matches a pattern of literal characters, star and question mark. Both
-/// are lowercased by the caller, since the vendor's directory lookup ignores case.
+/// are lowercased by the caller, since the vendor lookup ignores case.
 fn glob_matches(pattern: &str, name: &str) -> bool {
     let p: Vec<char> = pattern.chars().collect();
     let n: Vec<char> = name.chars().collect();
@@ -47,29 +43,109 @@ fn glob_matches(pattern: &str, name: &str) -> bool {
     pi == p.len()
 }
 
-/// The files one argument names. A name with no wildcard is passed straight through, so a
-/// file that is not there still reaches the no-match verdict instead of vanishing.
-fn expand(arg: &str) -> Vec<String> {
-    if !arg.contains('*') && !arg.contains('?') {
-        return vec![arg.to_string()];
+/// One argument, resolved the way the vendor resolves it.
+enum Resolved {
+    /// The entries it named, as a display name and the path to read.
+    Files(Vec<(String, PathBuf)>),
+    /// It named nothing at all, which is the no-match verdict.
+    None,
+    /// It contributed nothing: no message, no verdict, nothing.
+    Silent,
+}
+
+/// Resolve one argument into the entries it names.
+///
+/// None of these rules is the obvious one, and every one is pinned by the end to end
+/// suite rather than guessed:
+///
+/// * The vendor splits the argument on the BACKSLASH only. So sub-inner path searches in
+///   the subdirectory and is reported by its bare name, an absolute backslash path works,
+///   and a forward slash is not a separator at all.
+/// * A forward slash anywhere makes the argument contribute nothing whatever: no message,
+///   no verdict, not even the no-match one. That reads like a fault rather than a rule, but
+///   a leading dot-slash, a subdirectory path, a subdirectory wildcard and a bare
+///   directory followed by a slash all behave that way.
+/// * The reported name is the entry name as the filesystem spells it, never the argument as
+///   typed and never with the directory part, so an upper case argument is reported in the
+///   lower case the file really has.
+/// * A wildcard scan reaches the dot and dot-dot entries too, which the vendor then reports
+///   as missing files, because a directory is not something it can read.
+fn resolve(arg: &str) -> Resolved {
+    if arg.contains('/') {
+        return Resolved::Silent;
     }
-    let path = Path::new(arg);
-    let plain = path.parent().map_or(true, |p| p.as_os_str().is_empty());
-    let pattern = match path.file_name() {
-        Some(name) if plain => name.to_string_lossy().to_lowercase(),
-        _ => return vec![arg.to_string()],
+    let (dir, mask) = match arg.rfind('\\') {
+        Some(at) => (&arg[..at], &arg[at + 1..]),
+        None => ("", arg),
+    };
+    let in_dir = if dir.is_empty() { Path::new(".") } else { Path::new(dir) };
+    let listed = match fs::read_dir(in_dir) {
+        Ok(entries) => entries,
+        Err(_) => return Resolved::None,
+    };
+    let names: Vec<String> = listed
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .collect();
+    let path_of = |name: &str| {
+        if dir.is_empty() {
+            PathBuf::from(name)
+        } else {
+            in_dir.join(name)
+        }
     };
 
-    let mut matched: Vec<String> = match fs::read_dir(".") {
-        Ok(entries) => entries
-            .filter_map(|entry| entry.ok())
-            .filter_map(|entry| entry.file_name().into_string().ok())
-            .filter(|name| glob_matches(&pattern, &name.to_lowercase()))
-            .collect(),
-        Err(_) => Vec::new(),
-    };
-    matched.sort();
-    matched
+    if mask.contains('*') || mask.contains('?') {
+        let wanted = mask.to_lowercase();
+        let mut hits: Vec<String> = [".", ".."]
+            .iter()
+            .filter(|special| glob_matches(&wanted, special))
+            .map(|special| special.to_string())
+            .collect();
+        hits.extend(
+            names
+                .iter()
+                .filter(|name| glob_matches(&wanted, &name.to_lowercase()))
+                .cloned(),
+        );
+        hits.sort();
+        if hits.is_empty() {
+            return Resolved::None;
+        }
+        return Resolved::Files(
+            hits.into_iter()
+                .map(|name| {
+                    let path = path_of(&name);
+                    (name, path)
+                })
+                .collect(),
+        );
+    }
+
+    if let Some(found) = names.iter().find(|name| name.eq_ignore_ascii_case(mask)) {
+        let path = path_of(found);
+        return Resolved::Files(vec![(found.clone(), path)]);
+    }
+
+    // The scan resolves a dot entry to the directory itself, and names it as that
+    // directory spells its own name, which is why asking for the parent reports the
+    // directory above rather than the two dots.
+    if mask == "." || mask == ".." {
+        let target = path_of(mask);
+        if let Some(name) = fs::canonicalize(&target)
+            .ok()
+            .and_then(|real| real.file_name().map(|part| part.to_string_lossy().into_owned()))
+        {
+            return Resolved::Files(vec![(name, target)]);
+        }
+    }
+    Resolved::None
+}
+
+/// What to do for one resolved entry.
+enum Plan {
+    Read(String, PathBuf),
+    NoMatch(String),
 }
 
 fn main() {
@@ -83,30 +159,40 @@ fn main() {
     let args: Vec<&str> = owned.iter().map(String::as_str).collect();
     let (flags, named) = parse_arguments(&args);
 
-    // Each argument becomes the files it names, or a single entry meaning it named none.
-    let mut chosen: Vec<(String, bool)> = Vec::new();
+    let mut plans: Vec<Plan> = Vec::new();
     for arg in named {
-        let hits = expand(arg);
-        if hits.is_empty() {
-            chosen.push((arg.to_string(), false));
-        } else {
-            for hit in hits {
-                chosen.push((hit, true));
+        match resolve(arg) {
+            Resolved::Files(files) => {
+                for (display, path) in files {
+                    plans.push(Plan::Read(display, path));
+                }
             }
+            Resolved::None => plans.push(Plan::NoMatch(arg.to_string())),
+            Resolved::Silent => {}
         }
     }
 
-    // Read everything before building the inputs, so the slices live long enough.
-    let blobs: Vec<Option<Vec<u8>>> = chosen
+    // Read everything before building the inputs, so the slices outlive them. A failure to
+    // read is not a separate error to report: it is the same outcome the vendor reaches for
+    // a directory, which is the missing-file verdict.
+    let blobs: Vec<Option<Vec<u8>>> = plans
         .iter()
-        .map(|(path, _)| fs::read(path).ok())
+        .map(|plan| match plan {
+            Plan::Read(_, path) => fs::read(path).ok(),
+            Plan::NoMatch(_) => None,
+        })
         .collect();
-    let inputs: Vec<Input> = chosen
+
+    let inputs: Vec<Input> = plans
         .iter()
         .zip(blobs.iter())
-        .map(|((path, _), blob)| match blob {
-            Some(bytes) => Input::File { name: path.as_str(), bytes: bytes.as_slice() },
-            None => Input::NoMatch { as_typed: path.as_str() },
+        .map(|(plan, blob)| match (plan, blob) {
+            (Plan::Read(display, _), Some(bytes)) => Input::File {
+                name: display.as_str(),
+                bytes: bytes.as_slice(),
+            },
+            (Plan::Read(display, _), None) => Input::Missing { name: display.as_str() },
+            (Plan::NoMatch(typed), _) => Input::NoMatch { as_typed: typed.as_str() },
         })
         .collect();
 
