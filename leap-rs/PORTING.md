@@ -212,15 +212,18 @@ emulating any of the 168,840 functions, and by the sanctioned route rather than 
 reverse-engineered one. The exemplar is SEI's own `Export Data Values to Excel.vbs`,
 which walks regions, branches and variables and reads `Variable.DataValue(year)`.
 
-Measured so far: version 2026.7.0.3; the per-area collections read empty on a freshly
-created instance even though `ActiveArea` names an area and `Areas` lists five, so the
-open question is how an area is loaded for an externally created instance. Until that is
-answered this is a route rather than an oracle.
+Measured so far: version 2026.7.0.3, and the cause of the empty collections. An
+externally created instance has its NexusDB datasets closed, so every area collection
+reads empty and enumerating `Areas` raises `DicAreas: Cannot perform this operation on a
+closed dataset`. `Area.Open()` is the method that opens them, and it sits with `Init`,
+`Save`, `Active`, `ReadOnly`, `Directory` and `Name`. The whole 209 member surface is
+recorded in `docs/leap-api-surface.txt`.
 
-One caution worth stating plainly: an instance reports whatever area the user had open
-last, which on this machine is their own `Documents\LEAP Areas\Freedonia`. Anything that
-opens or recalculates an area is working with their data, so that step needs their
-say-so rather than mine.
+So one step separates this from being an oracle: opening an area, which is a decision
+rather than more probing. The five areas this machine knows are Asiana, Freedonia,
+HaiPhong_BAU, Optimization Exercise and Transport Exercise. Four are vendor samples and
+the fifth is the user's own work, and opening one writes cache files into it, which is why
+none has been opened.
 
 ## Out of scope, on purpose
 
