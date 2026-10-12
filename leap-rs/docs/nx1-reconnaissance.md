@@ -47,9 +47,21 @@ rather than for data.
 RC4 is twenty lines, so it was tried rather than assumed. A block from the empty template
 was decrypted with each of five candidate keys at six different offsets, and the best result
 was 24 zero bytes out of 4096, against a baseline of about 20. An empty table would decrypt
-to mostly zeros, so none of those is the transform. That leaves a Blowfish mode, an RC4 key
-derived some other way, or a NexusDB construction of its own, and finding out which means
-reading it out of the binary.
+to mostly zeros, so none of those is the transform. That leaves Blowfish, an RC4 key derived
+some other way, or a NexusDB construction of its own.
+
+It is Blowfish, and it is the published one. The constant table sits in the binary at
+`0x02ef2be8`: 1042 words, whose first twelve are the standard P-array and whose last word is
+`0x3ac372e6`, the published final S-box entry. Immediately after it come the bytes
+`ABCDEFGH...Zabc...`, which is the key of the Blowfish test vectors. So what is in the binary
+is the reference implementation with its own constants and self-test data, not a variant of
+the algorithm.
+
+That changes the size of what remains. Blowfish is fully specified, so the algorithm does not
+have to be recovered at all; what is unknown is only the mode and how the key is derived from
+`nx1xdefault`, and the twenty reserved bytes per block are the obvious place for an
+initialisation vector. Both are answerable by experiment rather than by reading code, because
+the plaintext of an empty table should be mostly zeros.
 
 ## What that means
 
