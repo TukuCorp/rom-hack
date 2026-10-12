@@ -79,8 +79,26 @@ words, XORing each with a keystream word from `FUN_015343d0`, and handing both t
 
 So it is not ECB and it is not CBC. It is a keystream XOR followed by the block step, which
 is why a plain Blowfish decryption produced noise, and why the unit is called Blowfish and
-RC4 together. Porting it means porting three functions and the key schedule that seeds that
-state, which is a specific job with known addresses rather than a search.
+RC4 together.
+
+## Both halves of that, read out of the code
+
+`FUN_015343d0` is plain RC4. Its S-box is 256 bytes at offset 8 of its object, its two
+indices are bytes at `0x208` and `0x209`, and each call advances the first index by four and
+returns four keystream bytes packed little endian. A standard RC4, so my earlier RC4 attempt
+was the right primitive with the wrong key or the wrong starting state.
+
+`FUN_015327d0` is Blowfish-shaped but not standard Blowfish, which is the answer to why a
+correct Blowfish implementation produced noise. Its F is the published one, with the four
+S-boxes at offsets `0x58`, `0x458`, `0x858` and `0xc58`, one kilobyte apart. But its round
+layout differs: it uses eighteen P words held at `0x10` through `0x54` in *descending* order,
+and each step folds the P word into the same expression as F, as
+`half ^= F(other) ^ P[k]`, instead of the standard separate `half ^= P[i]` at the head of a
+round. It closes with an XOR swap of the two halves. Seventeen F calls, eighteen P words.
+
+So the block step is specified exactly, and the only pieces still missing are the two key
+schedules: how the RC4 S-box is seeded, and how the P and S words are derived from the key.
+Those are the next functions to read, and they are the last of it.
 
 ## What that means
 
