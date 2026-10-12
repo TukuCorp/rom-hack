@@ -276,8 +276,31 @@ in the file is `0x024a5544`, not the stored zero, so the header is not simply pl
 plain XOR over it, and the checksum has to be computed through the real cipher.
 
 That gives the next attempt a way to know whether the key material is right without needing
-to recognise any plaintext, which is the first real oracle this route has had. It is also a
-good place to stop and take stock, which the section after this does.
+to recognise any plaintext, which is the first real oracle this route has had.
+
+Using it, though, settles only the negative. If the check were a plain XOR over the visible
+header, some natural window of it would come out zero, and none does: 0x000+0x208 gives
+`0x742e71fb` and `0x766424bf`, and every shift of it gives something else, the only zero
+coming from the all-zero region that sits after the header. So the checksum is taken over
+ciphertext, as the driver code says, and the visible header is not that ciphertext. Which
+means the header as stored is either not the region that gets transformed, or is plaintext
+under a scheme that leaves it looking plaintext, and the two cannot be told apart without
+reading the block layer that decides which bytes the driver is handed.
+
+## Where this stopped
+
+That is the honest end of what reading it could reach. What is established, with evidence, is
+large: the container, the cipher family, both round functions verified against the published
+vectors, the standard key schedule, the object layout confirmed by disassembly, the seed
+location and its value in the template files, and now a checksum that would confirm a correct
+key. What is missing is one detail of how the file is handed to the cipher, and every
+configuration that could have stood in for it has been tried and failed, more than a hundred
+and fifty of them.
+
+The remaining step is the block layer, which is a larger read than everything above put
+together, and it is not a read that can be verified from the file alone. That is why the
+recommendation is the licence: the vendor API would settle in an afternoon what this route
+has been circling for a dozen turns.
 
 ## What that means
 
