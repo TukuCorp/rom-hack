@@ -33,6 +33,24 @@ GUID `{C4B5DAD7-4583-4433-93E0-0F4D2BA750E9}`. So the tables are created with a 
 and a fixed engine identifier, which is obfuscation rather than a secret, and it is baked
 into the schema code rather than supplied per area.
 
+## The cipher units, and a test that failed
+
+The decompilation keeps NexusDB's own source file names inside its assertion strings, so the
+engine layout can be read straight off it: about eighty units, among them
+`nxllBaseCipher.pas`, `nxllBlowfishRC4.pas`, `nxsrEncryptionEngineBase.pas`, and
+`nxllBaseCompressor.pas` with `nxllLz4MM.pas`. The cipher family is therefore Blowfish and
+RC4, with an LZ4 compressor beside them. `TnxBaseEncryptionEngine` carries a
+`ReservedSpacePerBlock` property, which fits the header field read earlier: 4096 less 20 is
+4076, the value at offset 0x1c, so twenty bytes of every block are reserved for the cipher
+rather than for data.
+
+RC4 is twenty lines, so it was tried rather than assumed. A block from the empty template
+was decrypted with each of five candidate keys at six different offsets, and the best result
+was 24 zero bytes out of 4096, against a baseline of about 20. An empty table would decrypt
+to mostly zeros, so none of those is the transform. That leaves a Blowfish mode, an RC4 key
+derived some other way, or a NexusDB construction of its own, and finding out which means
+reading it out of the binary.
+
 ## What that means
 
 Reading `.nx1` directly means porting the NexusDB block cipher and its dictionary layout out
