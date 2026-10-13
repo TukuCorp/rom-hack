@@ -1,34 +1,36 @@
 //! Typed rows out of a NexusDB table, which is what turns a `.leap` area into numbers.
 //!
 //! `crate::nx1` reads a table dictionary as text and the record area as wide strings. This
-//! module goes the rest of the way: it reads the offset and size the dictionary states for
-//! each field, works out how long a record is, and decodes the fields by type.
+//! module goes the rest of the way: it reads the offset and size the dictionary states for each
+//! field, works out how long a record is, and decodes the fields by type.
 //!
-//! Three things about the format are worth stating before the code, because none of them is
-//! obvious from the bytes.
+//! The dictionary is a stream of tagged properties rather than a fixed structure, which is the
+//! thing to know before reading the code. A property is a tag byte and a value whose width the
+//! tag names: `0x01` and `0x02` are one byte, `0x03` two, `0x12` four, `0x06` and `0x07` a
+//! length-prefixed string, `0x08` a flag with no value, `0x09` a nested object whose class name
+//! is the string that follows. Only the properties a field actually carries are written, so a
+//! byte layout per field does not generalise -- an earlier version of this reader managed 54 of
+//! the 86 tables in the shipped area and got three more shapes wrong. Walking the tokens and
+//! anchoring on the byte pattern that introduces the ordinal gets 80.
 //!
-//! A field descriptor spells its placement as a tag byte and then a value whose width the tag
-//! names: `0x02` is one byte, `0x03` is two, `0x12` is four. Reading that pair is the whole of
-//! the dictionary read, and the result for `datanames.nx1` is the layout the bytes actually
-//! have -- TableID at 0 size 4, TableName at 4 size 102, FieldID at 106, SetID at 110, Name at
-//! 114 size 302, Abbreviation at 416, DateChanged at 518 -- so the check is available and is
-//! what the test does.
+//! Three rules extract a field: the name is the first string after the class name, the type name
+//! is the first string beginning with `nxt`, and the placement is the two numbers after the fixed
+//! pattern that precedes them. The result is only returned when the fields tile the record from
+//! zero with no gap: a partial or misread stream does not survive that, so a table this reader
+//! cannot place comes back empty rather than wrong.
 //!
-//! The record size is not in the file. Every one of the eighty tables has that descriptor field
-//! zeroed, because the area was written by an export that left it blank, so it has to be
-//! derived: a data block is 4096 bytes with a 60-byte header, the records area is 4032 bytes,
-//! and the vendor fills it with a whole number of records, so the record size is the smallest
-//! divisor of 4032 that is at least four bytes past the last field. That predicts 12 for
-//! `years`, 224 for `units` and 576 for `datanames`, and each is what the bytes show.
+//! Two more things the file does not state. The record size is zero in all eighty tables, because
+//! the area was written by an export that left that descriptor field blank, so it is derived: a
+//! data block is 4096 bytes with a 60-byte header, the records area is 4032 bytes, and it holds a
+//! whole number of records, so the size is the smallest divisor of 4032 that is at least four
+//! bytes past the last field. And the records start 60 bytes into the block rather than 64: the
+//! fourth byte the `NXDH` tag invites you to assume belongs to the first record.
 //!
-//! The records start 60 bytes into the block rather than 64. The extra four bytes the header
-//! looks like it has belong to the first record; reading strings from a 64-byte base misaligns
-//! every one of them.
-//!
-//! What this does not do is filter deleted records, and that matters for a caller that wants
-//! live rows: `years.nx1` has records past the live ones that still carry bytes, and the first
-//! two of those count up from 78, which is a free-record chain. NexusDB keeps the deleted map
-//! in the block header and reading it is the next step rather than a finished one.
+//! What this does not do is filter deleted records, which matters. The block header carries a used
+//! count and two further words whose meaning is not established; for `years.nx1` the row count is
+//! 31 and the header words are 32, 0x1f and 0x7fffffff, none of which is 31 and none of which is a
+//! plain bitmap over the slots. That is why the decoded sample in the oracle is `datanames.nx1`,
+//! whose seven records are all live, and not the year list.
 
 use std::fmt;
 
@@ -37,13 +39,13 @@ pub const BLOCK: usize = 0x1000;
 const HEADER: usize = 0x3c;
 const DATA: usize = BLOCK - HEADER - 4;
 
-/// The tag bytes that introduce an encoded number, and the width each one names.
-const TAG_ONE: u8 = 0x02;
-const TAG_TWO: u8 = 0x03;
-const TAG_FOUR: u8 = 0x12;
-
-/// The class name that starts a field descriptor.
+/// The class name that starts a field descriptor, and the one that ends the field list.
 const NEEDLE: &[u8] = b"\x06\x12TnxFieldDescriptor";
+const INDICES: &[u8] = b"\x07\x11IndicesDescriptor";
+
+/// The properties that introduce the ordinal, and then the placement pair.
+const ANCHOR: &[u8] = &[0x02, 0x03, 0x01, 0x00];
+const MIDDLE: &[u8] = &[0x12, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03];
 
 /// One field of a table, as its dictionary states it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,59 +92,165 @@ impl fmt::Display for Value {
     }
 }
 
-/// Every field the table dictionary describes, in the order it lists them.
+/// One token of the tagged property stream.
+#[derive(Debug)]
+struct Tok {
+    tag: u8,
+    start: usize,
+    end: usize,
+    num: i64,
+    text: Option<String>,
+}
+
+impl Tok {
+    fn text(&self) -> &str {
+        self.text.as_deref().unwrap_or("")
+    }
+
+    fn is_number(&self) -> bool {
+        matches!(self.tag, 0x01 | 0x02 | 0x03 | 0x04 | 0x05 | 0x12)
+    }
+}
+
+/// Every field the table dictionary describes, or nothing when it cannot be placed.
 ///
-/// Returns the fields read before anything unexpected, so a caller can see how far a read got.
+/// The empty answer is deliberate. The fields have to tile a record with no gap for the read to
+/// be believable, and six of the eighty-six tables in the shipped area carry a descriptor shape
+/// this reader cannot place; those come back empty rather than as a plausible wrong layout.
 pub fn field_descriptors(bytes: &[u8]) -> Vec<Field> {
-    let Some(mut at) = find(bytes, NEEDLE, 0) else {
+    let starts = descriptor_starts(bytes);
+    let Some(last) = starts.last().copied() else {
         return Vec::new();
     };
+    let list_end = find(bytes, INDICES, last).unwrap_or(bytes.len());
     let mut out = Vec::new();
-    while bytes[at..].starts_with(NEEDLE) {
-        at += NEEDLE.len();
-        let Some(name) = short(bytes, &mut at) else { return out };
-        let Some((_, next)) = value(bytes, at) else { return out };
-        at = next;
-        let Some(type_name) = short(bytes, &mut at) else { return out };
-        let Some((declared_length, next)) = value(bytes, at) else { return out };
-        at = next;
-        if bytes.get(at..at + 7) != Some(&[0x02, 0x00, 0x08, 0x02, 0x03, 0x01, 0x00][..]) {
-            return out;
+    for (i, lo) in starts.iter().enumerate() {
+        let hi = if i + 1 < starts.len() { starts[i + 1] } else { list_end };
+        let segment = &bytes[*lo..hi];
+        let toks = tokens(segment);
+        let texts: Vec<&Tok> = toks.iter().filter(|t| matches!(t.tag, 0x06 | 0x07)).collect();
+        let names: Vec<&Tok> = texts.iter().copied().filter(|t| !t.text().starts_with("nxt")).collect();
+        let types: Vec<&Tok> = texts.iter().copied().filter(|t| t.text().starts_with("nxt")).collect();
+        if names.len() < 2 || types.is_empty() {
+            return Vec::new();
         }
-        at += 7;
-        let Some((_, next)) = value(bytes, at) else { return out };
-        at = next;
-        if bytes.get(at..at + 5) != Some(&[0x12, 0, 0, 0, 0][..]) {
-            return out;
-        }
-        if bytes.get(at + 5..at + 7) != Some(&[0x02, 0x03][..]) {
-            return out;
-        }
-        at += 7;
-        let Some((offset, next)) = value(bytes, at) else { return out };
-        let Some((size, next)) = value(bytes, next) else { return out };
-        at = next;
-        if bytes.get(at..at + 2) != Some(&[0x08, 0x08][..]) {
-            return out;
-        }
-        at += 6;
+        let type_name = types[0];
+let Some(declared) = toks.iter().find(|t| t.start >= type_name.end && t.is_number()) else {
+            return Vec::new();
+        };
+        let Some((offset, size)) = placement(segment) else {
+            return Vec::new();
+        };
         out.push(Field {
-            name,
-            type_name,
-            declared_length: declared_length as u32,
-            offset: offset as u32,
-            size: size as u32,
+            name: names[1].text().to_string(),
+            type_name: type_name.text().to_string(),
+            declared_length: declared.num as u32,
+            offset,
+            size,
         });
+    }
+    let mut end = 0u32;
+    for field in &out {
+        if field.offset != end {
+            return Vec::new();
+        }
+        end = field.end();
+    }
+    out
+}
+
+/// Every position where a field descriptor really starts.
+///
+/// The class name turns up inside stream data as well -- `fuels.nx1` has one followed by a string
+/// that is not an identifier -- so a match counts only when the name after it reads as one.
+fn descriptor_starts(bytes: &[u8]) -> Vec<usize> {
+    let mut out = Vec::new();
+    let mut from = 0;
+    while let Some(at) = find(bytes, NEEDLE, from) {
+        let name = at + NEEDLE.len();
+        if bytes.get(name) == Some(&0x06) {
+            let n = bytes.get(name + 1).copied().unwrap_or(0) as usize;
+            if let Some(text) = bytes.get(name + 2..name + 2 + n) {
+                if n > 0 && text.iter().all(|b| b.is_ascii_graphic() || *b == b' ') {
+                    out.push(at);
+                }
+            }
+        }
+        from = at + 1;
+    }
+    out
+}
+
+/// The offset and size of one field, found by the pattern that introduces them.
+fn placement(segment: &[u8]) -> Option<(u32, u32)> {
+    let anchor = find(segment, ANCHOR, 0)?;
+    let (_, mut at) = number(segment, anchor + ANCHOR.len())?;
+    if segment.get(at..at + MIDDLE.len())? != MIDDLE {
+        return None;
+    }
+    at += MIDDLE.len();
+    let (offset, at) = number(segment, at)?;
+    let (size, _) = number(segment, at)?;
+    Some((offset as u32, size as u32))
+}
+
+/// A tagged number, as (value, next).
+fn number(bytes: &[u8], at: usize) -> Option<(i64, usize)> {
+    match *bytes.get(at)? {
+        0x01 | 0x02 => Some((*bytes.get(at + 1)? as i64, at + 2)),
+        0x03 => {
+            let lo = *bytes.get(at + 1)? as i64;
+            let hi = *bytes.get(at + 2)? as i64;
+            Some((lo | (hi << 8), at + 3))
+        }
+        0x04 | 0x05 | 0x12 => {
+            let raw: [u8; 4] = bytes.get(at + 1..at + 5)?.try_into().ok()?;
+            Some((i32::from_le_bytes(raw) as i64, at + 5))
+        }
+        _ => None,
+    }
+}
+
+/// The token stream in one segment, stopping at a tag this reader has no rule for.
+fn tokens(segment: &[u8]) -> Vec<Tok> {
+    let mut out = Vec::new();
+    let mut at = 0usize;
+    while at < segment.len() {
+        let tag = segment[at];
+        match tag {
+            0x01 | 0x02 | 0x03 | 0x04 | 0x05 | 0x12 => {
+                let Some((num, next)) = number(segment, at) else { break };
+                out.push(Tok { tag, start: at, end: next, num, text: None });
+                at = next;
+            }
+            0x06 | 0x07 => {
+                let n = segment.get(at + 1).copied().unwrap_or(0) as usize;
+                let Some(text) = segment.get(at + 2..at + 2 + n) else { break };
+                let next = at + 2 + n;
+                out.push(Tok {
+                    tag,
+                    start: at,
+                    end: next,
+                    num: 0,
+                    text: Some(String::from_utf8_lossy(text).into_owned()),
+                });
+                at = next;
+            }
+            0x08 | 0x09 => {
+                out.push(Tok { tag, start: at, end: at + 1, num: 0, text: None });
+                at += 1;
+            }
+            _ => break,
+        }
     }
     out
 }
 
 /// The length of a record, which the file does not state.
 ///
-/// The records area holds a whole number of records, so the size is the smallest divisor of
-/// that area that leaves room for the last field plus four bytes of per-record overhead. Every
-/// table in the shipped area follows this, and the record size it gives is the stride the
-/// bytes are actually written at.
+/// The records area holds a whole number of records, so the size is the smallest divisor of that
+/// area that leaves room for the last field plus four bytes of per-record overhead. Every table in
+/// the shipped area follows this, and the size it gives is the stride the bytes are written at.
 pub fn record_size(fields: &[Field]) -> Option<usize> {
     let last = fields.iter().map(Field::end).max()? as usize;
     (4..=DATA).find(|size| DATA % size == 0 && *size >= last + 4)
@@ -165,10 +273,7 @@ pub fn records(block: &[u8], fields: &[Field], record_size: usize) -> Vec<Vec<Va
     (0..count)
         .map(|k| {
             let base = HEADER + k * record_size;
-            fields
-                .iter()
-                .map(|field| decode(block, base, field))
-                .collect()
+            fields.iter().map(|field| decode(block, base, field)).collect()
         })
         .collect()
 }
@@ -217,37 +322,8 @@ fn narrow_string(slot: &[u8]) -> String {
     String::from_utf8_lossy(&slot[..end]).into_owned()
 }
 
-/// A tag byte and the value whose width it names.
-fn value(bytes: &[u8], at: usize) -> Option<(i64, usize)> {
-    match *bytes.get(at)? {
-        TAG_ONE => Some((*bytes.get(at + 1)? as i64, at + 2)),
-        TAG_TWO => {
-            let lo = *bytes.get(at + 1)? as i64;
-            let hi = *bytes.get(at + 2)? as i64;
-            Some((lo | (hi << 8), at + 3))
-        }
-        TAG_FOUR => {
-            let raw: [u8; 4] = bytes.get(at + 1..at + 5)?.try_into().ok()?;
-            Some((i32::from_le_bytes(raw) as i64, at + 5))
-        }
-        _ => None,
-    }
-}
-
-/// A length-prefixed string at `at`, advancing past it.
-fn short(bytes: &[u8], at: &mut usize) -> Option<String> {
-    if *bytes.get(*at)? != 0x06 {
-        return None;
-    }
-    let n = *bytes.get(*at + 1)? as usize;
-    let text = bytes.get(*at + 2..*at + 2 + n)?;
-    *at += 2 + n;
-    Some(String::from_utf8_lossy(text).into_owned())
-}
-
 fn find(bytes: &[u8], needle: &[u8], from: usize) -> Option<usize> {
-    bytes
-        .windows(needle.len())
-        .position(|w| w == needle)
+    bytes.get(from..)
+        .and_then(|rest| rest.windows(needle.len()).position(|w| w == needle))
         .map(|i| i + from)
 }

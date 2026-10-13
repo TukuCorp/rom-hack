@@ -248,48 +248,66 @@ table with 320 names and failed three tests.
 
 ## Typed rows out of a table
 
-`src/records.rs` takes the last step that turns an area into numbers. `nx1::dictionary` reads a
-table schema and `nx1::wide_strings` reads the text out of a record area, but text is not a row:
-to know where a field sits you need the offset and size the dictionary states for it, and this
-module reads them.
+`src/records.rs` takes the step that turns an area into numbers. `nx1::dictionary` reads a table
+schema and `nx1::wide_strings` reads the text out of a record area, but text is not a row: where a
+field sits is stated per field in the dictionary, and this module reads it.
 
-The descriptor spells a placement as a tag byte and then a value whose width the tag names:
-`0x02` is one byte, `0x03` is two, `0x12` is four. That one rule unpacks the whole dictionary.
-For `datanames.nx1` it gives TableID at 0 size 4, TableName at 4 size 102, FieldID at 106,
-SetID at 110, Name at 114 size 302, Abbreviation at 416 and DateChanged at 518 size 8 -- and
-the fields then tile the record with no gap and no overlap, which is a claim the vendor's own
-bytes settle rather than one this crate makes about itself. They do: the first record spells
-Balcat then Electricity with the integers between them, and every wide-string slot decodes as
-clean UTF-16 in all seven records of its block.
+The dictionary is a stream of tagged properties rather than a fixed structure, and that decides
+how the reader is written. A property is a tag byte and a value whose width the tag names --
+`0x01` and `0x02` one byte, `0x03` two, `0x12` four, `0x06` and `0x07` a length-prefixed string,
+`0x08` a flag with no value, `0x09` a nested object whose class name follows -- and only the
+properties a field actually carries are written. A byte layout per field therefore does not
+generalise: a first version of this reader assumed one and placed 54 of the 86 tables, and it was
+wrong about three shapes it thought it could read. Walking the tokens and anchoring on the byte
+pattern that introduces the ordinal places 80.
+
+Three rules extract a field: the name is the first string after the class name, the type name is
+the first string beginning with `nxt`, and the placement is the two numbers after the pattern that
+precedes them. For `datanames.nx1` that gives TableID at 0 size 4, TableName at 4 size 102,
+FieldID at 106, SetID at 110, Name at 114 size 302, Abbreviation at 416 and DateChanged at 518
+size 8. The check is not that the reader likes its own answer: those fields tile the record with
+no gap and no overlap, and the vendor's bytes then agree, spelling Balcat and Electricity with
+the integers between them and every wide-string slot decoding as clean UTF-16 in all seven
+records of the block.
+
+The tiling is also the refusal rule. A layout comes back only when the fields tile from zero, so a
+partial stream, a field moved by a byte, or a class name planted inside stream data -- which
+`fuels.nx1` really does carry -- all produce nothing rather than a plausible wrong layout. Two
+tests make that the claim rather than a property of the implementation.
 
 Two things the file does not state, and both had to be read off the data.
 
-The record size is zero in all eighty tables, because the area was written by an export that
+The record size is zero in all eighty-six tables, because the area was written by an export that
 left that descriptor field blank. It is recoverable anyway: a data block is 4096 bytes with a
 60-byte header, the records area is 4032 bytes, and it holds a whole number of records, so the
-record size is the smallest divisor of 4032 that is at least four bytes past the last field.
-That gives 12 for `years`, 224 for `units`, 448 for `regions` and 576 for `datanames`, and each
-is the stride the bytes are written at. The test holds the rule against 53 tables: for every
-one it must produce the oracle's size, and no smaller divisor may fit.
+record size is the smallest divisor of 4032 that is at least four bytes past the last field. That
+gives 12 for `years`, 224 for `units`, 448 for `regions` and 576 for `datanames`, and each is the
+stride the bytes are written at. The test holds the rule against 80 tables and requires that no
+smaller divisor also fit.
 
-The records start 60 bytes into the block rather than 64. The fourth byte the header looks like
-it has belongs to the first record, and reading strings from a 64-byte base misaligns every one
-of them. That is how the 60 was found, and it is worth knowing because a 64-byte header is what
-the `NXDH` tag invites you to assume.
+The records start 60 bytes into the block rather than 64. The fourth byte the `NXDH` tag invites
+you to assume belongs to the first record, and reading strings from a 64-byte base misaligns every
+one of them. That is how the 60 was found.
 
-What this does not do yet, stated because it matters rather than because it is tidy. Deleted
-records are not filtered. In `years.nx1` the records past the live ones still carry bytes, and
-the first two of them count up from 78, which is a free-record chain rather than a year; NexusDB
-keeps the deleted map in the block header and a reader that wants live rows has to consult it.
-That is why the decoded sample in the oracle is `datanames.nx1`, whose seven records are all
-live, rather than `years.nx1`, which is the table a year list would naturally be read from.
-Blob fields decode as an identifier and no further, and 33 of the 86 tables in the shipped area
-carry a descriptor entry shape this parser has not seen, so they are reported and skipped rather
-than guessed at.
+What is left, and the first item is the one that matters.
 
-Mutations for this suite: reading a two-byte encoded value as one byte failed the layout test,
-dropping the four bytes of per-record overhead from the size rule failed the stride test, and
-moving the record base to 64 bytes failed both the stride and the decode.
+Deleted records are not filtered. The block header carries a used count and two further words
+whose meaning is not established: for `years.nx1` the row count is 31, the header words are 32,
+0x1f and 0x7fffffff, and none of the three is 31 or a plain bitmap over the slots, while slots 0
+and 1 are empty, 2..32 hold the years 2020 to 2050, and 33 onward hold a counter. That is why the
+decoded sample in the oracle is `datanames.nx1`, whose seven records are all live, and not the
+year list a reader would want first.
+
+Six of the 86 tables still resist, and they are named in the test rather than quietly missing:
+`PluginProperties`, `Plugins`, `areadata`, `fuels`, `tedtechdata` and `uservardata`. Twenty-six
+more read cleanly and hold no rows at all -- `envresults` and `results` among them -- which is a
+different thing from a read failure and is recorded as such. Blob fields decode as an identifier
+and no further, and the `NXHD` blocks alongside the record blocks are the blob heap, holding RTF
+rather than records.
+
+Mutations for this suite, all caught: looking for the declared length strictly after the type
+name, returning a layout that does not tile, accepting any string after the class name as a field
+name, and reading the placement from the wrong side of its anchor.
 
 ## The differential sweep
 

@@ -36,12 +36,15 @@ read out of the binary rather than inferred from the shape of the expressions.
 
 And the area is readable as numbers, not only as text. `records` reads the offset and size the
 dictionary states for every field, works out how long a record is, and decodes the fields by
-type, so a table comes back as typed rows. The first data block of `datanames.nx1` decodes to
-its seven records with TableID, TableName, FieldID, SetID, Name and Abbreviation.
+type, so a table comes back as typed rows: 80 of the 86 tables in the shipped area, of which 26
+hold no rows at all. The first data block of `datanames.nx1` decodes to its seven records with
+TableID, TableName, FieldID, SetID, Name and Abbreviation. A table whose descriptor stream
+cannot be placed comes back empty rather than as a plausible wrong layout, because the fields
+have to tile a record with no gap.
 
 ## How it is checked
 
-Forty-five tests over ten suites, none of which assert against its own implementation:
+Forty-nine tests over ten suites, none of which assert against its own implementation:
 
 * `calendar_parity` - 310 leap-year and 487 day-number vectors captured by emulating the
   original, floats compared as raw IEEE-754 bits.
@@ -62,9 +65,11 @@ Forty-five tests over ten suites, none of which assert against its own implement
   the dispatch points at. Every code the stored expressions spell has to be named by one table
   or the other and spelled the way the builder spells it.
 * `nx1_records_typed` - the typed-row reader over the vendor's own dictionary bytes and one data
-  block. The dictionary has to state a place for every field for the fields to tile a record
-  with no gap, and that is the assertion; the record size then has to be the stride the bytes
-  are written at, which is checked against 53 tables.
+  block. The dictionary has to state a place for every field for the fields to tile a record with
+  no gap, and that is the assertion; the record size then has to be the stride the bytes are
+  written at, which is checked against 80 tables. Two tests make the refusal itself the claim: a
+  field moved by one byte, and a class name planted inside stream data, both have to change
+  nothing.
 * `nx1_expr` - the expression reader over the 44 expressions the vendor area stores, each one
   with the byte window it was read from so the Rust scanner meets the capture tool on the
   original bytes. The round trip is asserted as a fixed point rather than character for
@@ -92,8 +97,9 @@ to it are both gated. They are written up in `docs/nx1-reconnaissance.md`.
   branch names and, in the scenario table, the **model arithmetic itself** are readable; that
   arithmetic parses into a tree; the codes in it are named and each is tied to the address of
   the function that evaluates it; and a table now decodes into typed rows rather than strings.
-  What is not done is filtering deleted records, reading the blob fields, and evaluating any of
-  it: an expression still has no value.
+  What is not done is filtering deleted records, reading the blob fields, six tables whose
+  descriptor stream this reader cannot place, and evaluating any of it: an expression still has
+  no value.
 
 So the honest state is: one component ported and verified hard, and the model readable down to
 typed rows but not yet evaluated. An expression parses, every code in it is named, the address

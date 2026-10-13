@@ -1,38 +1,40 @@
 """Capture the typed-row layout of a NexusDB `.nx1` table, as the vendor dictionary states it.
 
 A table file is a header block, a dictionary, index blocks, and then data blocks tagged
-`NXDH`. The records carry no field directory of their own, so the dictionary is the only
-thing that says where a field sits, and it says it per field:
+`NXDH`. The records carry no field directory of their own, so the dictionary is the only thing
+that says where a field sits, and it says it per field, as a stream of tagged properties:
 
-    TnxFieldDescriptor, the field name, the type name, the declared length, an ordinal,
-    and then a pair of encoded numbers, the offset and the size.
+    0x01 and 0x02  one byte,  0x03  two bytes,  0x12  four bytes,
+    0x06 and 0x07  a length-prefixed string,  0x08  a flag with no value,
+    0x09  a nested object, whose class name is the string that follows.
 
-The numbers are written as a tag byte and then a value whose width the tag names: 0x02 is
-one byte, 0x03 is two, 0x12 is four. Reading the pair for datanames.nx1 gives TableID at 0
-size 4, TableName at 4 size 102, FieldID at 106 size 4, SetID at 110 size 4, Name at 114
-size 302, Abbreviation at 416 size 102 and DateChanged at 518 size 8, which is exactly the
-layout the bytes have: the first record spells Balcat then Electricity with the integers
-between them, and every wide-string slot decodes as clean UTF-16 in all seven records of
-the block.
+Only the properties a field actually has are written, which is why a fixed byte layout per
+field does not work and the first version of this reader only managed 53 of the 86 tables. The
+tokens do work, and the extraction is three rules: the field name is the first string after the
+class name, the type name is the first string beginning with `nxt`, and the placement is the two
+numbers after the zero encoded as 0x12. For datanames.nx1 that gives TableID at 0 size 4,
+TableName at 4 size 102, FieldID at 106 size 4, SetID at 110 size 4, Name at 114 size 302,
+Abbreviation at 416 size 102 and DateChanged at 518 size 8, which is exactly the layout the
+bytes have.
 
 Two things the dictionary does not state in these files, and both had to be read off the data.
 
-The record size is zero in every one of the eighty tables, because the area was written by an
-export that left that descriptor field blank. It is recoverable: a data block is 4096 bytes
-with a 60-byte header, the records area is 4032 bytes, and it holds a whole number of records,
-so the record size is the smallest divisor of 4032 that is at least four bytes past the last
-field. That predicts 12 for years, 224 for units, 448 for regions and 576 for datanames, and
-each is what the bytes show.
+The record size is zero in all eighty tables, because the area was written by an export that
+left that descriptor field blank. It is recoverable: a data block is 4096 bytes with a 60-byte
+header, the records area is 4032 bytes, and it holds a whole number of records, so the record
+size is the smallest divisor of 4032 that is at least four bytes past the last field.
 
-The record base is 60 bytes into the block rather than 64: the fourth byte the header looks
-like it has belongs to the first record. Reading strings from a 64-byte base misaligns every
-one of them, which is how the 60 was found.
+The records start 60 bytes into the block rather than 64: the fourth byte the header looks like
+it has belongs to the first record. Reading strings from a 64-byte base misaligns every one of
+them, which is how the 60 was found.
 
-What this does not do yet. Deleted records are not filtered, and they matter: in years.nx1 the
-records past the live ones still carry bytes, and the first two of them count up from 78, which
-is a free-record chain rather than a year. NexusDB keeps a deleted-record map in the block
-header, and a reader that wants live rows has to consult it. That is the next read, and it is
-why the decoded sample here is datanames.nx1, whose seven records are all live.
+What this still does not do, stated because it matters. Deleted records are not filtered. The
+block header carries a used count and two further words whose meaning is not established here;
+for years.nx1, the number of real rows is 31, its header words are 32, 0x1f and 0x7fffffff, and
+slots 0 and 1 are empty while 2..32 hold the years 2020 to 2050 and 33 onward hold a counter.
+None of 32, 0x1f or 0x7fffffff is 31, and none is a plain bitmap over the slots, so the field is
+left unclaimed rather than guessed. That is also why the decoded sample is datanames.nx1, whose
+seven records are all live, and not the year list.
 
 Usage: python tools/capture_nx1_records.py leap-rs/src/oracle_records.rs
 """
@@ -49,52 +51,124 @@ HEADER = 0x3c
 DATA = BLOCK - HEADER - 4          # 4032 records bytes, four spare at the end of the block
 
 
-def read_value(buf, at):
-    """A tag byte and the value whose width it names."""
+def tokens(buf, lo, hi):
+    """The tagged token stream in buf[lo:hi], as (tag, value, next)."""
+    at = lo
+    out = []
+    while at < hi:
+        tag = buf[at]
+        if tag in (0x01, 0x02):
+            out.append((tag, buf[at + 1], at + 2))
+            at += 2
+        elif tag == 0x03:
+            out.append((tag, buf[at + 1] | (buf[at + 2] << 8), at + 3))
+            at += 3
+        elif tag == 0x12:
+            out.append((tag, int.from_bytes(buf[at + 1:at + 5], "little"), at + 5))
+            at += 5
+        elif tag in (0x04, 0x05):
+            out.append((tag, int.from_bytes(buf[at + 1:at + 5], "little"), at + 5))
+            at += 5
+        elif tag in (0x06, 0x07):
+            n = buf[at + 1]
+            out.append((tag, buf[at + 2:at + 2 + n].decode("latin-1"), at + 2 + n))
+            at += 2 + n
+        elif tag == 0x08:
+            out.append((tag, None, at + 1))
+            at += 1
+        elif tag == 0x09:
+            out.append((tag, None, at + 1))
+            at += 1
+        else:
+            break
+    return out
+
+
+ANCHOR = bytes([0x02, 0x03, 0x01, 0x00])          # the two properties before the ordinal
+MIDDLE = bytes([0x12, 0, 0, 0, 0, 0x02, 0x03])    # the zero, then the property before the pair
+
+
+def number(buf, at):
+    """A tagged number, as (value, next)."""
     tag = buf[at]
-    if tag == 0x02:
+    if tag in (0x01, 0x02):
         return buf[at + 1], at + 2
     if tag == 0x03:
         return buf[at + 1] | (buf[at + 2] << 8), at + 3
-    if tag == 0x12:
+    if tag in (0x04, 0x05, 0x12):
         return int.from_bytes(buf[at + 1:at + 5], "little"), at + 5
-    raise ValueError("tag %#x" % tag)
+    return None, None
+
+
+def placement(segment):
+    """(offset, size) for one field, found by the byte pattern that precedes it.
+
+    Counting tokens does not work: a field may carry more properties than another, and fields
+    such as the ones in areadata.nx1, fuels.nx1 and tedtechdata.nx1 carry more than the pair
+    this reader wants. The ordinal is introduced by a fixed byte pattern and the pair follows a
+    fixed pattern after it, so anchoring on those is what generalises.
+    """
+    at = segment.find(ANCHOR)
+    if at < 0:
+        return None, None
+    _, at = number(segment, at + len(ANCHOR))
+    if at is None or segment[at:at + len(MIDDLE)] != MIDDLE:
+        return None, None
+    offset, at = number(segment, at + len(MIDDLE))
+    size, at = number(segment, at)
+    return offset, size
+
+
+def segments(raw):
+    """The byte range of each real TnxFieldDescriptor entry.
+
+    The class name turns up inside stream data too -- fuels.nx1 has one followed by a string
+    that is not an identifier -- so a match only counts when the name after it reads as one.
+    """
+    starts = []
+    i = raw.find(NEEDLE)
+    while i >= 0:
+        at = i + len(NEEDLE)
+        if raw[at:at + 1] == bytes([0x06]):
+            n = raw[at + 1]
+            name = raw[at + 2:at + 2 + n]
+            if n and all(32 <= b < 127 for b in name):
+                starts.append(i)
+        i = raw.find(NEEDLE, i + 1)
+    if not starts:
+        return []
+    end = raw.find(INDICES, starts[-1])
+    if end < 0:
+        end = len(raw)
+    bounds = list(zip(starts, starts[1:] + [end]))
+    return bounds
 
 
 def field_descriptors(raw):
-    """(rows, complete) where a row is (name, type, declared length, offset, size)."""
-    at = raw.find(NEEDLE)
-    if at < 0:
-        return [], False
-    rows = []
-    while raw[at:at + len(NEEDLE)] == NEEDLE:
-        at += len(NEEDLE)
-        try:
-            n = raw[at + 1]
-            name = raw[at + 2:at + 2 + n].decode("latin-1")
-            at += 2 + n
-            _, at = read_value(raw, at)
-            n = raw[at + 1]
-            type_name = raw[at + 2:at + 2 + n].decode("latin-1")
-            at += 2 + n
-            declen, at = read_value(raw, at)
-            if raw[at:at + 7] != bytes([2, 0, 8, 2, 3, 1, 0]):
-                return rows, False
-            at += 7
-            _, at = read_value(raw, at)
-            if raw[at:at + 5] != bytes([0x12, 0, 0, 0, 0]) or raw[at + 5:at + 7] != bytes([2, 3]):
-                return rows, False
-            at += 7
-            offset, at = read_value(raw, at)
-            size, at = read_value(raw, at)
-            if raw[at:at + 2] != bytes([8, 8]):
-                return rows, False
-            at += 6
-        except (ValueError, IndexError):
-            return rows, False
-        rows.append((name, type_name, declen, offset, size))
-    # A fields-descriptor trailer sits between the last field and the indices descriptor.
-    return rows, INDICES in raw[at:at + 32]
+    """(rows, complete); a row is (name, type, declared length, offset, size)."""
+    out = []
+    for lo, hi in segments(raw):
+        ts = tokens(raw, lo, hi)
+        texts = [t for t in ts if t[0] in (0x06, 0x07)]
+        names = [t for t in texts if not t[1].startswith("nxt")]
+        types = [t for t in texts if t[1].startswith("nxt")]
+        if len(names) < 2 or not types:
+            return out, False
+        name = names[1][1]                     # names[0] is the class name
+        type_name = types[0][1]
+        after_type = [t for t in ts if t[2] > types[0][2] and t[0] in (0x01, 0x02, 0x03, 0x12)]
+        offset, size = placement(raw[lo:hi])
+        if not after_type or offset is None:
+            return out, False
+        out.append((name, type_name, after_type[0][1], offset, size))
+    # The fields have to tile the record from zero, which is a claim the bytes can settle and
+    # a partial or misread descriptor stream will not survive.
+    end = 0
+    for _, _, _, offset, size in out:
+        if offset != end:
+            return out, False
+        end = offset + size
+    return out, bool(out)
 
 
 def record_size(rows):
@@ -139,7 +213,6 @@ def quote(s):
 
 
 def scan_table(rec, by_name, names):
-    """(value, ...) for the named fields of one record."""
     out = []
     for name in names:
         _, type_name, _, off, size = by_name[name]
@@ -166,7 +239,7 @@ def main(out):
             rows, complete = field_descriptors(raw)
             name = member.rsplit("/", 1)[-1].replace(".nx1", "")
             blocks = data_blocks(raw)
-            if not complete or not rows or not blocks:
+            if not complete or not rows:
                 skipped.append(name)
                 continue
             size = record_size(rows)
@@ -174,16 +247,17 @@ def main(out):
                 skipped.append(name)
                 continue
             tables.append((name, size, rows))
+            # A table with no data block is empty rather than unreadable, and the oracle says so.
+            tables[-1] = (name, size, bool(blocks), rows)
             if name == "datanames":
-                start = raw.find(NEEDLE)
-                stop = raw.find(INDICES, start) + len(INDICES)
+                first = segments(raw)[0][0]
+                stop = raw.find(INDICES, first) + len(INDICES)
                 block = raw[blocks[0]:blocks[0] + BLOCK]
                 by_name = dict((f[0], f) for f in rows)
-                decoded = [scan_table(block[HEADER + k * size:], by_name,
-                                      ["TableID", "TableName", "FieldID", "SetID", "Name",
-                                       "Abbreviation"])
+                want = ("TableID", "TableName", "FieldID", "SetID", "Name", "Abbreviation")
+                decoded = [scan_table(block[HEADER + k * size:], by_name, want)
                            for k in range(DATA // size)]
-                sample = (raw[start:stop], block, decoded)
+                sample = (raw[first:stop], block, decoded)
 
     lines = []
     lines.append("// GENERATED by tools/capture_nx1_records.py -- do not edit by hand.")
@@ -193,11 +267,12 @@ def main(out):
     lines.append("// bytes and its first data block, so the Rust reader runs on the vendor bytes")
     lines.append("// rather than on a fixture.")
     lines.append("//")
-    lines.append("// (table, record size, [(field, type, declared length, offset, size)])")
-    lines.append("pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = &[")
-    for name, size, rows in tables:
+    lines.append("// (table, record size, holds a data block, [(field, type, declared length, offset, size)])")
+    lines.append("pub const NX1_RECORD_LAYOUT: &[(&str, usize, bool, &[(&str, &str, u32, u32, u32)])] = &[")
+    for name, size, has_data, rows in tables:
         lines.append("    // %s: %d fields" % (name, len(rows)))
-        lines.append("    (%s, %d, &[" % (quote(name), size))
+        lines.append("    (%s, %d, %s, &[" % (quote(name), size,
+                                            "true" if has_data else "false"))
         for row in rows:
             lines.append("        (%s, %s, %d, %d, %d),"
                          % tuple([quote(row[0]), quote(row[1])] + list(row[2:])))
@@ -221,6 +296,8 @@ def main(out):
 
     print("wrote %s" % out)
     print("  %d tables with a complete descriptor stream, %d skipped" % (len(tables), len(skipped)))
+    print("  %d of them hold no data block and are therefore empty"
+          % sum(1 for t in tables if not t[2]))
     print("  datanames: dictionary %d bytes, block %d bytes, %d rows"
           % (len(sample[0]), len(sample[1]), len(sample[2])))
     if skipped:
@@ -230,3 +307,12 @@ def main(out):
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1]))
+    lines.append("/// Tables whose descriptor stream reads but which hold no data block. An empty")
+    lines.append("/// table is not a read failure, and this area is mostly made of them.")
+    lines.append("pub const NX1_EMPTY_TABLES: &[&str] = &[")
+    for name in empty:
+        lines.append("    %s," % quote(name))
+    lines.append("];")
+    lines.append("")
+    lines.append("/// The datanames dictionary, from its first field descriptor to the indices one.")
+    lines.append("pub const NX1_DATANAMES_DICTIONARY: &str = %s;" % quote(sample[0].hex()))

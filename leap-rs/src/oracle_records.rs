@@ -5,16 +5,113 @@
 // bytes and its first data block, so the Rust reader runs on the vendor bytes
 // rather than on a fixture.
 //
-// (table, record size, [(field, type, declared length, offset, size)])
-pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = &[
+// (table, record size, holds a data block, [(field, type, declared length, offset, size)])
+pub const NX1_RECORD_LAYOUT: &[(&str, usize, bool, &[(&str, &str, u32, u32, u32)])] = &[
+    // BatchTable: 13 fields
+    ("BatchTable", 72, false, &[
+        ("BranchID", "nxtInt32", 5, 0, 4),
+        ("ScenarioID", "nxtInt32", 1, 4, 4),
+        ("VariableID", "nxtInt32", 2, 8, 4),
+        ("RegionID", "nxtInt32", 3, 12, 4),
+        ("YearID", "nxtInt32", 4, 16, 4),
+        ("ExtraID1", "nxtInt32", 5, 20, 4),
+        ("XAxis", "nxtInt32", 6, 24, 4),
+        ("Legend", "nxtInt32", 5, 28, 4),
+        ("ExtraID2", "nxtInt32", 8, 32, 4),
+        ("ResultVal", "nxtDouble", 0, 36, 8),
+        ("ResultVal2", "nxtDouble", 0, 44, 8),
+        ("PYVal", "nxtDouble", 0, 52, 8),
+        ("ScDiffVal", "nxtDouble", 0, 60, 8),
+    ]),
+    // Bookmarks: 5 fields
+    ("Bookmarks", 24, false, &[
+        ("BMID", "nxtInt32", 10, 0, 4),
+        ("RegionID", "nxtInt32", 10, 4, 4),
+        ("ScenarioID", "nxtInt32", 10, 8, 4),
+        ("VariableID", "nxtInt32", 10, 12, 4),
+        ("BranchID", "nxtInt32", 10, 16, 4),
+    ]),
+    // Constraints: 4 fields
+    ("Constraints", 14, false, &[
+        ("BranchID", "nxtInt32", 5, 0, 4),
+        ("RegionID", "nxtInt16", 5, 4, 2),
+        ("VariableID", "nxtInt16", 5, 6, 2),
+        ("Remove", "nxtBoolean", 0, 8, 1),
+    ]),
     // DeviceBranchTable: 3 fields
-    ("DeviceBranchTable", 16, &[
+    ("DeviceBranchTable", 16, true, &[
         ("DeviceBranchID", "nxtInt32", 10, 0, 4),
         ("BranchID", "nxtInt32", 10, 4, 4),
         ("BranchType", "nxtInt32", 10, 8, 4),
     ]),
+    // Discrepancies: 16 fields
+    ("Discrepancies", 4032, false, &[
+        ("ErrType", "nxtInt32", 1, 0, 4),
+        ("BranchID", "nxtInt32", 10, 4, 4),
+        ("VariableID", "nxtInt32", 1, 8, 4),
+        ("ScenarioID", "nxtInt32", 10, 12, 4),
+        ("RegionID", "nxtInt32", 10, 16, 4),
+        ("YearID", "nxtInt32", 3, 20, 4),
+        ("ExtraID1", "nxtInt32", 10, 24, 4),
+        ("ExtraID2", "nxtInt32", 10, 28, 4),
+        ("CorrectResultValue", "nxtDouble", 0, 32, 8),
+        ("IncorrectResultsValue", "nxtDouble", 0, 40, 8),
+        ("ErrorCode", "nxtInt32", 9, 48, 4),
+        ("ErrorPercent", "nxtDouble", 0, 52, 8),
+        ("ErrorValue", "nxtDouble", 0, 60, 8),
+        ("ErrCount", "nxtInt32", 10, 68, 4),
+        ("ErrMessage", "nxtWideString", 500, 72, 1002),
+        ("ErrLine", "nxtWideString", 500, 1074, 1002),
+    ]),
+    // Lines: 18 fields
+    ("Lines", 336, false, &[
+        ("ID", "nxtInt32", 10, 0, 4),
+        ("LineOrd", "nxtInt32", 10, 4, 4),
+        ("Name", "nxtWideString", 100, 8, 202),
+        ("FromNodeID", "nxtInt32", 10, 210, 4),
+        ("ToNodeID", "nxtInt32", 10, 214, 4),
+        ("Distance", "nxtDouble", 0, 218, 8),
+        ("Scale", "nxtInt32", 10, 226, 4),
+        ("UnitID", "nxtInt32", 10, 230, 4),
+        ("Notes", "nxtBlob", 0, 234, 8),
+        ("Tag", "nxtInt32", 10, 242, 4),
+        ("User1", "nxtDouble", 0, 246, 8),
+        ("User2", "nxtDouble", 0, 254, 8),
+        ("User3", "nxtDouble", 0, 262, 8),
+        ("FuelID", "nxtInt32", 10, 270, 4),
+        ("Enabled", "nxtBoolean", 0, 274, 1),
+        ("EffSpecMethod", "nxtInt16", 5, 275, 2),
+        ("CostSpecMethod", "nxtInt16", 5, 277, 2),
+        ("NotesHTML", "nxtBlobWideMemo", 0, 279, 8),
+    ]),
+    // MapUpdate: 5 fields
+    ("MapUpdate", 36, false, &[
+        ("MapID", "nxtInt32", 10, 0, 4),
+        ("RegionID", "nxtInt32", 1, 4, 4),
+        ("LastUpdated", "nxtDateTime", 0, 8, 8),
+        ("LastChanged", "nxtDateTime", 0, 16, 8),
+        ("LastUpdateStatus", "nxtDateTime", 0, 24, 8),
+    ]),
+    // Nodes: 15 fields
+    ("Nodes", 1008, false, &[
+        ("ID", "nxtInt32", 10, 0, 4),
+        ("NodeOrd", "nxtInt32", 1, 4, 4),
+        ("Name", "nxtWideString", 100, 8, 202),
+        ("RegionID", "nxtInt32", 2, 210, 4),
+        ("Latitude", "nxtDouble", 0, 214, 8),
+        ("Longitude", "nxtDouble", 100, 222, 8),
+        ("Tag", "nxtInt32", 10, 230, 4),
+        ("User1", "nxtInt32", 10, 234, 4),
+        ("User2", "nxtDouble", 0, 238, 8),
+        ("User3", "nxtDouble", 0, 246, 8),
+        ("Notes", "nxtBlob", 0, 254, 8),
+        ("Address", "nxtWideString", 250, 262, 502),
+        ("FuelID", "nxtInt32", 10, 764, 4),
+        ("Enabled", "nxtBoolean", 0, 768, 1),
+        ("NotesHTML", "nxtBlobWideMemo", 0, 769, 8),
+    ]),
     // RegressionResults: 8 fields
-    ("RegressionResults", 42, &[
+    ("RegressionResults", 42, true, &[
         ("BranchID", "nxtInt32", 10, 0, 4),
         ("VariableID", "nxtInt32", 1, 4, 4),
         ("ScenarioID", "nxtInt32", 10, 8, 4),
@@ -24,8 +121,14 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("ExtraID2", "nxtInt32", 10, 24, 4),
         ("Value", "nxtDouble", 0, 28, 8),
     ]),
+    // ScenarioTags: 3 fields
+    ("ScenarioTags", 16, false, &[
+        ("ID", "nxtInt32", 10, 0, 4),
+        ("TagID", "nxtInt32", 10, 4, 4),
+        ("TagOrder", "nxtInt32", 10, 8, 4),
+    ]),
     // RegressionResults: 8 fields
-    ("RegressionResults", 42, &[
+    ("RegressionResults", 42, true, &[
         ("BranchID", "nxtInt32", 10, 0, 4),
         ("VariableID", "nxtInt32", 1, 4, 4),
         ("ScenarioID", "nxtInt32", 10, 8, 4),
@@ -34,9 +137,22 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("ExtraID1", "nxtInt32", 10, 20, 4),
         ("ExtraID2", "nxtInt32", 10, 24, 4),
         ("Value", "nxtDouble", 0, 28, 8),
+    ]),
+    // aggresultscache: 10 fields
+    ("aggresultscache", 32, false, &[
+        ("BranchID", "nxtInt32", 10, 0, 4),
+        ("ScenarioID", "nxtInt16", 5, 4, 2),
+        ("RegionID", "nxtInt16", 5, 6, 2),
+        ("VariableID", "nxtInt16", 5, 8, 2),
+        ("DimType1", "nxtInt16", 5, 10, 2),
+        ("DimType2", "nxtInt16", 5, 12, 2),
+        ("DimVal1", "nxtInt16", 5, 14, 2),
+        ("DimVal2", "nxtInt16", 5, 16, 2),
+        ("YearID", "nxtInt16", 5, 18, 2),
+        ("ResultValue", "nxtDouble", 0, 20, 8),
     ]),
     // balcat: 9 fields
-    ("balcat", 336, &[
+    ("balcat", 336, true, &[
         ("BalCatID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("BalCatOrder", "nxtInt16", 5, 204, 2),
@@ -48,7 +164,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("Abbreviation", "nxtWideString", 30, 233, 62),
     ]),
     // balcat2: 9 fields
-    ("balcat2", 336, &[
+    ("balcat2", 336, true, &[
         ("BalCatID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("ShowResults", "nxtBoolean", 0, 204, 1),
@@ -60,7 +176,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("Abbreviation", "nxtWideString", 30, 233, 62),
     ]),
     // balcat3: 9 fields
-    ("balcat3", 336, &[
+    ("balcat3", 336, true, &[
         ("BalCatID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("ShowResults", "nxtBoolean", 0, 204, 1),
@@ -72,7 +188,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("Abbreviation", "nxtWideString", 30, 233, 62),
     ]),
     // balcat4: 9 fields
-    ("balcat4", 336, &[
+    ("balcat4", 336, true, &[
         ("BalCatID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("ShowResults", "nxtBoolean", 0, 204, 1),
@@ -83,19 +199,48 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("User3", "nxtDouble", 0, 225, 8),
         ("Abbreviation", "nxtWideString", 30, 233, 62),
     ]),
+    // branchreferences: 5 fields
+    ("branchreferences", 24, false, &[
+        ("BranchID", "nxtInt32", 10, 0, 4),
+        ("ScenarioID", "nxtInt16", 5, 4, 2),
+        ("RegionID", "nxtInt16", 5, 6, 2),
+        ("VariableID", "nxtInt16", 5, 8, 2),
+        ("Expression", "nxtBlobWideMemo", 0, 10, 8),
+    ]),
     // branchrefs: 2 fields
-    ("branchrefs", 12, &[
+    ("branchrefs", 12, true, &[
         ("BranchID", "nxtInt32", 10, 0, 4),
         ("RefID", "nxtInt16", 5, 4, 2),
     ]),
     // branchtags: 3 fields
-    ("branchtags", 16, &[
+    ("branchtags", 16, true, &[
         ("BranchID", "nxtInt32", 10, 0, 4),
         ("TagID", "nxtInt32", 10, 4, 4),
         ("TagOrder", "nxtInt32", 10, 8, 4),
     ]),
+    // changelog: 7 fields
+    ("changelog", 28, false, &[
+        ("BranchID", "nxtInt32", 10, 0, 4),
+        ("ScenarioID", "nxtInt16", 5, 4, 2),
+        ("RegionID", "nxtInt16", 5, 6, 2),
+        ("VariableID", "nxtInt16", 5, 8, 2),
+        ("Action", "nxtInt16", 5, 10, 2),
+        ("Scope", "nxtInt16", 5, 12, 2),
+        ("Expression", "nxtBlobWideMemo", 0, 14, 8),
+    ]),
+    // checksums: 8 fields
+    ("checksums", 32, false, &[
+        ("RegionID", "nxtInt16", 5, 0, 2),
+        ("FuelID", "nxtInt16", 5, 2, 2),
+        ("ScenarioID", "nxtInt16", 5, 4, 2),
+        ("YearID", "nxtInt16", 5, 6, 2),
+        ("DemandValue", "nxtDouble", 0, 8, 8),
+        ("PrimaryReqValue", "nxtDouble", 0, 16, 8),
+        ("ChecksumScaleID", "nxtInt16", 5, 24, 2),
+        ("ChecksumUnitID", "nxtInt16", 5, 26, 2),
+    ]),
     // constants: 7 fields
-    ("constants", 192, &[
+    ("constants", 192, true, &[
         ("NotesHTML", "nxtBlobWideMemo", 0, 0, 8),
         ("ID", "nxtInt32", 10, 8, 4),
         ("Name", "nxtWideString", 50, 12, 102),
@@ -105,7 +250,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("PluginGUID", "nxtNullString", 50, 131, 51),
     ]),
     // datanames: 7 fields
-    ("datanames", 576, &[
+    ("datanames", 576, true, &[
         ("TableID", "nxtInt32", 10, 0, 4),
         ("TableName", "nxtWideString", 50, 4, 102),
         ("FieldID", "nxtInt32", 10, 106, 4),
@@ -114,14 +259,22 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("Abbreviation", "nxtWideString", 50, 416, 102),
         ("DateChanged", "nxtDateTime", 0, 518, 8),
     ]),
+    // datanamessets: 5 fields
+    ("datanamessets", 672, false, &[
+        ("Order", "nxtInt32", 10, 0, 4),
+        ("ID", "nxtInt32", 10, 4, 4),
+        ("Name", "nxtWideString", 50, 8, 102),
+        ("LangCode", "nxtWideString", 5, 110, 12),
+        ("Notes", "nxtWideString", 250, 122, 502),
+    ]),
     // deviceparents: 3 fields
-    ("deviceparents", 16, &[
+    ("deviceparents", 16, true, &[
         ("DeviceBranchID", "nxtInt32", 10, 0, 4),
         ("BranchID", "nxtInt32", 10, 4, 4),
         ("BranchType", "nxtInt32", 10, 8, 4),
     ]),
     // diagnostics: 7 fields
-    ("diagnostics", 28, &[
+    ("diagnostics", 28, true, &[
         ("Order", "nxtInt32", 10, 0, 4),
         ("BranchID", "nxtInt32", 10, 4, 4),
         ("ScenarioID", "nxtInt16", 5, 8, 2),
@@ -130,13 +283,71 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("Message", "nxtBlobWideMemo", 0, 14, 8),
         ("MessageType", "nxtInt16", 5, 22, 2),
     ]),
+    // effectrefs: 2 fields
+    ("effectrefs", 8, false, &[
+        ("EffectID", "nxtInt16", 5, 0, 2),
+        ("RefID", "nxtInt16", 5, 2, 2),
+    ]),
+    // emissionmappings: 27 fields
+    ("emissionmappings", 4032, false, &[
+        ("ID", "nxtInt16", 5, 0, 2),
+        ("Name", "nxtWideString", 100, 2, 202),
+        ("FileName", "nxtWideString", 1000, 204, 2002),
+        ("CreatedOn", "nxtDateTime", 0, 2206, 8),
+        ("Tag", "nxtInt16", 5, 2214, 2),
+        ("User1", "nxtDouble", 0, 2216, 8),
+        ("User2", "nxtDouble", 0, 2224, 8),
+        ("User3", "nxtDouble", 0, 2232, 8),
+        ("EMOrd", "nxtInt16", 5, 2240, 2),
+        ("NumRows", "nxtInt32", 10, 2242, 4),
+        ("NumCols", "nxtInt32", 10, 2246, 4),
+        ("XLLCorner", "nxtDouble", 0, 2250, 8),
+        ("YLLCorner", "nxtDouble", 0, 2258, 8),
+        ("CellSize", "nxtDouble", 0, 2266, 8),
+        ("NoDataValue", "nxtDouble", 0, 2274, 8),
+        ("LastProcessed", "nxtDateTime", 0, 2282, 8),
+        ("NeedsUpdate", "nxtBoolean", 0, 2290, 1),
+        ("Referenced", "nxtInt32", 10, 2291, 4),
+        ("Selected", "nxtInt32", 10, 2295, 4),
+        ("Filesize", "nxtDouble", 0, 2299, 8),
+        ("FileType", "nxtWideString", 25, 2307, 52),
+        ("NumBands", "nxtInt16", 5, 2359, 2),
+        ("ActiveBand", "nxtInt16", 5, 2361, 2),
+        ("Projection", "nxtWideString", 100, 2363, 202),
+        ("Notes", "nxtBlob", 0, 2565, 8),
+        ("DataType", "nxtInt32", 10, 2573, 4),
+        ("NotesHTML", "nxtBlobWideMemo", 0, 2577, 8),
+    ]),
+    // envresults: 8 fields
+    ("envresults", 28, false, &[
+        ("BranchID", "nxtInt32", 5, 0, 4),
+        ("ScenarioID", "nxtInt16", 5, 4, 2),
+        ("RegionID", "nxtInt16", 5, 6, 2),
+        ("YearID", "nxtInt16", 5, 8, 2),
+        ("VariableID", "nxtInt16", 5, 10, 2),
+        ("ExtraDimID1", "nxtInt16", 5, 12, 2),
+        ("ExtraDimID2", "nxtInt16", 5, 14, 2),
+        ("ResultValue", "nxtDouble", 0, 16, 8),
+    ]),
     // fuelrefs: 2 fields
-    ("fuelrefs", 8, &[
+    ("fuelrefs", 8, true, &[
         ("FuelID", "nxtInt16", 5, 0, 2),
         ("RefID", "nxtInt16", 5, 2, 2),
     ]),
+    // hiddenbranches: 3 fields
+    ("hiddenbranches", 12, false, &[
+        ("BranchID", "nxtInt32", 10, 0, 4),
+        ("RegionID", "nxtInt16", 5, 4, 2),
+        ("Hidden", "nxtBoolean", 0, 6, 1),
+    ]),
+    // keyparamtags: 3 fields
+    ("keyparamtags", 16, false, &[
+        ("BranchID", "nxtInt32", 10, 0, 4),
+        ("VariableID", "nxtInt32", 10, 4, 4),
+        ("TagID", "nxtInt32", 10, 8, 4),
+    ]),
     // landtypes: 12 fields
-    ("landtypes", 336, &[
+    ("landtypes", 336, true, &[
         ("LandtypeID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("LTOrder", "nxtInt16", 5, 204, 2),
@@ -151,14 +362,14 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("NotesHTML", "nxtBlobWideMemo", 0, 314, 8),
     ]),
     // lastchangedcalculated: 4 fields
-    ("lastchangedcalculated", 28, &[
+    ("lastchangedcalculated", 28, true, &[
         ("ScenarioID", "nxtInt32", 10, 0, 4),
         ("RegionID", "nxtInt32", 10, 4, 4),
         ("LastChanged", "nxtDouble", 0, 8, 8),
         ("LastCalculated", "nxtDouble", 0, 16, 8),
     ]),
     // lifecycledata: 9 fields
-    ("lifecycledata", 192, &[
+    ("lifecycledata", 192, true, &[
         ("LifeCycleID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 50, 2, 102),
         ("AsData", "nxtInt16", 5, 104, 2),
@@ -170,13 +381,13 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("NotesHTML", "nxtBlobWideMemo", 0, 177, 8),
     ]),
     // lifecycletimedata: 3 fields
-    ("lifecycletimedata", 16, &[
+    ("lifecycletimedata", 16, true, &[
         ("LifeCycleID", "nxtInt16", 5, 0, 2),
         ("TimeID", "nxtInt16", 5, 2, 2),
         ("LFValue", "nxtDouble", 0, 4, 8),
     ]),
     // maccreport: 11 fields
-    ("maccreport", 84, &[
+    ("maccreport", 84, true, &[
         ("ReportID", "nxtInt32", 10, 0, 4),
         ("ScenarioID", "nxtInt32", 10, 4, 4),
         ("PlotOrder", "nxtInt32", 10, 8, 4),
@@ -190,7 +401,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("EmissionsCumulative", "nxtDouble", 0, 64, 8),
     ]),
     // masterstructure: 27 fields
-    ("masterstructure", 504, &[
+    ("masterstructure", 504, true, &[
         ("BranchID", "nxtInt32", 10, 0, 4),
         ("ParentBranchID", "nxtInt32", 10, 4, 4),
         ("BranchOrder", "nxtInt16", 5, 8, 2),
@@ -220,7 +431,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("NotesHTML", "nxtBlobWideMemo", 0, 492, 8),
     ]),
     // refs: 17 fields
-    ("refs", 4032, &[
+    ("refs", 4032, true, &[
         ("RefID", "nxtInt16", 5, 0, 2),
         ("Author", "nxtWideString", 250, 2, 502),
         ("AuthorShort", "nxtWideString", 50, 504, 102),
@@ -240,7 +451,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("NotesHTML", "nxtBlobWideMemo", 0, 3269, 8),
     ]),
     // regioncategories: 8 fields
-    ("regioncategories", 336, &[
+    ("regioncategories", 336, true, &[
         ("RegionCatID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("RegionCatOrder", "nxtInt16", 5, 204, 2),
@@ -251,7 +462,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("Abbreviation", "nxtWideString", 30, 232, 62),
     ]),
     // regioncategories2: 8 fields
-    ("regioncategories2", 336, &[
+    ("regioncategories2", 336, true, &[
         ("RegionCatID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("RegionCatOrder", "nxtInt16", 5, 204, 2),
@@ -262,7 +473,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("Abbreviation", "nxtWideString", 30, 232, 62),
     ]),
     // regioncategories3: 8 fields
-    ("regioncategories3", 336, &[
+    ("regioncategories3", 336, true, &[
         ("RegionCatID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("RegionCatOrder", "nxtInt16", 5, 204, 2),
@@ -273,7 +484,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("Abbreviation", "nxtWideString", 30, 232, 62),
     ]),
     // regioncategories4: 8 fields
-    ("regioncategories4", 336, &[
+    ("regioncategories4", 336, true, &[
         ("RegionCatID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("RegionCatOrder", "nxtInt16", 5, 204, 2),
@@ -284,7 +495,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("Abbreviation", "nxtWideString", 30, 232, 62),
     ]),
     // regions: 22 fields
-    ("regions", 448, &[
+    ("regions", 448, true, &[
         ("RegionID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("ShowResults", "nxtBoolean", 0, 204, 1),
@@ -308,8 +519,18 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("NotesHTML", "nxtBlobWideMemo", 0, 345, 8),
         ("IBC", "nxtBoolean", 0, 353, 1),
     ]),
+    // results: 7 fields
+    ("results", 28, false, &[
+        ("BranchID", "nxtInt32", 5, 0, 4),
+        ("ScenarioID", "nxtInt16", 5, 4, 2),
+        ("RegionID", "nxtInt16", 5, 6, 2),
+        ("YearID", "nxtInt16", 5, 8, 2),
+        ("VariableID", "nxtInt16", 5, 10, 2),
+        ("ExtraDimID1", "nxtInt16", 5, 12, 2),
+        ("ResultValue", "nxtDouble", 0, 14, 8),
+    ]),
     // resultsstructure: 5 fields
-    ("resultsstructure", 28, &[
+    ("resultsstructure", 28, true, &[
         ("BranchID", "nxtInt32", 10, 0, 4),
         ("VariableID", "nxtInt32", 10, 4, 4),
         ("ExtraID1", "nxtInt32", 10, 8, 4),
@@ -317,7 +538,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("Index", "nxtInt64", 20, 16, 8),
     ]),
     // scenariodata: 5 fields
-    ("scenariodata", 24, &[
+    ("scenariodata", 24, true, &[
         ("BranchID", "nxtInt32", 10, 0, 4),
         ("VariableID", "nxtInt16", 5, 4, 2),
         ("RegionID", "nxtInt16", 5, 6, 2),
@@ -325,7 +546,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("Expression", "nxtBlobWideMemo", 0, 10, 8),
     ]),
     // scenarioeffects: 37 fields
-    ("scenarioeffects", 2016, &[
+    ("scenarioeffects", 2016, true, &[
         ("EffectID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 150, 2, 302),
         ("Category", "nxtInt16", 5, 304, 2),
@@ -365,13 +586,13 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("CGTP100", "nxtDouble", 0, 1507, 8),
     ]),
     // scenarioinheritance: 3 fields
-    ("scenarioinheritance", 12, &[
+    ("scenarioinheritance", 12, true, &[
         ("ScenarioID", "nxtInt16", 5, 0, 2),
         ("ParentScenarioID", "nxtInt16", 5, 2, 2),
         ("InheritOrder", "nxtInt16", 5, 4, 2),
     ]),
     // scenarios: 21 fields
-    ("scenarios", 336, &[
+    ("scenarios", 336, true, &[
         ("ScenarioID", "nxtInt16", 5, 0, 2),
         ("Description", "nxtBlob", 0, 2, 8),
         ("MainParentScenarioID", "nxtInt16", 5, 10, 2),
@@ -395,7 +616,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("NotesHTML", "nxtBlobWideMemo", 0, 298, 8),
     ]),
     // scenariotemplate: 20 fields
-    ("scenariotemplate", 504, &[
+    ("scenariotemplate", 504, true, &[
         ("BranchID", "nxtInt32", 10, 0, 4),
         ("VariableID", "nxtInt32", 10, 4, 4),
         ("ParamOrder", "nxtInt32", 10, 8, 4),
@@ -418,13 +639,13 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("KPID", "nxtAutoInc", 10, 477, 4),
     ]),
     // staticdata: 3 fields
-    ("staticdata", 18, &[
+    ("staticdata", 18, true, &[
         ("BranchID", "nxtInt32", 10, 0, 4),
         ("VariableID", "nxtInt16", 5, 4, 2),
         ("Expression", "nxtDouble", 0, 6, 8),
     ]),
     // summaryreportrows: 17 fields
-    ("summaryreportrows", 1344, &[
+    ("summaryreportrows", 1344, true, &[
         ("RowID", "nxtAutoInc", 10, 0, 4),
         ("ReportID", "nxtInt16", 5, 4, 2),
         ("RowOrder", "nxtInt32", 10, 6, 4),
@@ -444,7 +665,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("Abbrev", "nxtWideString", 20, 1255, 42),
     ]),
     // summaryreports: 34 fields
-    ("summaryreports", 2016, &[
+    ("summaryreports", 2016, true, &[
         ("Name", "nxtWideString", 150, 0, 302),
         ("ReportOrd", "nxtInt32", 10, 302, 4),
         ("ReportID", "nxtInt32", 10, 306, 4),
@@ -481,7 +702,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("PinView", "nxtBoolean", 0, 1415, 1),
     ]),
     // taggroups: 15 fields
-    ("taggroups", 1344, &[
+    ("taggroups", 1344, true, &[
         ("TagGroupID", "nxtInt32", 10, 0, 4),
         ("Name", "nxtWideString", 100, 4, 202),
         ("TagOrder", "nxtInt32", 10, 206, 4),
@@ -498,8 +719,13 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("IntVal", "nxtInt16", 5, 1324, 2),
         ("GroupType", "nxtInt16", 5, 1326, 2),
     ]),
+    // taggroupshowresults: 2 fields
+    ("taggroupshowresults", 12, false, &[
+        ("TagID", "nxtInt32", 10, 0, 4),
+        ("TagGroupID", "nxtInt32", 10, 4, 4),
+    ]),
     // tags: 16 fields
-    ("tags", 2016, &[
+    ("tags", 2016, true, &[
         ("TagID", "nxtInt32", 10, 0, 4),
         ("TagOrd", "nxtInt32", 10, 4, 4),
         ("Name", "nxtWideString", 100, 8, 202),
@@ -518,7 +744,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("IntVal", "nxtInt16", 5, 1490, 2),
     ]),
     // tedeffects: 37 fields
-    ("tedeffects", 2016, &[
+    ("tedeffects", 2016, true, &[
         ("EffectID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 150, 2, 302),
         ("Category", "nxtInt16", 5, 304, 2),
@@ -558,7 +784,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("CGTP100", "nxtDouble", 0, 1507, 8),
     ]),
     // tedenvdata: 7 fields
-    ("tedenvdata", 32, &[
+    ("tedenvdata", 32, true, &[
         ("TechID", "nxtInt16", 5, 0, 2),
         ("EffectID", "nxtInt16", 5, 2, 2),
         ("EmissionSaving", "nxtDouble", 0, 4, 8),
@@ -567,18 +793,31 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("DenominatorUnit", "nxtInt16", 5, 22, 2),
         ("PerUnitType", "nxtInt16", 5, 24, 2),
     ]),
+    // tedinputfuelsdata: 3 fields
+    ("tedinputfuelsdata", 16, false, &[
+        ("TechID", "nxtInt16", 5, 0, 2),
+        ("FuelID", "nxtInt16", 5, 2, 2),
+        ("InputShare", "nxtDouble", 0, 4, 8),
+    ]),
+    // tedoutputfuelsdata: 4 fields
+    ("tedoutputfuelsdata", 18, false, &[
+        ("TechID", "nxtInt16", 5, 0, 2),
+        ("FuelID", "nxtInt16", 5, 2, 2),
+        ("OutputShare", "nxtDouble", 0, 4, 8),
+        ("ByProduct", "nxtBoolean", 0, 12, 1),
+    ]),
     // tedtechrefs: 2 fields
-    ("tedtechrefs", 8, &[
+    ("tedtechrefs", 8, true, &[
         ("TechID", "nxtInt16", 5, 0, 2),
         ("RefID", "nxtInt16", 5, 2, 2),
     ]),
     // timeslicegroups: 2 fields
-    ("timeslicegroups", 96, &[
+    ("timeslicegroups", 96, true, &[
         ("ID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 40, 2, 82),
     ]),
     // timesliceresults: 6 fields
-    ("timesliceresults", 126, &[
+    ("timesliceresults", 126, true, &[
         ("TimeSliceID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 50, 2, 102),
         ("Value", "nxtDouble", 0, 104, 8),
@@ -587,7 +826,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("Order2", "nxtInt32", 10, 117, 4),
     ]),
     // timeslices: 28 fields
-    ("timeslices", 1008, &[
+    ("timeslices", 1008, true, &[
         ("TimeSliceID", "nxtInt32", 10, 0, 4),
         ("TSOrder", "nxtInt32", 10, 4, 4),
         ("Name", "nxtWideString", 250, 8, 502),
@@ -618,7 +857,25 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("DayGroupID", "nxtInt32", 10, 747, 4),
     ]),
     // tsgroups1: 6 fields
-    ("tsgroups1", 252, &[
+    ("tsgroups1", 252, true, &[
+        ("ID", "nxtInt32", 10, 0, 4),
+        ("Ord", "nxtInt32", 10, 4, 4),
+        ("Name", "nxtWideString", 100, 8, 202),
+        ("NEMOMultiplier", "nxtDouble", 0, 210, 8),
+        ("Hours", "nxtDouble", 0, 218, 8),
+        ("ShowResults", "nxtBoolean", 0, 226, 1),
+    ]),
+    // tsgroups2: 6 fields
+    ("tsgroups2", 252, false, &[
+        ("ID", "nxtInt32", 10, 0, 4),
+        ("Ord", "nxtInt32", 10, 4, 4),
+        ("Name", "nxtWideString", 100, 8, 202),
+        ("NEMOMultiplier", "nxtDouble", 0, 210, 8),
+        ("Hours", "nxtDouble", 0, 218, 8),
+        ("ShowResults", "nxtBoolean", 0, 226, 1),
+    ]),
+    // tsgroups3: 6 fields
+    ("tsgroups3", 252, false, &[
         ("ID", "nxtInt32", 10, 0, 4),
         ("Ord", "nxtInt32", 10, 4, 4),
         ("Name", "nxtWideString", 100, 8, 202),
@@ -627,7 +884,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("ShowResults", "nxtBoolean", 0, 226, 1),
     ]),
     // tsprofiledata: 6 fields
-    ("tsprofiledata", 24, &[
+    ("tsprofiledata", 24, true, &[
         ("TSProfileID", "nxtInt16", 5, 0, 2),
         ("TimeSliceID", "nxtInt16", 5, 2, 2),
         ("PercentValue", "nxtDouble", 0, 4, 8),
@@ -636,7 +893,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("Group3ID", "nxtInt16", 5, 16, 2),
     ]),
     // tsprofiles: 23 fields
-    ("tsprofiles", 448, &[
+    ("tsprofiles", 448, true, &[
         ("TSProfileID", "nxtInt16", 5, 0, 2),
         ("ProfileOrder", "nxtInt16", 5, 2, 2),
         ("Name", "nxtWideString", 100, 4, 202),
@@ -662,13 +919,13 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("NotesHTML", "nxtBlobWideMemo", 0, 387, 8),
     ]),
     // unitclass: 3 fields
-    ("unitclass", 72, &[
+    ("unitclass", 72, true, &[
         ("UnitClassID", "nxtInt16", 5, 0, 2),
         ("UnitClassName", "nxtWideString", 30, 2, 62),
         ("UnitClassOrder", "nxtInt16", 5, 64, 2),
     ]),
     // units: 11 fields
-    ("units", 224, &[
+    ("units", 224, true, &[
         ("UnitID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 50, 2, 102),
         ("Conversion", "nxtDouble", 0, 104, 8),
@@ -681,8 +938,15 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("PluginGUID", "nxtNullString", 50, 152, 51),
         ("NotesHTML", "nxtBlobWideMemo", 0, 203, 8),
     ]),
+    // uservartags: 4 fields
+    ("uservartags", 21, false, &[
+        ("VariableID", "nxtInt32", 10, 0, 4),
+        ("TagID", "nxtInt32", 10, 4, 4),
+        ("TagType", "nxtInt32", 10, 8, 4),
+        ("TagOrder", "nxtInt32", 10, 12, 4),
+    ]),
     // variablecategories: 6 fields
-    ("variablecategories", 576, &[
+    ("variablecategories", 576, true, &[
         ("CategoryID", "nxtInt32", 10, 0, 4),
         ("VCOrder", "nxtInt32", 10, 4, 4),
         ("Name", "nxtWideString", 50, 8, 102),
@@ -691,7 +955,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("Tag", "nxtInt32", 10, 516, 4),
     ]),
     // variabledata: 11 fields
-    ("variabledata", 4032, &[
+    ("variabledata", 4032, true, &[
         ("VariableID", "nxtInt16", 5, 0, 2),
         ("Description", "nxtWideString", 250, 2, 502),
         ("MinValue", "nxtDouble", 0, 504, 8),
@@ -704,19 +968,35 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, &[(&str, &str, u32, u32, u32)])] = 
         ("VisibleScenario", "nxtBoolean", 0, 2130, 1),
         ("PluginGUID", "nxtNullString", 50, 2131, 51),
     ]),
+    // variableshortcuts: 9 fields
+    ("variableshortcuts", 112, false, &[
+        ("ShortCutID", "nxtInt32", 10, 0, 4),
+        ("BranchID", "nxtInt32", 10, 4, 4),
+        ("VariableID", "nxtInt32", 10, 8, 4),
+        ("ScaleID", "nxtInt32", 10, 12, 4),
+        ("UnitID", "nxtInt32", 10, 16, 4),
+        ("ShortCut", "nxtWideString", 30, 20, 62),
+        ("SCOrder", "nxtInt32", 10, 82, 4),
+        ("Notes", "nxtBlob", 0, 86, 8),
+        ("Tag", "nxtInt32", 10, 94, 4),
+    ]),
+    // version: 1 fields
+    ("version", 8, true, &[
+        ("FileVersion", "nxtInt32", 10, 0, 4),
+    ]),
     // vintage: 3 fields
-    ("vintage", 12, &[
+    ("vintage", 12, true, &[
         ("VintageID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtNullString", 4, 2, 5),
         ("ShowResults", "nxtBoolean", 0, 7, 1),
     ]),
     // writtenresults: 2 fields
-    ("writtenresults", 9, &[
+    ("writtenresults", 9, true, &[
         ("VariableID", "nxtInt32", 10, 0, 4),
         ("Written", "nxtBoolean", 0, 4, 1),
     ]),
     // years: 3 fields
-    ("years", 12, &[
+    ("years", 12, true, &[
         ("YearID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtNullString", 4, 2, 5),
         ("ShowResults", "nxtBoolean", 0, 7, 1),
