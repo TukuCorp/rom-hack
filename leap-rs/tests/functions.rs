@@ -72,6 +72,67 @@ fn the_names_are_the_ones_the_builder_states() {
     assert_eq!(functions::name(407), None);
 }
 
+/// Every function call in a tree, as (code, how many arguments).
+fn calls(expr: &Expr, out: &mut Vec<(u32, usize)>) {
+    match expr {
+        Expr::Func { code, args } => {
+            if let Some(args) = args {
+                out.push((*code, args.len()));
+                for arg in args {
+                    calls(arg, out);
+                }
+            }
+        }
+        Expr::Var { args } => {
+            if let Some(args) = args {
+                for arg in args {
+                    calls(arg, out);
+                }
+            }
+        }
+        Expr::Binary { lhs, rhs, .. } => {
+            calls(lhs, out);
+            calls(rhs, out);
+        }
+        Expr::Unary { expr, .. } => calls(expr, out),
+        Expr::Paren(inner) => calls(inner, out),
+        Expr::Number(_) | Expr::Const(_) | Expr::Series(_) => {}
+    }
+}
+
+#[test]
+fn every_call_the_vendor_stored_takes_the_number_of_arguments_the_binary_states() {
+    // Two independent artefacts: the registration helpers in leap.exe, which state an arity per
+    // signature, and the arithmetic the area stores. If either reading is wrong this fails.
+    let mut checked = 0;
+    let mut codes = std::collections::BTreeSet::new();
+    for (table, at, _, text) in NX1_EXPRESSIONS {
+        let tree = expr::parse(text).unwrap_or_else(|e| panic!("{table} at {at:#x}: {e}"));
+        let mut found = Vec::new();
+        calls(&tree, &mut found);
+        for (code, count) in found {
+            if let Some(arity) = functions::arity(code) {
+                assert_eq!(
+                    count as u32, arity,
+                    "{} at {:#x}: {} takes {} arguments, not {}",
+                    table, at, functions::marker(code), arity, count
+                );
+                codes.insert(code);
+                checked += 1;
+            }
+        }
+    }
+    assert_eq!(checked, 36, "calls with a stated arity in the corpus");
+    assert_eq!(codes, [1u32, 7, 8, 10, 37, 41, 43].into_iter().collect());
+
+    // The numbers are the binary\u0027s, and they line up with the shapes in the corpus.
+    assert_eq!(functions::arity(1), Some(1), "Growth takes a value");
+    assert_eq!(functions::arity(37), Some(8), "GrowthAs takes a branch, a year and six flags");
+    assert_eq!(functions::arity(41), Some(9), "GrowthAs with a rate takes one more");
+    assert_eq!(functions::arity(43), Some(2), "annualized cost takes a rate and a life");
+    assert_eq!(functions::arity(176), None, "a fuel property is not a function");
+}
+
 #[test]
 fn every_code_the_vendor_stored_is_registered_and_spelled_the_same_way() {
     let mut seen = 0;

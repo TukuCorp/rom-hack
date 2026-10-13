@@ -71,7 +71,7 @@ and the seventh comes back short and says so.
 
 ## How it is checked
 
-Fifty-eight tests over eleven suites, none of which assert against its own implementation:
+Fifty-nine tests over eleven suites, none of which assert against its own implementation:
 
 * `calendar_parity` - 310 leap-year and 487 day-number vectors captured by emulating the
   original, floats compared as raw IEEE-754 bits.
@@ -90,7 +90,9 @@ Fifty-eight tests over eleven suites, none of which assert against its own imple
 * `functions` - the registry the vendor builds at startup, 354 codes with their names and second
   names, the 16 property codes numbered in the same space, and the 332 evaluator entry points
   the dispatch points at. Every code the stored expressions spell has to be named by one table
-  or the other and spelled the way the builder spells it.
+  or the other and spelled the way the builder spells it. The registration helpers are one per
+  signature and each states its own argument count, and that count is held against every call the
+  vendor stored: 36 calls across seven codes, and each has to match.
 * `nx1_records_typed` - the typed-row reader over the vendor's own dictionary bytes and one data
 * `model` - the branch tree out of the vendor's structure table. The top level of the area has to
   come back as the eight modules it is made of, Freedonia among them, and the whole tree has to

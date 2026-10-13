@@ -26,7 +26,21 @@
 //! sites do not pass, so it is not recoverable from those sites and this module does not
 //! pretend otherwise.
 
-use crate::oracle_functions::{LEAP_EVALUATORS, LEAP_FUNCTIONS, LEAP_PROPERTIES};
+use crate::oracle_functions::{LEAP_ARITY, LEAP_EVALUATORS, LEAP_FUNCTIONS, LEAP_PROPERTIES};
+
+/// How many arguments the evaluator for a code takes, as its registration helper states.
+///
+/// The registration helpers are one per signature, and each writes its own number into the
+/// descriptor it builds, so this count is the vendor's rather than a reading of the expressions.
+/// The agreement is checkable and checked: `_gr` states 1 and every stored `@F001` call passes one
+/// argument, `_gras` states 8 and `@F037` passes eight, `_grasel` states 9 and `@F041` passes
+/// nine. Only the codes whose helper this pass reads appear; the fuel properties are not functions.
+pub fn arity(code: u32) -> Option<u32> {
+    LEAP_ARITY
+        .binary_search_by(|row| row.0.cmp(&code))
+        .ok()
+        .map(|i| LEAP_ARITY[i].1)
+}
 
 /// The evaluator behind a second name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

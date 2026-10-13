@@ -237,6 +237,16 @@ spaced 0x60 apart, which reads like one helper per signature rather than one per
 dispatch folds case where the registry does not, so `_Data` there is `_data` here. Every function
 the corpus calls resolves to an address through it.
 
+The third table says what evaluates each name, and it carries arity as well. The helpers run from
+`FUN_01b5c0c0` upward in steps of 0x60, one per signature, and each builds the same descriptor, fills
+in the name and the evaluator address, and writes its own number at +0x10: 0 for the first helper,
+1 for the second, and up to 13 before the family repeats with a different kind byte. That number is
+the argument count, and it is checkable rather than merely plausible, because the vendor's stored
+arithmetic has to agree with it. It does: `_gr` states 1 and every stored `@F001` call passes one
+argument, `_gras` states 8 and `@F037` passes eight, `_grasel` states 9 and `@F041` passes nine,
+`_AnnualizedCostSimple` states 2 and `@F043` passes two. Across the corpus that is 36 calls over
+seven codes, all matching, which ties the registration in the binary to the arithmetic in the area.
+
 Twenty-seven second names are registered by nobody, and the test pins them rather than skipping
 them quietly: the plain math functions from Abs to Floor, the financial ones from Sign to Power,
 and three counters. Something else evaluates those, and naming it is the next read.
