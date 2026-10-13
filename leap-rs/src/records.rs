@@ -278,6 +278,48 @@ pub fn records(block: &[u8], fields: &[Field], record_size: usize) -> Vec<Vec<Va
         .collect()
 }
 
+/// Whether a slot is one nothing was ever written to.
+///
+/// A fresh block leaves either zeroes or, for every slot past the last written one, the slot
+/// number in its first two bytes with the rest of the record zero. The year list is what makes
+/// this checkable rather than merely plausible: with the rule, `years.nx1` reads as exactly the 31
+/// years 2020 to 2050, which is the base year the area settings file states, and without it the
+/// free slots past them read as years 33 and up.
+///
+/// It is a signature of an unwritten slot rather than the file own answer, and it under-filters:
+/// a slot that was written and then freed keeps bytes elsewhere in the record and still looks
+/// written. The exact rule is a map the block header carries, which is not read yet, so a caller
+/// that needs certainty should compare the count against the header own used count.
+pub fn slot_is_unwritten(record: &[u8], index: usize) -> bool {
+    if record.iter().all(|byte| *byte == 0) {
+        return true;
+    }
+    record.len() >= 2
+        && record[2..].iter().all(|byte| *byte == 0)
+        && u16::from_le_bytes([record[0], record[1]]) as usize == index
+}
+
+/// The records of a data block that were written, in the order the block holds them.
+pub fn live_records(block: &[u8], fields: &[Field], record_size: usize) -> Vec<Vec<Value>> {
+    if record_size == 0 {
+        return Vec::new();
+    }
+    let count = DATA / record_size;
+    (0..count)
+        .filter(|k| {
+            let base = HEADER + k * record_size;
+            !block
+                .get(base..base + record_size)
+                .map(|record| slot_is_unwritten(record, *k))
+                .unwrap_or(true)
+        })
+        .map(|k| {
+            let base = HEADER + k * record_size;
+            fields.iter().map(|field| decode(block, base, field)).collect()
+        })
+        .collect()
+}
+
 fn decode(block: &[u8], base: usize, field: &Field) -> Value {
     let at = base + field.offset as usize;
     let size = field.size as usize;

@@ -42,9 +42,13 @@ TableID, TableName, FieldID, SetID, Name and Abbreviation. A table whose descrip
 cannot be placed comes back empty rather than as a plausible wrong layout, because the fields
 have to tile a record with no gap.
 
+The year list reads as well: `years.nx1` comes back as the 31 years 2020 to 2050 -- the base year
+the area settings state, through to the year LEAP stops at -- once slots nothing was ever written
+to are left out. Without that, the free slots past the live ones read as years 33 and up.
+
 ## How it is checked
 
-Forty-nine tests over ten suites, none of which assert against its own implementation:
+Fifty tests over ten suites, none of which assert against its own implementation:
 
 * `calendar_parity` - 310 leap-year and 487 day-number vectors captured by emulating the
   original, floats compared as raw IEEE-754 bits.
@@ -69,7 +73,8 @@ Forty-nine tests over ten suites, none of which assert against its own implement
   no gap, and that is the assertion; the record size then has to be the stride the bytes are
   written at, which is checked against 80 tables. Two tests make the refusal itself the claim: a
   field moved by one byte, and a class name planted inside stream data, both have to change
-  nothing.
+  nothing. The year list is the one table whose answer is knowable on its own, and it has to come
+  out as exactly 2020..2050 with the free slots left out.
 * `nx1_expr` - the expression reader over the 44 expressions the vendor area stores, each one
   with the byte window it was read from so the Rust scanner meets the capture tool on the
   original bytes. The round trip is asserted as a fixed point rather than character for
@@ -97,9 +102,10 @@ to it are both gated. They are written up in `docs/nx1-reconnaissance.md`.
   branch names and, in the scenario table, the **model arithmetic itself** are readable; that
   arithmetic parses into a tree; the codes in it are named and each is tied to the address of
   the function that evaluates it; and a table now decodes into typed rows rather than strings.
-  What is not done is filtering deleted records, reading the blob fields, six tables whose
-  descriptor stream this reader cannot place, and evaluating any of it: an expression still has
-  no value.
+  What is not done is reading the blob fields, six tables whose descriptor stream this reader
+  cannot place, filtering a record that was written and then deleted -- the year list is filtered
+  by the signature of an unwritten slot rather than by the block header's own map, which is not
+  read yet -- and evaluating any of it: an expression still has no value.
 
 So the honest state is: one component ported and verified hard, and the model readable down to
 typed rows but not yet evaluated. An expression parses, every code in it is named, the address

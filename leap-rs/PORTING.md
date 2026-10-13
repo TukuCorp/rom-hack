@@ -291,12 +291,26 @@ one of them. That is how the 60 was found.
 
 What is left, and the first item is the one that matters.
 
-Deleted records are not filtered. The block header carries a used count and two further words
-whose meaning is not established: for `years.nx1` the row count is 31, the header words are 32,
-0x1f and 0x7fffffff, and none of the three is 31 or a plain bitmap over the slots, while slots 0
-and 1 are empty, 2..32 hold the years 2020 to 2050, and 33 onward hold a counter. That is why the
-decoded sample in the oracle is `datanames.nx1`, whose seven records are all live, and not the
-year list a reader would want first.
+A record that was written and then deleted is not recognised by the file's own map. The block
+header carries a used count and two further words whose meaning is not established: for
+`years.nx1` the live row count is 31, the header words are 32, 0x1f and 0x7fffffff, and none of
+the three is 31 or a plain bitmap over the slots, while slots 0 and 1 are empty, 2..32 hold the
+years 2020 to 2050, and 33 onward hold a counter. After three passes at it the encoding is still
+not settled, so it is left unclaimed rather than fitted to one table.
+
+What the reader does instead is skip slots nothing was ever written to, which is a signature
+rather than the file's answer: a slot is unwritten when every byte is zero, or when its first two
+bytes carry its own slot number and the rest is zero, which is what a fresh block leaves behind.
+The year list is what makes that checkable rather than merely plausible. With the rule,
+`years.nx1` reads as exactly the 31 years 2020 to 2050 -- the base year the area's own settings
+file states, through to the year LEAP stops at -- and without it the free slots read as years 33
+and up. The rows also come out in insertion order, 2021 to 2030 then 2020 then 2050 down to 2031,
+which is worth knowing: a caller that wants them sorted has to sort them.
+
+The rule under-filters. A slot that was written and then freed keeps bytes elsewhere in the record
+and still looks written, so a table whose live count the header states can come back with more
+rows than that: `regions.nx1` says one and yields eight. That is the price of not having the map,
+and it is stated rather than hidden.
 
 Six of the 86 tables still resist, and they are named in the test rather than quietly missing:
 `PluginProperties`, `Plugins`, `areadata`, `fuels`, `tedtechdata` and `uservardata`. Twenty-six
@@ -307,7 +321,9 @@ rather than records.
 
 Mutations for this suite, all caught: looking for the declared length strictly after the type
 name, returning a layout that does not tile, accepting any string after the class name as a field
-name, and reading the placement from the wrong side of its anchor.
+name, reading the placement from the wrong side of its anchor, treating nothing as unwritten,
+deciding that on the all-zero case alone, and comparing a slot number against the next slot
+instead of its own.
 
 ## The differential sweep
 

@@ -8,6 +8,7 @@
 
 use leap_rs::oracle_records::{
     NX1_DATANAMES_BLOCK, NX1_DATANAMES_DICTIONARY, NX1_DATANAMES_ROWS, NX1_RECORD_LAYOUT,
+    NX1_YEARS_BLOCK, NX1_YEARS_ROWS,
 };
 use leap_rs::records::{self, Field, Value};
 
@@ -226,4 +227,41 @@ fn a_class_name_inside_stream_data_is_not_a_field() {
 
     assert_eq!(records::field_descriptors(&bytes), records::field_descriptors(&real));
     assert_eq!(records::field_descriptors(&bytes).len(), 7);
+}
+
+#[test]
+fn the_year_list_comes_out_of_the_written_slots() {
+    // The one table where the answer is knowable independently: the year list runs from the
+    // area base year to 2050, and this block holds free slots past the written ones that would
+    // otherwise be read as years 33 and up.
+    let block = unhex(NX1_YEARS_BLOCK);
+    let (size, fields) = layout_of("years");
+    let rows = records::live_records(&block, &fields, size);
+    assert_eq!(rows.len(), 31, "every written slot and no free one");
+    assert_eq!(rows.len(), NX1_YEARS_ROWS.len());
+
+    let mut years = Vec::new();
+    for (row, want) in rows.iter().zip(NX1_YEARS_ROWS) {
+        assert_eq!(row[0], Value::Int(want.0 as i64), "YearID");
+        assert_eq!(row[1], Value::Text(want.1.to_string()), "Name");
+        years.push(want.0);
+    }
+
+    // The rows come out in insertion order, which is not sorted, and as a set they are the whole
+    // run from 2020 to 2050 -- the base year the area settings state to the year LEAP stops at.
+    assert_eq!(years[0], 2021);
+    assert_eq!(years[10], 2020);
+    assert_eq!(years[11], 2050);
+    let mut ordered = years.clone();
+    ordered.sort_unstable();
+    assert_ne!(years, ordered, "the file stores the rows in insertion order");
+    assert_eq!(ordered, (2020..=2050).collect::<Vec<i16>>());
+
+    // Without the rule the free slots read as years, which is what the rule is for.
+    let everything = records::records(&block, &fields, size);
+    assert_eq!(everything.len(), 336, "the block holds this many slots");
+    assert!(
+        everything.iter().any(|row| row[0] == Value::Int(33)),
+        "a free slot reads as year 33 when nothing filters it"
+    );
 }
