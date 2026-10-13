@@ -325,6 +325,37 @@ name, reading the placement from the wrong side of its anchor, treating nothing 
 deciding that on the all-zero case alone, and comparing a slot number against the next slot
 instead of its own.
 
+## The model: the branch tree
+
+`src/model.rs` is the first module here that reads a model rather than a file format. A LEAP area's
+structure table lists every branch of the tree with its parent, its level, its kind and its name,
+and that tree is what the arithmetic in the scenario table attaches to. In the shipped area it is
+439 rows, 434 of them named, and the top level comes out as the eight modules the area is made of:
+Load Shapes, Land Areas, Effects, Indicators, Non Energy, Stock Changes, Statistical Differences
+and Freedonia itself.
+
+The tree is worth reading because it checks itself, which nothing else in this port does yet. Every
+named branch has a parent the same table holds; exactly one branch, Freedonia, has a parent that is
+not a branch; and following the links from any branch reaches that root without closing a cycle.
+Those are claims about the vendor's own data, and a wrong offset, a wrong record size or a wrong
+slot rule would break them.
+
+Two things to know before believing the count. The five nameless rows are slots that were written
+and then freed -- ids 4 to 8, no name, parent zero -- which the unwritten-slot rule cannot tell
+apart from written rows because they still carry bytes. And the level field is not the depth in
+the tree: Demand is level 0 and its child Household is level 2, so the module reads the field and
+does not interpret it.
+
+What is still out of reach is the arithmetic itself. The scenario table keeps its expressions in a
+`nxtBlobWideMemo` field, an eight-byte reference, rather than as text inside the record, and the
+memos live in the `NXHD` blocks that sit alongside the record blocks. Those blocks do hold the text
+in order and the references count up from one, so the pairing looks recoverable, but the heap's own
+chunk framing is not decoded and the pairing has no independent check yet, which is why it is left
+alone rather than shipped.
+
+Mutations for this suite, all caught: reading the parent from the id field, reading the level from
+the order field, and treating every slot as a written row.
+
 ## The differential sweep
 
 `tools/differential_sweep.py` is the broadest check here, and it is a tool rather than a

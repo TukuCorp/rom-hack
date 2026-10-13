@@ -46,9 +46,15 @@ The year list reads as well: `years.nx1` comes back as the 31 years 2020 to 2050
 the area settings state, through to the year LEAP stops at -- once slots nothing was ever written
 to are left out. Without that, the free slots past the live ones read as years 33 and up.
 
+Above the records sits the model itself. `model` reads the structure table into the area's branch
+tree -- 439 rows in the shipped area, 434 of them named, each with its parent, level and type --
+which is the first thing here that is a model rather than a file format. The tree checks itself:
+every named branch has a parent the table also holds, exactly one branch has no parent, and the
+links never close into a cycle.
+
 ## How it is checked
 
-Fifty tests over ten suites, none of which assert against its own implementation:
+Fifty-five tests over eleven suites, none of which assert against its own implementation:
 
 * `calendar_parity` - 310 leap-year and 487 day-number vectors captured by emulating the
   original, floats compared as raw IEEE-754 bits.
@@ -68,6 +74,12 @@ Fifty tests over ten suites, none of which assert against its own implementation
   names, the 16 property codes numbered in the same space, and the 332 evaluator entry points
   the dispatch points at. Every code the stored expressions spell has to be named by one table
   or the other and spelled the way the builder spells it.
+* `nx1_records_typed` - the typed-row reader over the vendor's own dictionary bytes and one data
+* `model` - the branch tree out of the vendor's structure table. The top level of the area has to
+  come back as the eight modules it is made of, Freedonia among them, and the whole tree has to
+  satisfy its links: every named branch's parent is a branch, one branch has no parent, and the
+  chain never closes a cycle. The last data block, which is seven slots deep, pins that a slot
+  nothing was written to is left out.
 * `nx1_records_typed` - the typed-row reader over the vendor's own dictionary bytes and one data
   block. The dictionary has to state a place for every field for the fields to tile a record with
   no gap, and that is the assertion; the record size then has to be the stride the bytes are
@@ -108,9 +120,11 @@ to it are both gated. They are written up in `docs/nx1-reconnaissance.md`.
   read yet -- and evaluating any of it: an expression still has no value.
 
 So the honest state is: one component ported and verified hard, and the model readable down to
-typed rows but not yet evaluated. An expression parses, every code in it is named, the address
-of the function that would evaluate it is known, and the numbers it would read are where the
-dictionary says they are; not one of them has a value.
+its branch tree and its year list but not yet evaluated. The arithmetic parses, every code in it
+is named, the address of the function that would evaluate it is known, and the rows it would read
+are where the dictionary says they are; not one of them has a value. The equations the scenario
+table holds are the part still out of reach, because it keeps them as blob memos in the blob heap
+rather than as text in the record.
 
 ## Build and test
 

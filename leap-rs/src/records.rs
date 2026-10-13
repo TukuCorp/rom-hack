@@ -257,6 +257,12 @@ pub fn record_size(fields: &[Field]) -> Option<usize> {
 }
 
 /// Where each data block starts in a table.
+/// Where a named field sits in a decoded row, when the table has that field.
+pub fn index_of(fields: &[Field], name: &str) -> Option<usize> {
+    fields.iter().position(|field| field.name == name)
+}
+
+/// Where each data block starts in a table.
 pub fn data_blocks(bytes: &[u8]) -> Vec<usize> {
     (0..bytes.len() / BLOCK)
         .map(|b| b * BLOCK)
