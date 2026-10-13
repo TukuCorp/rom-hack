@@ -15,33 +15,62 @@
 //!     and 72 bytes apart;
 //!   * the allocation is `2c + 1` for a text of `c` units, with a floor of 13.
 //!
-//! What this does not do yet, and a caller should know before trusting a count. The walk reaches
-//! the end of six of the seven blob blocks of the shipped scenario table, each time with one
-//! record left over -- a terminator rather than a memo -- and it stops early in the seventh, the
-//! one whose first memo is a long text that opens with a space. A caller can tell: if the list is
-//! no longer than the highest position the records point at, the block was not read to its end.
-//! A few memos also carry no terminator inside their own record, so their text picks up a
-//! character of padding, and some memos hold letter values such as `True` and `False`, which the
-//! expression reader refuses because they are values rather than arithmetic.
+//! A blob block states in its own header how many memos it holds, and that is the check this reader
+//! leans on: six of the seven blob blocks of the shipped scenario table read to exactly the count
+//! they state, and the seventh comes back short. That one opens with a record whose text is longer
+//! than its allocation accounts for, and what follows it is not a record this reader understands, so
+//! it yields one memo where 152 are stated. The shortfall is visible rather than filled in.
+//!
+//! Two smaller things to expect. A few memos carry no terminator inside their own record, so their
+//! text picks up a character of the padding after it, and some hold letter values such as `True` and
+//! `False`, which the expression reader refuses because they are values rather than arithmetic.
 
 /// The length of the blob block header, where the first memo starts.
 const DATA_START: usize = 0x14;
 
+/// How many memos a blob block states it holds, from the word at 0x10.
+///
+/// The shipped scenario table states 190 for a block whose rows point at 190 positions, and 152
+/// for another whose rows point at 152, so this reads as the count of memos the block holds.
+pub fn stated(block: &[u8]) -> Option<u32> {
+    let bytes: [u8; 4] = block.get(0x10..0x14)?.try_into().ok()?;
+    Some(u32::from_le_bytes(bytes))
+}
+
 /// The memos in one blob block, in the order the block holds them.
+///
+/// The walk starts at the block header and follows the record sizes until it has the memos the block
+/// states. It does not hunt for records: when it meets something it cannot read it stops, so six of
+/// the seven blocks of the shipped scenario table read to their stated count exactly and the seventh
+/// comes back short. A caller can see that, because the count is what the block states.
 pub fn memos(block: &[u8]) -> Vec<String> {
+    let want = stated(block).map(|count| count as usize);
     let mut out = Vec::new();
     let mut at = DATA_START;
     while at + 6 <= block.len() {
-        let alloc = u16::from_le_bytes([block[at], block[at + 1]]) as usize;
-        let size = (alloc + 3 + 3) / 4 * 4;
-        if alloc < 4 || at + size > block.len() {
+        if want.is_some_and(|count| out.len() >= count) {
             break;
         }
-        let from = if block[at + 3] == 0 { at + 4 } else { at + 3 };
-        out.push(text(block, from, at + size));
-        at += size;
+        match record(block, at) {
+            Some((text, size)) => {
+                out.push(text);
+                at += size;
+            }
+            None => break,
+        }
     }
     out
+}
+
+/// One memo at `at`, as its text and the number of bytes it occupies.
+fn record(block: &[u8], at: usize) -> Option<(String, usize)> {
+    let alloc = u16::from_le_bytes([*block.get(at)?, *block.get(at + 1)?]) as usize;
+    let size = (alloc + 3 + 3) / 4 * 4;
+    if alloc < 4 || at + size > block.len() {
+        return None;
+    }
+    let from = if *block.get(at + 3)? == 0 { at + 4 } else { at + 3 };
+    Some((text(block, from, at + size), size))
 }
 
 /// The memo at a one-based position, when the block holds one.

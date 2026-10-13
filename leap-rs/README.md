@@ -65,9 +65,13 @@ with a two-byte allocation and a kind byte, the text follows in UTF-16, and the 
 first seven rows of the shipped area come out as `0.2`, `5`, `1000`, `5`, `0`, `1` and `2040`,
 in the order the rows name them. The eighth has no expression at all.
 
+A blob block states in its own header how many memos it holds, and that is what the reader checks
+itself against: six of the seven blocks of the shipped table read to exactly the count they state,
+and the seventh comes back short and says so.
+
 ## How it is checked
 
-Fifty-seven tests over eleven suites, none of which assert against its own implementation:
+Fifty-eight tests over eleven suites, none of which assert against its own implementation:
 
 * `calendar_parity` - 310 leap-year and 487 day-number vectors captured by emulating the
   original, floats compared as raw IEEE-754 bits.
@@ -96,7 +100,9 @@ Fifty-seven tests over eleven suites, none of which assert against its own imple
   The scenario table is read as well, and its keys have to join to the tree: every branch a
   scenario row refers to is a branch of the structure table, the memos it points at are all in the
   file's blob blocks, and the first block numbers them one upwards. `heap` then reads the memo at
-  that address, and the first seven rows have to come back as the numbers the file holds.
+  that address, and the first seven rows have to come back as the numbers the file holds. The block
+  states its own memo count, and a block the walk cannot finish has to come back short rather than
+  invented.
 * `nx1_records_typed` - the typed-row reader over the vendor's own dictionary bytes and one data
   block. The dictionary has to state a place for every field for the fields to tile a record with
   no gap, and that is the assertion; the record size then has to be the stride the bytes are

@@ -12,6 +12,7 @@ use leap_rs::oracle_records::{
     NX1_BRANCHES, NX1_BRANCH_BLOCK, NX1_BRANCH_DICTIONARY, NX1_BRANCH_LAST_BLOCK,
     NX1_SCENARIO_BLOB_BLOCKS, NX1_SCENARIO_BLOCK, NX1_SCENARIO_DICTIONARY,
     NX1_SCENARIO_BLOB_BLOCK,
+    NX1_SCENARIO_LONG_BLOB_BLOCK,
 };
 use leap_rs::records;
 
@@ -209,10 +210,10 @@ fn a_scenario_row_resolves_to_the_expression_it_points_at() {
     let blob = unhex(NX1_SCENARIO_BLOB_BLOCK);
     let memos = heap::memos(&blob);
 
-    // The block holds one record more than the highest position the table uses, which is the
-    // terminator the walk stops on.
+    // The block states how many memos it holds, and the walk stops when it has them.
     assert_eq!(rows.iter().map(|row| row.memo_index).max(), Some(165));
-    assert_eq!(memos.len(), 191);
+    assert_eq!(heap::stated(&blob), Some(190), "the block states its own count");
+    assert_eq!(memos.len(), 190, "every memo the block states, and no terminator");
 
     // The expressions the first rows point at, in the order the rows name them.
     let first: Vec<&str> = rows
@@ -247,4 +248,23 @@ fn a_scenario_row_resolves_to_the_expression_it_points_at() {
         );
     }
     assert_eq!(heap::memo(&blob, 0), None);
+}
+
+#[test]
+fn a_block_the_walk_cannot_finish_comes_back_short_rather_than_invented() {
+    // One block of the shipped table is not walked to its end: its first record holds a text longer
+    // than its own allocation accounts for, and what follows it is not a record this reader
+    // understands. The block states how many memos it holds, so the shortfall is visible rather
+    // than quietly filled in -- and if a later pass does learn to read it, this test says so.
+    let blob = unhex(NX1_SCENARIO_LONG_BLOB_BLOCK);
+    assert_eq!(heap::stated(&blob), Some(152));
+    let memos = heap::memos(&blob);
+    assert_eq!(memos.len(), 1, "the reader reports what it read, not what it hopes");
+    assert!(memos.len() < 152);
+    assert!(memos[0].starts_with(" divided @C1000 total population"), "{:?}", memos[0]);
+
+    // The other six blocks of the same file read to the count they state, and one of them is
+    // checked on the vendor bytes in the test above.
+    let first = unhex(NX1_SCENARIO_BLOB_BLOCK);
+    assert_eq!(heap::memos(&first).len(), heap::stated(&first).unwrap() as usize);
 }

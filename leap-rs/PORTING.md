@@ -372,15 +372,19 @@ out as 0.2, 5, 1000, 5, 0, 1 and 2040, in the order the rows name them, and the 
 expression at all; those are the vendor's own numbers, decoded from its block rather than from a
 fixture.
 
-What is still short of complete, and a caller should know it. The walk reaches the end of six of the
-seven blob blocks of the shipped table, each time with one record left over -- a terminator rather
-than a memo -- and it stops early in the seventh, the one whose first memo is a long text that opens
-with a space, so that block yields one memo where 152 are referenced. A caller can tell: if the list
-is no longer than the highest position the records point at, the block was not read to its end. A few
-memos also carry no terminator inside their own record, so their text picks up a character of
-padding, and some hold letter values such as True and False, which the expression reader refuses
-because they are values rather than arithmetic. And nothing is evaluated: the equations read as text
-and not one of them has a value.
+A blob block states in its own header how many memos it holds, and that is what the walk is measured
+against: six of the seven blob blocks of the shipped scenario table read to exactly the count they
+state -- 190, 199, 149, 170, 114 and 41 -- and the seventh comes back short. That one opens with a
+record whose text is longer than its allocation accounts for, and what follows it is not a record the
+walk understands, so it yields one memo where 152 are stated. The reader stops rather than hunting
+for the next record, so the shortfall is visible instead of quietly filled in; an earlier pass did
+step forward one byte at a time, which reads that block but takes byte patterns inside the long text
+for headers, and that was dropped for inventing memos rather than reading them.
+
+Two smaller things to expect. A few memos carry no terminator inside their own record, so their text
+picks up a character of the padding after it, and some hold letter values such as True and False,
+which the expression reader refuses because they are values rather than arithmetic. And nothing is
+evaluated: the equations read as text and not one of them has a value.
 
 Mutations for this suite, all caught: swapping the two halves of the blob reference, reading the
 variable from the region field, reading the expression from the branch field, reading the parent from
