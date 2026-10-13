@@ -23,9 +23,16 @@ It also builds `testleap`, a drop-in for the vendor binary: same verdicts, same 
 exit codes, down to CRLF. The one thing it will not do is delete your files, which the vendor
 does on `/C` whatever the verdict, valid archives included. `PORTING.md` carries a warning.
 
+Beside the validator the crate reads the model out of an area. `nx1::dictionary` reads a table
+schema, `nx1::wide_strings` reads the names and the arithmetic out of the record area as plain
+UTF-16, and `expr` parses that arithmetic, which the scenario table stores as `@F` and
+`@V` expressions. None of that has an address in the binary to carry, because it is a file
+format rather than a function, so its evidence is the vendor's own area rather than an
+emulator.
+
 ## How it is checked
 
-Twenty-four tests over seven suites, none of which assert against its own implementation:
+Thirty-three tests over eight suites, none of which assert against its own implementation:
 
 * `calendar_parity` - 310 leap-year and 487 day-number vectors captured by emulating the
   original, floats compared as raw IEEE-754 bits.
@@ -41,6 +48,10 @@ Twenty-four tests over seven suites, none of which assert against its own implem
   reference parser and against what LEAP calls these objects: fuel names such as Electricity
   and Natural Gas, branch names such as Load Shapes and Land Areas, and the model arithmetic
   itself, which the scenario table stores as @F and @V expressions.
+* `nx1_expr` - the expression reader over the 44 expressions the vendor area stores, each one
+  with the byte window it was read from so the Rust scanner meets the capture tool on the
+  original bytes. The round trip is asserted as a fixed point rather than character for
+  character, because LEAP is not consistent about the spaces between arguments.
 * `vendor_e2e` - the ported binary and the vendor binary run against each other over 55
   argument lists, plus the five sample areas SEI ships, up to twelve megabytes each. Nothing
   pre-recorded.
@@ -62,11 +73,12 @@ to it are both gated. They are written up in `docs/nx1-reconnaissance.md`.
 * Through the files, which is permission-free and now mostly done. The dictionaries are
   plain text, so an area schema is readable; the record areas are plain UTF-16, so the fuel
   and branch names and, in the scenario table, the **model arithmetic itself** are readable
-  too. What is not done is turning those strings into typed rows: the field offsets inside a
-  record come from the dictionary and have not been wired up yet.
+  too, and that arithmetic now parses into a tree. What is not done is turning those strings
+  into typed rows and evaluating the tree: the field offsets inside a record come from the
+  dictionary and have not been wired up yet.
 
-So the honest state is: one component ported and verified hard, and the model waiting on a
-licence or on several more turns of format work.
+So the honest state is: one component ported and verified hard, and the model readable but not
+yet evaluated. An expression parses and prints back; not one of them has a value.
 
 ## Build and test
 

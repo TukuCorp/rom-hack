@@ -1,5 +1,10 @@
 # NexusDB .nx1 tables: reconnaissance
 
+> **Superseded, and read the last section first.** Everything below about a cipher is the
+> record of a wrong turn. The record areas are plain UTF-16, they were read straight out of
+> the shipped area, and there is no cipher to port. The notes are kept because the reason
+> the first sixteen attempts failed is worth knowing, not because the conclusion stands.
+
 These are the notes from looking at what is inside a .leap area, before deciding whether
 the port should read the tables directly. The short answer is that it should not, yet, and
 this records why rather than leaving the next reader to rediscover it.
@@ -339,25 +344,36 @@ So the schema of a LEAP area, meaning which tables it has and which fields and i
 one carries, is readable with no cipher work whatsoever. That is a real deliverable for an
 agentic reader and it was hiding behind my own choice of specimen.
 
-The records are still transformed, and the same survey shows their shape. In
+The records carry a per-block header, and the same survey shows its shape. In
 `resultsstructure.nx1` every data block carries a short readable marker at block offset
 `0x0b`: a non-printing byte, then `vmen`, then a byte that differs from block to block. The
 template file had the same four letters at the same place, which is what I misread as a
 scrambled field three turns ago. So each block is a small plain-text header followed by the
-transformed payload, and that header is where the next attempt should start rather than at
-the hypothetical cipher state.
+record payload, and that header is where the next attempt should start.
 
-## What that means
+## What that means, and the correction that closes it
 
-Reading `.nx1` directly means porting the NexusDB block cipher and its dictionary layout out
-of a 169 MB binary. Verifying such a port is the easier half: a correct cipher should turn
-those high-entropy blocks into a recognisable block structure, mostly zeros for an empty
-table, and the dictionary should give back the same field names this reconnaissance already
-found in clear. What is hard is locating and porting the cipher, and that is a subproject of
-its own rather than a step on the path to verifying arithmetic.
+The block layer is not encrypted, and that is the finding every section above was missing.
+Read the record area of a populated table and it is plain UTF-16: `datanames.nx1` spells
+out the fuel list, `masterstructure.nx1` the branch tree, and `scenariodata.nx1` the model
+arithmetic itself, as `@F` and `@V` expressions in clear. A reader that looks for
+NUL-terminated runs of wide characters gets all of it without a key. `nx1::wide_strings` does
+that and is tested against the vendor tables, and four of the field names the dictionary
+reader recovers also appear as keys in `areasettingsINI.txt`, which is a separate artefact
+and so corroboration rather than a second reading of the same bytes.
 
-What is readable without it: the container itself, which is already ported, and
-`areasettingsINI.txt`, which sits beside the tables in the same zip. That file is a plain
-INI of session and UI settings, colours and tab positions and the like, plus a few last-used
-IDs. It carries no model arithmetic, so it is a small convenience rather than a route to
-the numbers.
+Why the attempts above missed it is worth naming. They worked from `_defaultNX.zip`, the empty
+template the installer ships, whose record area is mostly zeros and therefore high-entropy
+in exactly the way the output of a block cipher is. A populated area has text in it, and
+text that was never encrypted looks nothing like text that was. The mistake was in the
+choice of specimen rather than in the format.
+
+What that leaves is not a cipher but a layout. A table's records sit behind the per-block
+header described above, and the field offsets inside a record come from the dictionary,
+which is readable. Wiring a named field to its value is the remaining step, and
+`src/expr.rs`, which parses the arithmetic the scenario table stores, is its first piece.
+
+What is readable besides all of that: the container itself, which is already ported, and
+`areasettingsINI.txt`, a plain INI of session and UI settings, colours, tab positions and a
+few last-used IDs. It carries no model arithmetic, so it is a convenience rather than a
+route to the numbers.
