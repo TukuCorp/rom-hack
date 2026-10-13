@@ -275,8 +275,27 @@ A first attempt to shortcut it fails usefully: the plain XOR of the header words
 in the file is `0x024a5544`, not the stored zero, so the header is not simply plaintext with a
 plain XOR over it, and the checksum has to be computed through the real cipher.
 
-That gives the next attempt a way to know whether the key material is right without needing
-to recognise any plaintext, which is the first real oracle this route has had.
+**Everything above turned out to be beside the point.** A later pass looked for UTF-16 as
+well as ASCII, and the record areas of a populated area are plain UTF-16 throughout. The
+Blowfish and RC4 work, the seed hunt, the checksum: all of it was aimed at a payload that
+was never encrypted. What the high entropy showed is what the *empty template* looks like,
+and I never checked a populated table before building a theory on it.
+
+What the records actually contain is the model. `datanames.nx1` yields the fuel list,
+Electricity and Oil Products and Natural Gas and Renewables among 916 names.
+`masterstructure.nx1` yields the branch tree, Demand and Transformation and Load Shapes and
+Land Areas among 185. And `scenariodata.nx1` yields the arithmetic itself, written the way
+LEAP writes it: `@F001(@F010(3))`, `@V(556,2027,-99,-99,0,0,0,0)/100`,
+`@F176*(1-@F185)*(@C0004/@C0003)`. The `vmen` marker I had built a block framing theory
+around is a block header and nothing more.
+
+So there is no cipher to port, and the earlier sections of this note should be read as the
+record of a wrong turn rather than as work still needed. What remains is typed rows: the
+dictionary gives each field a name and a type, and the record gives fixed-width values, and
+wiring the two together is the next step.
+
+One check the cipher hunt did leave behind is a way to know whether key material is right,
+in the checksum the header carries, but it is no longer needed for anything.
 
 Using it, though, settles only the negative. If the check were a plain XOR over the visible
 header, some natural window of it would come out zero, and none does: 0x000+0x208 gives

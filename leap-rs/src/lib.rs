@@ -14,4 +14,5 @@ pub mod oracle_calendar;
 pub mod oracle_container;
 pub mod oracle_deflate;
 pub mod oracle_nx1;
+pub mod oracle_nx1_strings;
 pub mod oracle_run;

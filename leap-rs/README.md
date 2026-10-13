@@ -25,7 +25,7 @@ does on `/C` whatever the verdict, valid archives included. `PORTING.md` carries
 
 ## How it is checked
 
-Twenty tests over six suites, none of which assert against its own implementation:
+Twenty-four tests over seven suites, none of which assert against its own implementation:
 
 * `calendar_parity` - 310 leap-year and 487 day-number vectors captured by emulating the
   original, floats compared as raw IEEE-754 bits.
@@ -37,6 +37,10 @@ Twenty tests over six suites, none of which assert against its own implementatio
 * `nx1_schema` - the dictionary reader against three tables from the Freedonia area that
   ships with LEAP. Four of the field names it recovers also appear as keys in the area
   plain-text settings file, which is a different artefact and so real corroboration.
+* `nx1_records` - the wide-string reader over the same three tables, checked against the
+  reference parser and against what LEAP calls these objects: fuel names such as Electricity
+  and Natural Gas, branch names such as Load Shapes and Land Areas, and the model arithmetic
+  itself, which the scenario table stores as @F and @V expressions.
 * `vendor_e2e` - the ported binary and the vendor binary run against each other over 55
   argument lists, plus the five sample areas SEI ships, up to twelve megabytes each. Nothing
   pre-recorded.
@@ -55,12 +59,11 @@ to it are both gated. They are written up in `docs/nx1-reconnaissance.md`.
   headlessly, and it refuses every area operation with "not available when a supporting screen
   is open". That screen is a dialog titled Evaluation Mode: LEAP is unlicensed on this
   machine, and dismissing it from a script would be defeating the vendor licensing.
-* Through the files, which is permission-free, and which is two halves. The table
-  **dictionaries are plain text**, so the schema of an area, which tables it holds and which
-  fields and indexes each carries, is readable today with no cipher work. The table
-  **records** are transformed: a small plain-text header per block, then a payload behind a
-  Blowfish and RC4 hybrid whose round functions and key schedule have been verified against
-  the published vectors but whose block framing is not yet pinned.
+* Through the files, which is permission-free and now mostly done. The dictionaries are
+  plain text, so an area schema is readable; the record areas are plain UTF-16, so the fuel
+  and branch names and, in the scenario table, the **model arithmetic itself** are readable
+  too. What is not done is turning those strings into typed rows: the field offsets inside a
+  record come from the dictionary and have not been wired up yet.
 
 So the honest state is: one component ported and verified hard, and the model waiting on a
 licence or on several more turns of format work.

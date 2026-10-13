@@ -90,3 +90,43 @@ pub fn dictionary(bytes: &[u8]) -> Dictionary {
     }
     dict
 }
+
+/// How much of a table is scanned for record text. The record area follows the dictionary,
+/// so this is generous on purpose; a caller with a larger slice can pass one.
+pub const RECORD_WINDOW: usize = 0x9000;
+
+/// Distinct, NUL-terminated UTF-16 runs of printable text, in first-seen order.
+///
+/// The record area stores its text as fixed-width wide string fields, zero padded, so a name
+/// is a run of printable ASCII with a zero byte between each character, followed by a NUL. A
+/// run counts from five characters, which is what keeps an incidental pair of bytes in binary
+/// data from being read as a name. This is the function that makes the model readable: the
+/// fuel and branch names, and the expressions in the scenario table, are all stored this way.
+pub fn wide_strings(bytes: &[u8], end: usize) -> Vec<String> {
+    let end = end.min(bytes.len());
+    let mut out: Vec<String> = Vec::new();
+    let mut at = 0usize;
+    while at + 12 <= end {
+        let head_ok = bytes[at].is_ascii_graphic() || bytes[at] == b' ';
+        if head_ok && bytes[at + 1] == 0 {
+            let mut n = 0usize;
+            while at + 2 * n + 1 < end
+                && (bytes[at + 2 * n].is_ascii_graphic() || bytes[at + 2 * n] == b' ')
+                && bytes[at + 2 * n + 1] == 0
+            {
+                n += 1;
+            }
+            if n >= 5 && bytes.get(at + 2 * n..at + 2 * n + 2) == Some(&[0u8, 0u8][..]) {
+                let text: String = (0..n).map(|k| bytes[at + 2 * k] as char).collect();
+                let text = text.trim().to_string();
+                if !text.is_empty() && !out.contains(&text) {
+                    out.push(text);
+                }
+                at += 2 * n;
+                continue;
+            }
+        }
+        at += 1;
+    }
+    out
+}

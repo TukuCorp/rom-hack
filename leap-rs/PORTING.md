@@ -258,9 +258,10 @@ fails with NexusDB: AliasName or AliasPath not set.
 - The remaining 168,838 functions of `leap.exe`.
 - The VCL user interface, the TMS `TAdv*` components and TeeChart. The port is
   headless by design.
-- The records inside the NexusDB `.nx1` tables an area is built from. Their **dictionaries**
-  are plain text and `nx1::dictionary` reads them, so an area schema is available; the record
-  blocks are transformed, and `docs/nx1-reconnaissance.md` records what reading those takes.
+- Turning the tables into typed rows. `nx1::dictionary` reads a table schema and
+  `nx1::wide_strings` reads the text out of the record area, and both are tested against the
+  vendor area. Placing a value at a named field means interpreting the dictionary field
+  layout, which is the next step rather than a finished one.
 - Wildcard expansion inside the library. `container::run` takes each argument already
   resolved, because the order a filesystem hands back matching files is a property of the
   filesystem rather than of the program. The `testleap` binary does the expanding, in the
