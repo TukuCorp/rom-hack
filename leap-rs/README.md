@@ -25,7 +25,7 @@ does on `/C` whatever the verdict, valid archives included. `PORTING.md` carries
 
 ## How it is checked
 
-Seventeen tests over five suites, none of which assert against its own implementation:
+Twenty tests over six suites, none of which assert against its own implementation:
 
 * `calendar_parity` - 310 leap-year and 487 day-number vectors captured by emulating the
   original, floats compared as raw IEEE-754 bits.
@@ -34,6 +34,9 @@ Seventeen tests over five suites, none of which assert against its own implement
 * `deflate_parity` - 12 zlib streams against the crate inflater, covering stored blocks and
   back-references out to 32000 bytes.
 * `run_parity` - 14 argument lists against the argument loop, including the `-1` verdicts.
+* `nx1_schema` - the dictionary reader against three tables from the Freedonia area that
+  ships with LEAP. Four of the field names it recovers also appear as keys in the area
+  plain-text settings file, which is a different artefact and so real corroboration.
 * `vendor_e2e` - the ported binary and the vendor binary run against each other over 55
   argument lists, plus the five sample areas SEI ships, up to twelve megabytes each. Nothing
   pre-recorded.
