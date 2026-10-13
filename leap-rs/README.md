@@ -52,11 +52,12 @@ to it are both gated. They are written up in `docs/nx1-reconnaissance.md`.
   headlessly, and it refuses every area operation with "not available when a supporting screen
   is open". That screen is a dialog titled Evaluation Mode: LEAP is unlicensed on this
   machine, and dismissing it from a script would be defeating the vendor licensing.
-* Through the files, which is permission-free: the tables are a bespoke Blowfish and RC4
-  hybrid with plaintext chaining and a running checksum. The RC4 generator, its key schedule
-  and the Blowfish-shaped block step have all been read out of the binary, and the shape is
-  known, but the key derivation is not yet pinned, and a reader without an oracle could not be
-  verified against anything.
+* Through the files, which is permission-free, and which is two halves. The table
+  **dictionaries are plain text**, so the schema of an area, which tables it holds and which
+  fields and indexes each carries, is readable today with no cipher work. The table
+  **records** are transformed: a small plain-text header per block, then a payload behind a
+  Blowfish and RC4 hybrid whose round functions and key schedule have been verified against
+  the published vectors but whose block framing is not yet pinned.
 
 So the honest state is: one component ported and verified hard, and the model waiting on a
 licence or on several more turns of format work.
@@ -71,4 +72,3 @@ default toolchain, but tests need the user-local GNU one:
     & $env:USERPROFILE\.cargo\bin\cargo.exe +stable-x86_64-pc-windows-gnu test --target x86_64-pc-windows-gnu
 
 `PORTING.md` has the policy, the scope limits, and the provenance of every vector.
-

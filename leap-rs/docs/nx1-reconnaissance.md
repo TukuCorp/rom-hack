@@ -302,6 +302,32 @@ together, and it is not a read that can be verified from the file alone. That is
 recommendation is the licence: the vendor API would settle in an afternoon what this route
 has been circling for a dozen turns.
 
+## A populated area, which corrects the premise
+
+Every step above worked from the empty template, and that was the mistake. Looking at a
+populated area instead, `Freedonia` from the install, shows the tables are not opaque at all.
+
+Their dictionaries are plain text. `masterstructure.nx1` spells out its indexes as
+`TnxIndexDescriptor`, `TnxCompKeyDescriptor`, `KeylessBStarTree`, `TnxExtTextKeyFieldDescriptor`
+and names them, `nameidx`, `nameparentidx`, `NX$PRIMARY`, `OldCodeIDX`. `areadata.nx1` lists
+its own settings fields with their types: `IncludeVintageResults` and `EndogLoadShape` as
+`nxtBoolean`, `ResultsEveryXYears` as `nxtInt16`, `IncCAPs` and `CallibrateShapes` as more
+booleans. And every table opens with the same header: `NexusDB`, `StreamDescriptor`,
+`FilesDescriptor`, `TnxFileDescriptor`, and a `$FileID` naming the temporary path the area was
+built from, `C:\Users\charl\AppData\Local\Temp\_LEAPWork\0\areadata.nx1`, with a GUID.
+
+So the schema of a LEAP area, meaning which tables it has and which fields and indexes each
+one carries, is readable with no cipher work whatsoever. That is a real deliverable for an
+agentic reader and it was hiding behind my own choice of specimen.
+
+The records are still transformed, and the same survey shows their shape. In
+`resultsstructure.nx1` every data block carries a short readable marker at block offset
+`0x0b`: a non-printing byte, then `vmen`, then a byte that differs from block to block. The
+template file had the same four letters at the same place, which is what I misread as a
+scrambled field three turns ago. So each block is a small plain-text header followed by the
+transformed payload, and that header is where the next attempt should start rather than at
+the hypothetical cipher state.
+
 ## What that means
 
 Reading `.nx1` directly means porting the NexusDB block cipher and its dictionary layout out
