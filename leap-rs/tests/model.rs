@@ -6,10 +6,12 @@
 
 use std::collections::{HashMap, HashSet};
 
-use leap_rs::model;
+use leap_rs::expr::{self, Expr};
+use leap_rs::{heap, model};
 use leap_rs::oracle_records::{
     NX1_BRANCHES, NX1_BRANCH_BLOCK, NX1_BRANCH_DICTIONARY, NX1_BRANCH_LAST_BLOCK,
     NX1_SCENARIO_BLOB_BLOCKS, NX1_SCENARIO_BLOCK, NX1_SCENARIO_DICTIONARY,
+    NX1_SCENARIO_BLOB_BLOCK,
 };
 use leap_rs::records;
 
@@ -198,4 +200,51 @@ fn the_scenario_table_says_which_expression_belongs_to_which_variable() {
     };
     assert_eq!(scenarios, vec![1, 2, 11]);
     assert!(rows.iter().all(|row| row.region == 1));
+}
+
+#[test]
+fn a_scenario_row_resolves_to_the_expression_it_points_at() {
+    let fields = records::field_descriptors(&unhex(NX1_SCENARIO_DICTIONARY));
+    let rows = model::scenarios_with(&fields, &unhex(NX1_SCENARIO_BLOCK));
+    let blob = unhex(NX1_SCENARIO_BLOB_BLOCK);
+    let memos = heap::memos(&blob);
+
+    // The block holds one record more than the highest position the table uses, which is the
+    // terminator the walk stops on.
+    assert_eq!(rows.iter().map(|row| row.memo_index).max(), Some(165));
+    assert_eq!(memos.len(), 191);
+
+    // The expressions the first rows point at, in the order the rows name them.
+    let first: Vec<&str> = rows
+        .iter()
+        .take(7)
+        .map(|row| memos[(row.memo_index - 1) as usize].as_str())
+        .collect();
+    assert_eq!(first, vec!["0.2", "5", "1000", "5", "0", "1", "2040"]);
+    assert_eq!(memos[7], "EN");
+    assert_eq!(memos[8], "Fictitious or Example Data");
+
+    // And the arithmetic reader reads them: a number is a number and a formula is a formula.
+    assert_eq!(expr::parse(&memos[0]).unwrap(), Expr::Number("0.2".to_string()));
+    let formula = memos
+        .iter()
+        .find(|text| text.starts_with("@F001(@F010("))
+        .expect("the block holds a wrapped percentage");
+    assert_eq!(formula, "@F001(@F010(3))");
+    assert!(expr::parse(formula).is_ok(), "{formula}");
+    assert_eq!(
+        expr::parse(&memos[5]).unwrap(),
+        Expr::Number("1".to_string()),
+        "the sixth row is a plain one"
+    );
+
+    // Every position that the rows of this block use has a memo behind it.
+    for row in rows.iter().filter(|row| row.memo_index != 0) {
+        assert!(
+            heap::memo(&blob, row.memo_index).is_some(),
+            "position {} has no memo",
+            row.memo_index
+        );
+    }
+    assert_eq!(heap::memo(&blob, 0), None);
 }

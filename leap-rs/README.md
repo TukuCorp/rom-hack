@@ -57,11 +57,17 @@ variable it sets, in which region and scenario, and where the expression for it 
 part is a blob reference of two numbers, and the second is the number of a data block inside the
 same file -- the seven blocks the scenario table points at are exactly its seven `NXHD` blocks --
 while the first is the memo position within that block. So every expression has an address; reading
-the memo at that address is the piece still missing.
+the memo at that address is what `heap` does.
+
+The memo framing came out of the gaps between memos rather than out of a specification: a memo starts
+with a two-byte allocation and a kind byte, the text follows in UTF-16, and the record occupies
+`round_up_to_four(allocation + 3)` bytes. With it a scenario row resolves to its expression, and the
+first seven rows of the shipped area come out as `0.2`, `5`, `1000`, `5`, `0`, `1` and `2040`,
+in the order the rows name them. The eighth has no expression at all.
 
 ## How it is checked
 
-Fifty-six tests over eleven suites, none of which assert against its own implementation:
+Fifty-seven tests over eleven suites, none of which assert against its own implementation:
 
 * `calendar_parity` - 310 leap-year and 487 day-number vectors captured by emulating the
   original, floats compared as raw IEEE-754 bits.
@@ -89,7 +95,8 @@ Fifty-six tests over eleven suites, none of which assert against its own impleme
   nothing was written to is left out.
   The scenario table is read as well, and its keys have to join to the tree: every branch a
   scenario row refers to is a branch of the structure table, the memos it points at are all in the
-  file's blob blocks, and the first block numbers them one upwards.
+  file's blob blocks, and the first block numbers them one upwards. `heap` then reads the memo at
+  that address, and the first seven rows have to come back as the numbers the file holds.
 * `nx1_records_typed` - the typed-row reader over the vendor's own dictionary bytes and one data
   block. The dictionary has to state a place for every field for the fields to tile a record with
   no gap, and that is the assertion; the record size then has to be the stride the bytes are
@@ -129,12 +136,12 @@ to it are both gated. They are written up in `docs/nx1-reconnaissance.md`.
   by the signature of an unwritten slot rather than by the block header's own map, which is not
   read yet -- and evaluating any of it: an expression still has no value.
 
-So the honest state is: one component ported and verified hard, and the model readable down to
-its branch tree, its year list and the keys of its scenario table, but not yet evaluated. The
-arithmetic parses, every code in it is named, the address of the function that would evaluate it is
-known, the rows it would read are where the dictionary says they are, and each scenario row names
-the blob its expression sits in; not one of them has a value, because the framing of the memos
-inside a blob block is still not settled.
+So the honest state is: one component ported and verified hard, and the model readable down to its
+branch tree, its year list, its keys and, for the first block, its equations. The arithmetic parses,
+every code in it is named, the address of the function that would evaluate it is known, the rows it
+would read are where the dictionary says they are, and 165 of the shipped model's expressions now
+come out as text. Not one of them has a value: the heap walk stops early in one of the seven blob
+blocks, and the evaluator is not written.
 
 ## Build and test
 

@@ -357,14 +357,30 @@ with the three rows that carry no expression holding zero in both fields.
 
 So the keys are read and they join to the rest of the model: every branch a scenario row refers to is
 a branch of the structure table, and every memo it points at is in one of the file's blob blocks.
-What is missing is the last step, reading the memo at that address. The memos are laid out in a blob
-block as a sequence of records whose header looks like a two-byte allocation, a kind byte and then
-the text, with the allocation `2c + 1` for a text of `c` units and a floor of 13, and the whole thing
-padded to sixteen bytes for short texts. That reading works for the short memos and for the first
-several blocks, and it drifts on the longer ones -- a 26-character memo with an allocation of 53, a
-39-character one with 84 bytes of spacing where 79 is written -- and after three passes there is
-still no rule that consumes a block exactly. Rather than ship a walk that reads some memos and stops
-at the rest, the framing is left open and only the address is claimed.
+
+The last step is reading the memo, and `src/heap.rs` does it. The framing came out of the gaps
+between memos rather than out of a specification: a memo starts with a two-byte allocation and a kind
+byte, the text follows in UTF-16, and the record occupies `round_up_to_four(allocation + 3)` bytes.
+That last part is what took three passes, because allocations of 13, 17, 21, 31, 33, 53 and 66 sit
+16, 20, 24, 36, 36, 56 and 72 bytes apart, which is the rounding and not the allocation itself. The
+allocation is `2c + 1` for a text of `c` units with a floor of 13, and the text begins one byte
+further along when the byte after the kind is zero, which is how the memos that open with a space are
+stored.
+
+With that, a row resolves to its expression. The first seven rows of the shipped scenario table come
+out as 0.2, 5, 1000, 5, 0, 1 and 2040, in the order the rows name them, and the eighth row has no
+expression at all; those are the vendor's own numbers, decoded from its block rather than from a
+fixture.
+
+What is still short of complete, and a caller should know it. The walk reaches the end of six of the
+seven blob blocks of the shipped table, each time with one record left over -- a terminator rather
+than a memo -- and it stops early in the seventh, the one whose first memo is a long text that opens
+with a space, so that block yields one memo where 152 are referenced. A caller can tell: if the list
+is no longer than the highest position the records point at, the block was not read to its end. A few
+memos also carry no terminator inside their own record, so their text picks up a character of
+padding, and some hold letter values such as True and False, which the expression reader refuses
+because they are values rather than arithmetic. And nothing is evaluated: the equations read as text
+and not one of them has a value.
 
 Mutations for this suite, all caught: swapping the two halves of the blob reference, reading the
 variable from the region field, reading the expression from the branch field, reading the parent from
