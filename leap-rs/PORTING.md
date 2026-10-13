@@ -346,15 +346,29 @@ apart from written rows because they still carry bytes. And the level field is n
 the tree: Demand is level 0 and its child Household is level 2, so the module reads the field and
 does not interpret it.
 
-What is still out of reach is the arithmetic itself. The scenario table keeps its expressions in a
-`nxtBlobWideMemo` field, an eight-byte reference, rather than as text inside the record, and the
-memos live in the `NXHD` blocks that sit alongside the record blocks. Those blocks do hold the text
-in order and the references count up from one, so the pairing looks recoverable, but the heap's own
-chunk framing is not decoded and the pairing has no independent check yet, which is why it is left
-alone rather than shipped.
+The arithmetic is the part still out of reach, and this turn got as far as its address. The scenario
+table keeps its expressions in a `nxtBlobWideMemo` field rather than as text inside the record, and
+that field turns out to be a reference of two numbers: the second is the number of a data block in
+the same file, and the first is the memo position within that block. The second number settles the
+question, because the seven blocks the shipped scenario table points at are exactly the seven `NXHD`
+blocks of `scenariodata.nx1`, which is not a coincidence a wrong reading would produce. The first is
+bounded by them: the first data block of the table numbers its 165 memos one upwards in row order,
+with the three rows that carry no expression holding zero in both fields.
 
-Mutations for this suite, all caught: reading the parent from the id field, reading the level from
-the order field, and treating every slot as a written row.
+So the keys are read and they join to the rest of the model: every branch a scenario row refers to is
+a branch of the structure table, and every memo it points at is in one of the file's blob blocks.
+What is missing is the last step, reading the memo at that address. The memos are laid out in a blob
+block as a sequence of records whose header looks like a two-byte allocation, a kind byte and then
+the text, with the allocation `2c + 1` for a text of `c` units and a floor of 13, and the whole thing
+padded to sixteen bytes for short texts. That reading works for the short memos and for the first
+several blocks, and it drifts on the longer ones -- a 26-character memo with an allocation of 53, a
+39-character one with 84 bytes of spacing where 79 is written -- and after three passes there is
+still no rule that consumes a block exactly. Rather than ship a walk that reads some memos and stops
+at the rest, the framing is left open and only the address is claimed.
+
+Mutations for this suite, all caught: swapping the two halves of the blob reference, reading the
+variable from the region field, reading the expression from the branch field, reading the parent from
+the id field, reading the level from the order field, and treating every slot as a written row.
 
 ## The differential sweep
 

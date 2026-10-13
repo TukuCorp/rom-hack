@@ -9,6 +9,7 @@ use std::collections::{HashMap, HashSet};
 use leap_rs::model;
 use leap_rs::oracle_records::{
     NX1_BRANCHES, NX1_BRANCH_BLOCK, NX1_BRANCH_DICTIONARY, NX1_BRANCH_LAST_BLOCK,
+    NX1_SCENARIO_BLOB_BLOCKS, NX1_SCENARIO_BLOCK, NX1_SCENARIO_DICTIONARY,
 };
 use leap_rs::records;
 
@@ -131,4 +132,70 @@ fn the_tree_reaches_the_branches_the_model_is_built_from() {
     assert_eq!(find("Household").0, urban.1);
     assert_eq!(find("Demand").0, find("Household").1);
     assert_eq!(find("Freedonia").0, find("Demand").1);
+}
+
+#[test]
+fn the_scenario_table_says_which_expression_belongs_to_which_variable() {
+    let fields = records::field_descriptors(&unhex(NX1_SCENARIO_DICTIONARY));
+    assert_eq!(fields.len(), 5, "the scenario table has this many fields");
+    let block = unhex(NX1_SCENARIO_BLOCK);
+    let rows = model::scenarios_with(&fields, &block);
+
+    assert_eq!(rows.len(), 168, "a block of this table holds this many rows");
+    assert_eq!(
+        rows[0],
+        model::ScenarioRow {
+            branch: -1,
+            variable: 2186,
+            region: 1,
+            scenario: 1,
+            memo_index: 1,
+            memo_block: 5,
+        }
+    );
+    assert_eq!(rows[6].variable, 2216);
+    assert_eq!(rows[6].memo_index, 7);
+    assert_eq!(rows[7].memo_index, 0, "this row carries no expression");
+    assert_eq!(rows[7].memo_block, 0);
+
+    // Every memo a row points at is in one of the file own seven blob blocks, and the rows that
+    // have one number them one upwards in row order.
+    for row in &rows {
+        if row.memo_index == 0 {
+            assert_eq!(row.memo_block, 0, "a row with no memo has no block");
+            continue;
+        }
+        assert!(
+            NX1_SCENARIO_BLOB_BLOCKS.contains(&(row.memo_block as usize)),
+            "block {} is not one of the file blob blocks",
+            row.memo_block
+        );
+    }
+    let indices: Vec<u64> = rows
+        .iter()
+        .filter(|row| row.memo_index != 0)
+        .map(|row| row.memo_index)
+        .collect();
+    assert_eq!(indices.len(), 165, "three rows of the block carry no expression");
+    assert_eq!(
+        indices,
+        (1..=165).collect::<Vec<u64>>(),
+        "the first block numbers its memos one upwards"
+    );
+
+    // The keys join to the rest of the model: every branch a row refers to is a branch of the
+    // tree, and the rows are one region in three scenarios.
+    let tree: std::collections::HashSet<i64> = NX1_BRANCHES.iter().map(|b| b.0 as i64).collect();
+    for row in &rows {
+        assert!(tree.contains(&row.branch), "branch {} is not in the tree", row.branch);
+        assert!(row.variable > 0, "variable {}", row.variable);
+    }
+    let scenarios: Vec<i64> = {
+        let mut seen: Vec<i64> = rows.iter().map(|row| row.scenario).collect();
+        seen.sort_unstable();
+        seen.dedup();
+        seen
+    };
+    assert_eq!(scenarios, vec![1, 2, 11]);
+    assert!(rows.iter().all(|row| row.region == 1));
 }

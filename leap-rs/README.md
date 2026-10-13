@@ -52,9 +52,16 @@ which is the first thing here that is a model rather than a file format. The tre
 every named branch has a parent the table also holds, exactly one branch has no parent, and the
 links never close into a cycle.
 
+The scenario table reads too, and it is the other half of the model: each row names the branch and
+variable it sets, in which region and scenario, and where the expression for it lives. That last
+part is a blob reference of two numbers, and the second is the number of a data block inside the
+same file -- the seven blocks the scenario table points at are exactly its seven `NXHD` blocks --
+while the first is the memo position within that block. So every expression has an address; reading
+the memo at that address is the piece still missing.
+
 ## How it is checked
 
-Fifty-five tests over eleven suites, none of which assert against its own implementation:
+Fifty-six tests over eleven suites, none of which assert against its own implementation:
 
 * `calendar_parity` - 310 leap-year and 487 day-number vectors captured by emulating the
   original, floats compared as raw IEEE-754 bits.
@@ -80,6 +87,9 @@ Fifty-five tests over eleven suites, none of which assert against its own implem
   satisfy its links: every named branch's parent is a branch, one branch has no parent, and the
   chain never closes a cycle. The last data block, which is seven slots deep, pins that a slot
   nothing was written to is left out.
+  The scenario table is read as well, and its keys have to join to the tree: every branch a
+  scenario row refers to is a branch of the structure table, the memos it points at are all in the
+  file's blob blocks, and the first block numbers them one upwards.
 * `nx1_records_typed` - the typed-row reader over the vendor's own dictionary bytes and one data
   block. The dictionary has to state a place for every field for the fields to tile a record with
   no gap, and that is the assertion; the record size then has to be the stride the bytes are
@@ -120,11 +130,11 @@ to it are both gated. They are written up in `docs/nx1-reconnaissance.md`.
   read yet -- and evaluating any of it: an expression still has no value.
 
 So the honest state is: one component ported and verified hard, and the model readable down to
-its branch tree and its year list but not yet evaluated. The arithmetic parses, every code in it
-is named, the address of the function that would evaluate it is known, and the rows it would read
-are where the dictionary says they are; not one of them has a value. The equations the scenario
-table holds are the part still out of reach, because it keeps them as blob memos in the blob heap
-rather than as text in the record.
+its branch tree, its year list and the keys of its scenario table, but not yet evaluated. The
+arithmetic parses, every code in it is named, the address of the function that would evaluate it is
+known, the rows it would read are where the dictionary says they are, and each scenario row names
+the blob its expression sits in; not one of them has a value, because the framing of the memos
+inside a blob block is still not settled.
 
 ## Build and test
 
