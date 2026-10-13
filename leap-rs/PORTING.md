@@ -12,9 +12,10 @@ of a Delphi runtime, and with no user interface.
 
 What this crate actually is: the pipeline (oracle capture, port, parity test), the two
 calendar functions, the `.leap` container validation chain behind `TestLEAP`, and a reader
-for the model arithmetic the area tables store. That is four units of work against 168,840
-functions. A passing `cargo test` means those pieces agree with the original over what
-they have been measured on; it does not mean LEAP has been ported.
+for the model arithmetic the area tables store together with the registry that says what each
+function code in it is. That is four units of work against 168,840 functions. A passing
+`cargo test` means those pieces agree with the original over what they have been measured on;
+it does not mean LEAP has been ported.
 
 ## Rules the port follows
 
@@ -200,6 +201,50 @@ what looks like a percentage, `@F007` a year/value series and `@F043` a pair of 
 but that reading comes from the shapes in the corpus rather than from an oracle, and the port
 does not act on it. Evaluating the tree, and resolving a `@V` id to a branch and a year, are
 later steps.
+
+## What each function code is
+
+`src/functions.rs` closes the other half of the arithmetic. The `@F` codes in the corpus are
+not opaque: `leap.exe` builds a registry of every function its expression language can call,
+and `tools/capture_function_table.py` reads all 354 entries out of that builder rather than
+guessing from the expressions. Each entry carries the code, the name, the resource id the name
+came from, and the second name the call site spells out.
+
+The marker text comes from the same place. The builder formats `"000%d"` with the code, takes
+the trailing three characters, and prefixes `"@F"` from a literal at address 0x01b908ec, which
+is where `@F007` comes from. `functions::marker` reproduces that construction, and the corpus
+test requires the file's own spelling of every code to equal it, so the registry and the parser
+cannot drift apart.
+
+Three kinds of argument had to be resolved, and the interesting one is the third. A name is a
+literal, or a wide string in the image read through the PE section map, or a local filled by
+`FUN_01bdcbc0(&local, id)` from a table of resource names. That last one turns out to be a plain
+switch of `if (param_2 == n) { FUN_00415060(param_1, L"Name"); }`, so the resource table is
+readable too and all 354 entries end up named. The first version of the tool resolved only the
+first kind and managed 320; the thirty-four it could not name failed the suite, which is how
+the switch was found.
+
+The numbering is shared with a second table. Sixteen property codes, `@F175` carbon content
+through `@F186` non-energy carbon stored, are registered by three functions that map a property
+name to the expression that yields it, and that is what makes one corpus expression checkable
+rather than merely plausible: `@F176*(1-@F185)*(@C0004/@C0003)` is the sulfur emission factor it
+looks like only if 176 is sulfur content and 185 sulfur retention. The test reads both codes out
+of the parsed tree and requires them to be those two properties by name.
+
+What evaluates each name is the third table. `FUN_01b89f80` hands 332 second names, with the
+address of the evaluator, to one of a family of helpers running `FUN_01b5c0c0` to `FUN_01b5c6c0`
+spaced 0x60 apart, which reads like one helper per signature rather than one per function. The
+dispatch folds case where the registry does not, so `_Data` there is `_data` here. Every function
+the corpus calls resolves to an address through it.
+
+Twenty-seven second names are registered by nobody, and the test pins them rather than skipping
+them quietly: the plain math functions from Abs to Floor, the financial ones from Sign to Power,
+and three counters. Something else evaluates those, and naming it is the next read.
+
+Mutations for this suite ran through both the Rust and the generator. Dropping the zero padding
+from the marker failed the spelling test, making `describe` stop falling back to the property
+table failed the corpus test, and making the generator skip the resource switch regenerated a
+table with 320 names and failed three tests.
 
 ## The differential sweep
 
