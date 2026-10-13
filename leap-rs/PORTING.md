@@ -12,10 +12,10 @@ of a Delphi runtime, and with no user interface.
 
 What this crate actually is: the pipeline (oracle capture, port, parity test), the two
 calendar functions, the `.leap` container validation chain behind `TestLEAP`, and a reader
-for the model arithmetic the area tables store together with the registry that says what each
-function code in it is. That is four units of work against 168,840 functions. A passing
-`cargo test` means those pieces agree with the original over what they have been measured on;
-it does not mean LEAP has been ported.
+for the model arithmetic the area tables store, together with the registry that says what each
+function code in it is and the record reader that puts a number at a named field. That is four
+units of work against 168,840 functions. A passing `cargo test` means those pieces agree with
+the original over what they have been measured on; it does not mean LEAP has been ported.
 
 ## Rules the port follows
 
@@ -245,6 +245,51 @@ Mutations for this suite ran through both the Rust and the generator. Dropping t
 from the marker failed the spelling test, making `describe` stop falling back to the property
 table failed the corpus test, and making the generator skip the resource switch regenerated a
 table with 320 names and failed three tests.
+
+## Typed rows out of a table
+
+`src/records.rs` takes the last step that turns an area into numbers. `nx1::dictionary` reads a
+table schema and `nx1::wide_strings` reads the text out of a record area, but text is not a row:
+to know where a field sits you need the offset and size the dictionary states for it, and this
+module reads them.
+
+The descriptor spells a placement as a tag byte and then a value whose width the tag names:
+`0x02` is one byte, `0x03` is two, `0x12` is four. That one rule unpacks the whole dictionary.
+For `datanames.nx1` it gives TableID at 0 size 4, TableName at 4 size 102, FieldID at 106,
+SetID at 110, Name at 114 size 302, Abbreviation at 416 and DateChanged at 518 size 8 -- and
+the fields then tile the record with no gap and no overlap, which is a claim the vendor's own
+bytes settle rather than one this crate makes about itself. They do: the first record spells
+Balcat then Electricity with the integers between them, and every wide-string slot decodes as
+clean UTF-16 in all seven records of its block.
+
+Two things the file does not state, and both had to be read off the data.
+
+The record size is zero in all eighty tables, because the area was written by an export that
+left that descriptor field blank. It is recoverable anyway: a data block is 4096 bytes with a
+60-byte header, the records area is 4032 bytes, and it holds a whole number of records, so the
+record size is the smallest divisor of 4032 that is at least four bytes past the last field.
+That gives 12 for `years`, 224 for `units`, 448 for `regions` and 576 for `datanames`, and each
+is the stride the bytes are written at. The test holds the rule against 53 tables: for every
+one it must produce the oracle's size, and no smaller divisor may fit.
+
+The records start 60 bytes into the block rather than 64. The fourth byte the header looks like
+it has belongs to the first record, and reading strings from a 64-byte base misaligns every one
+of them. That is how the 60 was found, and it is worth knowing because a 64-byte header is what
+the `NXDH` tag invites you to assume.
+
+What this does not do yet, stated because it matters rather than because it is tidy. Deleted
+records are not filtered. In `years.nx1` the records past the live ones still carry bytes, and
+the first two of them count up from 78, which is a free-record chain rather than a year; NexusDB
+keeps the deleted map in the block header and a reader that wants live rows has to consult it.
+That is why the decoded sample in the oracle is `datanames.nx1`, whose seven records are all
+live, rather than `years.nx1`, which is the table a year list would naturally be read from.
+Blob fields decode as an identifier and no further, and 33 of the 86 tables in the shipped area
+carry a descriptor entry shape this parser has not seen, so they are reported and skipped rather
+than guessed at.
+
+Mutations for this suite: reading a two-byte encoded value as one byte failed the layout test,
+dropping the four bytes of per-record overhead from the size rule failed the stride test, and
+moving the record base to 64 bytes failed both the stride and the decode.
 
 ## The differential sweep
 

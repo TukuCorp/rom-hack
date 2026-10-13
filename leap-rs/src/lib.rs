@@ -19,4 +19,6 @@ pub mod oracle_functions;
 pub mod oracle_nx1_expr;
 pub mod oracle_nx1;
 pub mod oracle_nx1_strings;
+pub mod oracle_records;
 pub mod oracle_run;
+pub mod records;

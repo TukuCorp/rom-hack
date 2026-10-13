@@ -34,9 +34,14 @@ The codes inside that arithmetic are named as well. `functions` carries what the
 registry states for each code, together with the address of the function that evaluates it,
 read out of the binary rather than inferred from the shape of the expressions.
 
+And the area is readable as numbers, not only as text. `records` reads the offset and size the
+dictionary states for every field, works out how long a record is, and decodes the fields by
+type, so a table comes back as typed rows. The first data block of `datanames.nx1` decodes to
+its seven records with TableID, TableName, FieldID, SetID, Name and Abbreviation.
+
 ## How it is checked
 
-Forty-one tests over nine suites, none of which assert against its own implementation:
+Forty-five tests over ten suites, none of which assert against its own implementation:
 
 * `calendar_parity` - 310 leap-year and 487 day-number vectors captured by emulating the
   original, floats compared as raw IEEE-754 bits.
@@ -56,6 +61,10 @@ Forty-one tests over nine suites, none of which assert against its own implement
   names, the 16 property codes numbered in the same space, and the 332 evaluator entry points
   the dispatch points at. Every code the stored expressions spell has to be named by one table
   or the other and spelled the way the builder spells it.
+* `nx1_records_typed` - the typed-row reader over the vendor's own dictionary bytes and one data
+  block. The dictionary has to state a place for every field for the fields to tile a record
+  with no gap, and that is the assertion; the record size then has to be the stride the bytes
+  are written at, which is checked against 53 tables.
 * `nx1_expr` - the expression reader over the 44 expressions the vendor area stores, each one
   with the byte window it was read from so the Rust scanner meets the capture tool on the
   original bytes. The round trip is asserted as a fixed point rather than character for
@@ -78,17 +87,18 @@ to it are both gated. They are written up in `docs/nx1-reconnaissance.md`.
   headlessly, and it refuses every area operation with "not available when a supporting screen
   is open". That screen is a dialog titled Evaluation Mode: LEAP is unlicensed on this
   machine, and dismissing it from a script would be defeating the vendor licensing.
-* Through the files, which is permission-free and now mostly done. The dictionaries are
-  plain text, so an area schema is readable; the record areas are plain UTF-16, so the fuel
-  and branch names and, in the scenario table, the **model arithmetic itself** are readable
-  too, and that arithmetic now parses into a tree. What is not done is turning those strings
-  into typed rows and evaluating the tree: the field offsets inside a record come from the
-  dictionary and have not been wired up yet. The codes in the tree are named, and each is tied
-  to the address of the function that evaluates it, which is the list of what is left to port.
+* Through the files, which is permission-free and now most of the way. The dictionaries are
+  plain text, so an area schema is readable; the record areas are plain UTF-16, so the fuel and
+  branch names and, in the scenario table, the **model arithmetic itself** are readable; that
+  arithmetic parses into a tree; the codes in it are named and each is tied to the address of
+  the function that evaluates it; and a table now decodes into typed rows rather than strings.
+  What is not done is filtering deleted records, reading the blob fields, and evaluating any of
+  it: an expression still has no value.
 
-So the honest state is: one component ported and verified hard, and the model readable but not
-yet evaluated. An expression parses, every code in it is named, and the address of the function
-that would evaluate it is known; not one of them has a value.
+So the honest state is: one component ported and verified hard, and the model readable down to
+typed rows but not yet evaluated. An expression parses, every code in it is named, the address
+of the function that would evaluate it is known, and the numbers it would read are where the
+dictionary says they are; not one of them has a value.
 
 ## Build and test
 
