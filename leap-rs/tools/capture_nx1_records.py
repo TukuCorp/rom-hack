@@ -294,6 +294,7 @@ def main(out):
     branches = None
     scenarios = None
     regions = None
+    staticdata = None
     with zipfile.ZipFile(LEAP_ZIP) as zf:
         for member in sorted(zf.namelist()):
             if not member.lower().endswith(".nx1"):
@@ -349,6 +350,20 @@ def main(out):
                     live.append((i16(rec, by_name["RegionID"][3]),
                                  wide(rec, name_field[3], name_field[4])))
                 regions = (block, live)
+            if name == "staticdata":
+                block = raw[blocks[0]:blocks[0] + BLOCK]
+                by_name = dict((f[0], f) for f in rows)
+                live = []
+                for k in range((BLOCK - 4 - base) // size):
+                    rec = block[base + k * size:base + (k + 1) * size]
+                    if unwritten(rec, k):
+                        continue
+                    bid = by_name["BranchID"]
+                    vid = by_name["VariableID"]
+                    exp = by_name["Expression"]
+                    live.append((i32(rec, bid[3]), i32(rec, vid[3]),
+                                 int.from_bytes(rec[exp[3]:exp[3] + 8], "little")))
+                staticdata = (block, live)
             if name == "masterstructure":
                 block = raw[blocks[0]:blocks[0] + BLOCK]
                 last = raw[blocks[-1]:blocks[-1] + BLOCK]
@@ -462,6 +477,18 @@ def main(out):
     lines.append("pub const NX1_REGION_ROWS: &[(i32, &str)] = &[")
     for rid, text in regions[1]:
         lines.append("    (%d, %s)," % (rid, quote(text)))
+    lines.append("];")
+    lines.append("")
+    lines.append("/// The first data block of staticdata.nx1, all 201 of whose slots are live.")
+    lines.append("pub const NX1_STATICDATA_BLOCK: &str = %s;" % quote(staticdata[0].hex()))
+    lines.append("")
+    lines.append("/// (BranchID, VariableID, Expression as raw f64 bits), one per live slot, in file")
+    lines.append("/// order. The ids ascend with gaps -- the variables that appear are only the ones")
+    lines.append("/// the area gave static values, and the doubles carry the 1.0 and 2021.0 values that")
+    lines.append("/// pinned this table's geometry in the first place.")
+    lines.append("pub const NX1_STATICDATA_ROWS: &[(i32, i32, u64)] = &[")
+    for bid, vid, bits in staticdata[1]:
+        lines.append("    (%d, %d, %d)," % (bid, vid, bits))
     lines.append("];")
     lines.append("")
     lines.append("/// The masterstructure dictionary, and its first data block, which holds the top level.")

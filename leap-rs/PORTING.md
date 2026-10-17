@@ -314,6 +314,13 @@ numbers, 33, 34, 35 and on, exactly at 0x3c + n*12. None of 20, 304, 312 or 368 
 so the smallest-divisor rule is refuted rather than extended, and the measured pitch wins
 where it exists: the layout table carries it, and the tests make the difference between
 derived and measured a claim rather than an accident.
+
+The static values table also decodes and checks itself at that geometry: after 35 globals
+(BranchID -1, VariableIDs 1685 through 2325 ascending) the table switches to one section per
+branch, ids restarting within each, and the values are variable defaults -- recurring 47.0
+and 7.0, step ladders 1000 through 7000, conversions 7440, 7880 and 8320, and 2021.0 itself
+as a global value. A wrong base or stride scrambles ids and values alike; the test walks
+both.
 What is left, and the first item is the one that matters.
 
 Where a table's records start in the block. The samples decode from 60 bytes in -- a 64-byte

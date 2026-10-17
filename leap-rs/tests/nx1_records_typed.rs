@@ -8,7 +8,8 @@
 
 use leap_rs::oracle_records::{
     NX1_DATANAMES_BLOCK, NX1_DATANAMES_DICTIONARY, NX1_DATANAMES_ROWS, NX1_RECORD_LAYOUT,
-    NX1_REGION_BLOCK, NX1_REGION_ROWS, NX1_YEARS_BLOCK, NX1_YEARS_ROWS,
+    NX1_REGION_BLOCK, NX1_REGION_ROWS, NX1_STATICDATA_BLOCK, NX1_STATICDATA_ROWS,
+    NX1_YEARS_BLOCK, NX1_YEARS_ROWS,
 };
 use leap_rs::records::{self, Field, Value};
 
@@ -165,6 +166,44 @@ fn the_pitch_consecutive_live_records_show_matches_the_layout() {
             "{name}: the records sit {want} apart from {want_base:#x}, the layout says otherwise"
         );
     }
+}
+
+#[test]
+fn staticdata_decodes_as_an_ascending_table_of_variable_values() {
+    // Base 0x48, records 20 apart: the geometry the Expression doubles themselves prove, so
+    // this test reads the doubles back and pins the ones that appeared in the byte walks. The
+    // variable id is sparse but never falls.
+    let block = unhex(NX1_STATICDATA_BLOCK);
+    let (base, size, fields) = layout_of("staticdata");
+    let rows = records::live_records(&block, base, &fields, size);
+    let wants = NX1_STATICDATA_ROWS;
+    assert_eq!(rows.len(), wants.len(), "every slot that reads as written");
+    let mut previous = (-1i64, 0i64);
+    for (row, want) in rows.iter().zip(wants) {
+        assert_eq!(row[0], Value::Int(want.0 as i64), "BranchID");
+        assert_eq!(row[1], Value::Int(want.1 as i64), "VariableID");
+        match row[2] {
+            Value::Float(got) => {
+                assert_eq!(got, f64::from_bits(want.2), "Expression of variable {}", want.1);
+            }
+            _ => panic!("Expression is not a double"),
+        }
+        // Per branch the ids ascend; a new branch section restarts the id count, as the
+        // freed-area structure implies: the globals come first, then each branch's block.
+        let (branch, id) = (i64::from(want.0), i64::from(want.1));
+        assert!(branch > previous.0 || (branch == previous.0 && id > previous.1),
+            "ids ascend within a branch: ({}, {}) after {:?}", want.0, want.1, previous);
+        previous = (branch, id);
+    }
+    // The exact values the byte walks showed: two exact ones, then the LEAP base year as a
+    // static value, then zero. A wrong base or stride scrambles these before anything else.
+    assert_eq!(f64::from_bits(wants[1].2), 1.0, "variable 1690's value");
+    assert_eq!(f64::from_bits(wants[3].2), 2021.0, "the LEAP base year as a value");
+    // The first per-branch section after the globals ends at slot 34 (branch -1, id 2325),
+    // and the first branch carries its own values: a wrong stride mixes branches into ids
+    // that break this before anything else would.
+    assert_eq!(wants[34], (-1, 2325, 4611686018427387904), "globals end here");
+    assert_eq!(wants[35].0, 1, "the first per-branch row");
 }
 
 #[test]
