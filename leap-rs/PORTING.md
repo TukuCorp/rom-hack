@@ -287,40 +287,51 @@ tests make that the claim rather than a property of the implementation.
 
 Two things the file does not state, and both had to be read off the data.
 
-The record size is zero in all eighty-six tables, because the area was written by an export that
-left that descriptor field blank. It is recoverable anyway: a data block is 4096 bytes with a
-60-byte header, the records area is 4032 bytes, and it holds a whole number of records, so the
-record size is the smallest divisor of 4032 that is at least four bytes past the last field. That
-gives 12 for `years`, 224 for `units`, 448 for `regions` and 576 for `datanames`, and each is the
-stride the bytes are written at. The test holds the rule against 80 tables and requires that no
-smaller divisor also fit.
+The record size is zero in all eighty-six tables, because the area was written by an export
+that left that descriptor field blank. It is mostly recoverable by arithmetic: a data block is
+4096 bytes, the record area of each block runs to 4092, and for most tables the record size is
+the smallest divisor of 4032 that is at least four bytes past the last field, which every
+record then wastes in a trailing flag block. That gives 12 for years, 224 for units and
+576 for datanames, and for those it is the stride the bytes are written at -- datanames
+shows it directly: its seven records pitch their TableName fields exactly 576 apart, 0x040,
+0x280, 0x4c0 and on. The test holds the rule against the tables it covers and requires that no
+smaller divisor fit.
 
-The records start 60 bytes into the block rather than 64. The fourth byte the `NXDH` tag invites
-you to assume belongs to the first record, and reading strings from a 64-byte base misaligns every
-one of them. That is how the 60 was found.
-
+Not every table obeys it, and three are carried as measured strides instead of derived ones.
+The evidence is the pitch of consecutive live records, which no arithmetic can fake: their
+wide-string or double fields sit an exact distance apart, a whole number of pitches from the
+4092 where the record area stops. staticdata measures 20 from base 0x48 against the rule's
+18 -- its Expression doubles land on that pitch as 1.0, 1.0, 2021.0 and 0.0, and the header
+word at 0x1e states 201, which is (4092-0x48)/20. balcat measures 304 from base 0x8c against
+the rule's 336 -- thirteen fuel names, exactly 0x130 apart, ending at 4092. scenarios
+measures 312 from base 0x24 against the rule's 336 -- nine names 0x138 apart, Current Accounts
+through Biogas Digestion -- and its second record reads as Baseline with a memo reference to
+blob block 13 and the Current Accounts parent, which is the semantics the area itself implies.
+None of 20, 304 or 312 divides 4032, so the smallest-divisor rule is refuted rather than
+extended, and the measured pitch wins where it exists: the layout table carries it, and the
+tests make the difference between derived and measured a claim rather than an accident.
 What is left, and the first item is the one that matters.
 
-A record that was written and then deleted is not recognised by the file's own map. The block
-header carries a used count and two further words whose meaning is not established: for
-`years.nx1` the live row count is 31, the header words are 32, 0x1f and 0x7fffffff, and none of
-the three is 31 or a plain bitmap over the slots, while slots 0 and 1 are empty, 2..32 hold the
-years 2020 to 2050, and 33 onward hold a counter. After three passes at it the encoding is still
-not settled, so it is left unclaimed rather than fitted to one table.
+Where a table's records start in the block. The samples decode from 60 bytes in -- a 64-byte
+base misaligns every string, which is how the 60 was found -- and datanames and years tile 4092
+exactly from there. But the three measured tables put their first record at 0x24 (scenarios),
+0x48 (staticdata) and 0x8c (balcat), and no rule is established for that base. The header
+is more than a fixed 60 bytes: word 0x1e states the live record count (years 31, balcat 13,
+scenarios 9, regions 1, staticdata 201, all confirmed against what the records themselves
+show), and word 0x20 onward is a used-slot bitmap with one set bit per live record, which
+staticdata displays as 201 consecutive set bits. A record deleted and then freed also keeps
+bytes that still look written, which is why regions.nx1 states one live row and yields eight:
+the extra ticks are leftovers, not rows, and the bitmap is not consumed yet.
 
 What the reader does instead is skip slots nothing was ever written to, which is a signature
 rather than the file's answer: a slot is unwritten when every byte is zero, or when its first two
 bytes carry its own slot number and the rest is zero, which is what a fresh block leaves behind.
+
 The year list is what makes that checkable rather than merely plausible. With the rule,
 `years.nx1` reads as exactly the 31 years 2020 to 2050 -- the base year the area's own settings
 file states, through to the year LEAP stops at -- and without it the free slots read as years 33
 and up. The rows also come out in insertion order, 2021 to 2030 then 2020 then 2050 down to 2031,
 which is worth knowing: a caller that wants them sorted has to sort them.
-
-The rule under-filters. A slot that was written and then freed keeps bytes elsewhere in the record
-and still looks written, so a table whose live count the header states can come back with more
-rows than that: `regions.nx1` says one and yields eight. That is the price of not having the map,
-and it is stated rather than hidden.
 
 Six of the 86 tables still resist, and they are named in the test rather than quietly missing:
 `PluginProperties`, `Plugins`, `areadata`, `fuels`, `tedtechdata` and `uservardata`. Twenty-six

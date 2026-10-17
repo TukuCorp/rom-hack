@@ -152,7 +152,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, bool, &[(&str, &str, u32, u32, u32)
         ("ResultValue", "nxtDouble", 0, 20, 8),
     ]),
     // balcat: 9 fields
-    ("balcat", 336, true, &[
+    ("balcat", 304, true, &[
         ("BalCatID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("BalCatOrder", "nxtInt16", 5, 204, 2),
@@ -592,7 +592,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, bool, &[(&str, &str, u32, u32, u32)
         ("InheritOrder", "nxtInt16", 5, 4, 2),
     ]),
     // scenarios: 21 fields
-    ("scenarios", 336, true, &[
+    ("scenarios", 312, true, &[
         ("ScenarioID", "nxtInt16", 5, 0, 2),
         ("Description", "nxtBlob", 0, 2, 8),
         ("MainParentScenarioID", "nxtInt16", 5, 10, 2),
@@ -639,7 +639,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, bool, &[(&str, &str, u32, u32, u32)
         ("KPID", "nxtAutoInc", 10, 477, 4),
     ]),
     // staticdata: 3 fields
-    ("staticdata", 18, true, &[
+    ("staticdata", 20, true, &[
         ("BranchID", "nxtInt32", 10, 0, 4),
         ("VariableID", "nxtInt16", 5, 4, 2),
         ("Expression", "nxtDouble", 0, 6, 8),
@@ -1001,24 +1001,6 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, bool, &[(&str, &str, u32, u32, u32)
         ("Name", "nxtNullString", 4, 2, 5),
         ("ShowResults", "nxtBoolean", 0, 7, 1),
     ]),
-];
-
-/// The datanames dictionary, from its first field descriptor to the indices one.
-/// The strides each table records themselves imply, for a table whose id counts
-/// from one. The record size rule is checked against these rather than against itself.
-pub const NX1_STRIDE_CHECK: &[(&str, &[usize])] = &[
-    ("RegressionResults", &[240, 280]),
-    ("RegressionResults", &[240, 280]),
-    ("constants", &[192]),
-    ("datanames", &[576]),
-    ("landtypes", &[336]),
-    ("lifecycletimedata", &[512]),
-    ("masterstructure", &[504]),
-    ("scenariodata", &[24]),
-    ("tedenvdata", &[32, 160, 192, 224, 416]),
-    ("unitclass", &[72]),
-    ("units", &[224]),
-    ("vintage", &[132, 252]),
 ];
 
 pub const NX1_DATANAMES_DICTIONARY: &str = "0612546e784669656c6444657363726970746f7206075461626c654944120000000006086e7874496e743332020a02000802030100020b12000000000203020002040808020108080612546e784669656c6444657363726970746f7206095461626c654e616d651200000000060d6e787457696465537472696e67023202000802030100020c12000000000203020402660808020108080612546e784669656c6444657363726970746f7206074669656c644944120000000006086e7874496e743332020a02000802030100020d12000000000203026a02040808020108080612546e784669656c6444657363726970746f7206055365744944120000000006086e7874496e743332020a02000802030100020e12000000000203026e02040808020108080612546e784669656c6444657363726970746f7206044e616d651200000000060d6e787457696465537472696e6703960002000802030100020f120000000002030272032e010808020108080612546e784669656c6444657363726970746f72060c416262726576696174696f6e1200000000060d6e787457696465537472696e6702320200080203010002101200000000020303a00102660808020108080612546e784669656c6444657363726970746f72060b446174654368616e6765641200000000060b6e78744461746554696d650200020008020301000211120000000002030306020208080802010808030e02031002080711496e646963657344657363726970746f72";

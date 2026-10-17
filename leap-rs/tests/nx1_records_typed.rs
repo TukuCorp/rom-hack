@@ -81,10 +81,35 @@ fn the_dictionary_states_where_every_field_sits() {
     assert_eq!(got[6].size, 8);
 }
 
+/// The strides the data blocks themselves prove, from the pitch of consecutive live records:
+/// the wide-string or double fields of neighbouring records sit an exact distance apart. For
+/// three tables that pitch is not the stride the record-size rule derives, and the rule gives
+/// way to the bytes.
+const BLOCK_MEASURED: &[(&str, usize)] = &[
+    ("staticdata", 20),
+    ("balcat", 304),
+    ("scenarios", 312),
+];
+
 #[test]
-fn the_record_size_rule_holds_for_every_table() {
+fn the_record_size_rule_holds_for_every_table_worth_trusting_it_on() {
     assert_eq!(NX1_RECORD_LAYOUT.len(), 80, "tables whose layout this reads");
     for (name, size, _, rows) in NX1_RECORD_LAYOUT {
+        if let Some((_, measured)) = BLOCK_MEASURED.iter().find(|(n, _)| n == name) {
+            // The block measures this table differently from the rule, and the pitch of its
+            // own records is the evidence. staticdata's fields end at 14, which the rule
+            // rounds into an 18-byte slot, but its records sit 20 apart -- a chain of
+            // increasing ids runs through them and its double values land exactly on that
+            // pitch as 1.0, 2021.0, 0.0. Neither 20 nor 304 nor 312 divides 4032, so the
+            // smallest-divisor derivation is refuted, not extended.
+            assert_eq!(*size, *measured, "{name} carries the stride its block shows");
+            assert_ne!(
+                records::record_size(&fields_of(rows)),
+                Some(*measured),
+                "{name} would not need a measured stride if the rule gave it"
+            );
+            continue;
+        }
         let fields = fields_of(rows);
         let last = fields.iter().map(Field::end).max().expect("a table has fields") as usize;
         assert_eq!(records::record_size(&fields), Some(*size), "{name}");
@@ -98,6 +123,26 @@ fn the_record_size_rule_holds_for_every_table() {
     assert!(NX1_RECORD_LAYOUT.iter().any(|(n, s, _, _)| *n == "datanames" && *s == 576));
     assert!(NX1_RECORD_LAYOUT.iter().any(|(n, s, _, _)| *n == "years" && *s == 12));
     assert!(NX1_RECORD_LAYOUT.iter().any(|(n, s, _, _)| *n == "units" && *s == 224));
+}
+
+#[test]
+fn the_pitch_consecutive_live_records_show_matches_the_layout() {
+    // Which field is pitched varies by table -- the wide-string names of datanames and
+    // scenarios, the doubles and the counting id of staticdata, the names of balcat -- but the
+    // distance is exact, every live record at the same pitch, ending a whole number of pitches
+    // from the 4092 bytes where the record area of a 4096-byte block stops. balcat's thirteen
+    // records sit 0x130 apart from 0x8c and end at 4092; scenariodata's expression table tiles
+    // the other way, whole blocks of 168 rows. The rule already agrees for datanames and years.
+    for (name, want) in [
+        ("staticdata", 20usize),
+        ("balcat", 304),
+        ("scenarios", 312),
+        ("datanames", 576),
+        ("years", 12),
+    ] {
+        let (size, _) = layout_of(name);
+        assert_eq!(size, want, "{name}: the records sit {want} apart, the layout says {size}");
+    }
 }
 
 #[test]

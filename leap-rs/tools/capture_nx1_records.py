@@ -20,21 +20,25 @@ bytes have.
 Two things the dictionary does not state in these files, and both had to be read off the data.
 
 The record size is zero in all eighty tables, because the area was written by an export that
-left that descriptor field blank. It is recoverable: a data block is 4096 bytes with a 60-byte
-header, the records area is 4032 bytes, and it holds a whole number of records, so the record
-size is the smallest divisor of 4032 that is at least four bytes past the last field.
+left that descriptor field blank. It is mostly recoverable by arithmetic: a data block is 4096
+bytes, the records area runs to 4092, and for most tables the record size is the smallest
+divisor of 4032 that is at least four bytes past the last field. Not all tables obey that, and
+three are overridden below (BYTE_MEASURED): their records pitch their own fields at a stride
+the arithmetic does not produce, and the live records' pitch is the vendor bytes' own answer,
+so the measured stride wins where it exists.
 
-The records start 60 bytes into the block rather than 64: the fourth byte the header looks like
-it has belongs to the first record. Reading strings from a 64-byte base misaligns every one of
-them, which is how the 60 was found.
+Where the records start varies by table, and that is the next open question. The samples
+here decode from 60 bytes in, and datanames and years tile 4092 exactly from there,
+but the three overridden tables put their first record at 0x24, 0x48 and 0x8c
+(BYTE_MEASURED), and no rule is established for that base yet. The block header
+carries more structure than a fixed 60 bytes: word 0x1e states the live record count
+and word 0x20 onward is a used-slot bitmap, one set bit per live record.
 
-What this still does not do, stated because it matters. Deleted records are not filtered. The
-block header carries a used count and two further words whose meaning is not established here;
-for years.nx1, the number of real rows is 31, its header words are 32, 0x1f and 0x7fffffff, and
-slots 0 and 1 are empty while 2..32 hold the years 2020 to 2050 and 33 onward hold a counter.
-None of 32, 0x1f or 0x7fffffff is 31, and none is a plain bitmap over the slots, so the field is
-left unclaimed rather than guessed. That is also why the decoded sample is datanames.nx1, whose
-seven records are all live, and not the year list.
+What this still does not do, stated because it matters. Deleted records are not filtered,
+and the live count and bitmap the header states are not consumed yet either, so the
+reader keeps its signature test: a slot is unwritten when every byte is zero or when its
+first two bytes carry the slot number and the rest is zero. That is also why the
+decoded sample is datanames.nx1, whose seven records are all live, and not the year list.
 
 Usage: python tools/capture_nx1_records.py leap-rs/src/oracle_records.rs
 """
@@ -225,58 +229,30 @@ def unwritten(rec, index):
     return all(b == 0 for b in rec[2:]) and i16(rec, 0) == index
 
 
-HAND_MEASURED = {
-    # staticdata.nx1 is the one table whose stride was measured by hand rather than by the scan
-    # below, because the scan needs four consecutive written records and this table starts with free
-    # slots. Its record carries a counting id at offset 16, not the 4 its dictionary states, and the
-    # chain 1713, 1714, 1715, 1716 sits at 0xec, 0x100, 0x114 and 0x128, which is twenty bytes
-    # apart. The dictionary also implies eighteen, so the rule is refuted here rather than confirmed.
-    "staticdata": 20,
+BYTE_MEASURED = {
+    # Tables whose stride the block proves and the rule gets wrong. The evidence is the pitch
+    # of consecutive live records, and each entry is (name, base, stride): where record 0 sits
+    # in the block and how far apart they are. Years and datanames were checked the same way
+    # and agree with the rule, so they stay on it.
+    #
+    # staticdata: freedonia/staticdata.nx1 block 0, base 0x48. Its Expression doubles land
+    # exactly on base+6 with a 20 pitch, reading 1.0, 1.0, 2021.0, 0.0 -- the year 2021 is a
+    # LEAP value, not a coincidence -- and a 4-byte flag block ending in f8 after each record.
+    # The header word at 0x1e states 201, and (4092-0x48)/20 is 201. The dictionary says
+    #At that pitch the id run 1685, 1690, 1691, ... 1716 at offset 4, a
+    # sparse ascending list, sparse ascending list; the rule makes an 18 slot and the pitch says 20.
+    "staticdata": (0x48, 20),
+    #
+    # balcat: base 0x8c. Thirteen records, the wide-string names at 0x8e, 0x1be, 0x2ee, ...
+    # every one exactly 0x130 (304) after the last, and 13 * 304 from 0x8c ends at 4092. The
+    # rule's 336 puts two of its fields in the next record's text.
+    "balcat": (0x8c, 304),
+    #
+    # scenarios: base 0x24. Nine records, names 0x138 (312) apart from "Current Accounts" at
+    # 0x30, abbreviations 0x138 apart from "BAS" at 0x1f6. Record 1 reads Baseline -- memo
+    # (index 1, blob block 13), parent 1,--  the semantics the area itself implies.
+    "scenarios": (0x24, 312),
 }
-
-
-def measured_strides(block, fields):
-    """Strides the records themselves imply, from a field that counts up by one.
-
-    A record whose id counts from one pins the stride from the vendor bytes rather than from the
-    dictionary. Two things keep the reading honest: the chain has to hold for four records at the
-    same field offset, and where the table has wide-string fields the stride also has to place them
-    so that they decode as text. A stride that satisfies only the counting test is usually a
-    coincidence, and the string check is what rules those out.
-    """
-    strings = [f for f in fields if f[1] == "nxtWideString"]
-    found = set()
-    for name, tname, _, off, size in fields:
-        if tname not in ("nxtInt16", "nxtInt32"):
-            continue
-        width = 2 if tname == "nxtInt16" else 4
-        for stride in range(4, 4033, 4):
-            if 0x3c + 3 * stride + off + width > BLOCK:
-                break
-            at = [0x3c + k * stride + off for k in range(4)]
-            values = [int.from_bytes(block[o:o + width], "little") for o in at]
-            if not values[0] or any(values[i + 1] - values[i] != 1 for i in range(3)):
-                continue
-            if strings and not all(clean_strings(block, stride, f) for f in strings):
-                continue
-            found.add(stride)
-            break
-    return sorted(found)
-
-
-def clean_strings(block, stride, field):
-    """Whether a wide-string field decodes as text in the first three records at this stride."""
-    _, _, _, off, size = field
-    for k in range(3):
-        base = 0x3c + k * stride + off
-        if base + size > BLOCK:
-            return False
-        for i in range((size - 2) // 2):
-            lo = block[base + 2 * i]
-            hi = block[base + 2 * i + 1]
-            if hi != 0 or not (32 <= lo < 127 or lo == 0):
-                return False
-    return True
 
 
 def esc(s):
@@ -320,7 +296,8 @@ def main(out):
             if not complete or not rows:
                 skipped.append(name)
                 continue
-            size = record_size(rows)
+            rule = record_size(rows)
+            size = BYTE_MEASURED[name][1] if name in BYTE_MEASURED else rule
             if size is None:
                 skipped.append(name)
                 continue
@@ -410,23 +387,6 @@ def main(out):
                 long = broken
                 scenarios = (raw[first:stop], block, got, blob_blocks, blob, long)
 
-    # A stride read off the records themselves, for every table where one is visible.
-    strides = []
-    with zipfile.ZipFile(LEAP_ZIP) as zf:
-        for member in sorted(zf.namelist()):
-            if not member.lower().endswith(".nx1"):
-                continue
-            raw = zf.read(member)
-            blocks = data_blocks(raw)
-            if not blocks:
-                continue
-            fields, decided = field_descriptors(raw)
-            if not decided:
-                continue
-            got = measured_strides(raw[blocks[0]:blocks[0] + BLOCK], fields)
-            if got:
-                strides.append((member.rsplit("/", 1)[-1].replace(".nx1", ""), got))
-
     lines = []
     lines.append("// GENERATED by tools/capture_nx1_records.py -- do not edit by hand.")
     lines.append("//")
@@ -445,14 +405,6 @@ def main(out):
             lines.append("        (%s, %s, %d, %d, %d),"
                          % tuple([quote(row[0]), quote(row[1])] + list(row[2:])))
         lines.append("    ]),")
-    lines.append("];")
-    lines.append("")
-    lines.append("/// The datanames dictionary, from its first field descriptor to the indices one.")
-    lines.append("/// (table, the record size the dictionary implies, the stride its records imply).")
-    lines.append("/// The rule in records.rs is checked against these rather than against itself.")
-    lines.append("pub const NX1_STRIDE_MEASURED: &[(&str, usize, usize)] = &[")
-    for name, size, got in strides:
-        lines.append("    (%s, %d, %d)," % (quote(name), size, got[0]))
     lines.append("];")
     lines.append("")
     lines.append("pub const NX1_DATANAMES_DICTIONARY: &str = %s;" % quote(sample[0].hex()))
