@@ -321,6 +321,17 @@ branch, ids restarting within each, and the values are variable defaults -- recu
 and 7.0, step ladders 1000 through 7000, conversions 7440, 7880 and 8320, and 2021.0 itself
 as a global value. A wrong base or stride scrambles ids and values alike; the test walks
 both.
+
+The engine's own arithmetic is now in the port as a check, read off the decompile. Adding a
+field (FUN_012eb790 in chunk-00122.c, nxsdDataDictionary) walks a cumulative offset that the
+descriptor verification compares the dictionary's own offsets against, and stores the summed
+size rounded up to four bytes; FUN_012ec9e0 then adds four bytes per thirty-two fields for
+the null-bitmap that ends every record. That reproduces three of the measured tables exactly
+(years 12, scenarios 312, staticdata 20) and misses three by a slack the current dictionary
+cannot name -- datanames by 44, balcat by 4, regions by 8 -- which the exporter side left
+behind and which the pitch of the records themselves pins instead. The bitmap formula also
+makes OriginalFieldCount (present in every shipped dictionary, string-encoded) explain the
+bitmap's sizing without explaining that slack.
 What is left, and the first item is the one that matters.
 
 Where a table's records start in the block. The samples decode from 60 bytes in -- a 64-byte

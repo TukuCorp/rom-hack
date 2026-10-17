@@ -263,6 +263,19 @@ pub fn record_size(fields: &[Field]) -> Option<usize> {
     (4..=DATA).find(|size| DATA % size == 0 && *size >= last + 4)
 }
 
+/// The record size the decompiled engine itself computes: round the summed field sizes up
+/// to a multiple of four (undefined4 in FUN_012eb790, which reaches FUN_012ec9e0), then add
+/// four bytes per thirty-two fields for the null-bitmap at the end of every record
+/// (FUN_012ec9e0 in chunk-00122.c, nxsdDataDictionary). Where the shipped files sit further
+/// out than this -- three of the measured tables -- their dictionaries lost that slack to an
+/// export, and the pitch of the records themselves is what the layout keeps.
+pub fn engine_record_size(fields: &[Field]) -> Option<usize> {
+    let sum: u32 = fields.iter().map(Field::end).max()?;
+    let count = fields.len();
+    let word = 4 * ((count + 31) / 32);
+    Some(((sum as usize + 3) / 4) * 4 + word)
+}
+
 /// Where each data block starts in a table.
 /// Where a named field sits in a decoded row, when the table has that field.
 pub fn index_of(fields: &[Field], name: &str) -> Option<usize> {

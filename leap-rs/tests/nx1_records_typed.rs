@@ -180,6 +180,44 @@ fn the_block_header_states_the_live_record_count() {
 }
 
 #[test]
+fn the_engine_record_size_formula_agrees_where_it_can() {
+    // The decompiled engine computes the record size itself (FUN_012ec9e0, reached through
+    // FUN_012eb790's add-field accounting): round the summed field sizes up to a multiple of
+    // four, then add four bytes per 32 fields for the null-bitmap that ends every record --
+    // the f8 words the years and staticdata blocks had shown all along. The formula agrees
+    // with the measured strides for years, scenarios and staticdata. datanames, balcat and
+    // regions sit further out, so their files grew by an exporter-side slack the current
+    // dictionary cannot name, and the pitch -- not the formula -- carries their truth.
+    for (name, want) in [
+        ("years", 12usize),
+        ("scenarios", 312),
+        ("staticdata", 20),
+    ] {
+        let (_, _, fields) = layout_of(name);
+        assert_eq!(records::engine_record_size(&fields), Some(want), "{name}");
+        let (_, size, _) = layout_of(name);
+        assert_eq!(size, want, "{name}: the measured pitch IS the formula's answer");
+    }
+    for (name, engine, measured) in [
+        ("datanames", (528usize + 4), 576usize),
+        ("balcat", (296 + 4), 304),
+        ("regions", (356 + 4), 368),
+    ] {
+        let (_, _, fields) = layout_of(name);
+        assert_eq!(records::engine_record_size(&fields), Some(engine), "{name}");
+        assert_eq!(
+            measured - engine,
+            match name {
+                "datanames" => 44,
+                "balcat" => 4,
+                _ => 8,
+            },
+            "{name}: the exporter-side slack this table's file carries"
+        );
+    }
+}
+
+#[test]
 fn staticdata_decodes_as_an_ascending_table_of_variable_values() {
     // Base 0x48, records 20 apart: the geometry the Expression doubles themselves prove, so
     // this test reads the doubles back and pins the ones that appeared in the byte walks. The
