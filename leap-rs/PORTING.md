@@ -370,6 +370,7 @@ more read cleanly and hold no rows at all -- `envresults` and `results` among th
 different thing from a read failure and is recorded as such. Blob fields decode as an identifier
 and no further, and the `NXHD` blocks alongside the record blocks are the blob heap, holding RTF
 rather than records.
+Why those six resist is now stated at the byte level too. The table-file header carries the usable page size at +16 -- 0x0ffc (4092 bytes per page) for every table this reader handles, and 0x1ffc (8188 bytes per page) for`PluginProperties`,`Plugins` and`uservardata`, whose 8192-byte pages carry stream and index blocks (NXSH, NXIH) and at most one NXDH each, so the fixed-record reader's assumptions do not apply and cannot. areadata, fuels and tedtechdata are on 4092-byte pages like everyone else, but their dictionaries contain two-byte placement gaps before some nxtNullString fields that the reader refuses to guess around, which is why they come back empty instead of nearly right.
 
 Mutations for this suite, all caught: looking for the declared length strictly after the type
 name, returning a layout that does not tile, accepting any string after the class name as a field
