@@ -114,7 +114,17 @@ def placement(segment):
     """
     at = segment.find(ANCHOR)
     if at < 0:
-        return None, None
+        # The two LEAP-flavored dictionaries - areadata and tedtechdata's boolean runs -
+        # carry extra leading properties the fixed anchor cannot hold, but every
+        # descriptor ends with the fdPos zero, the marker pair, and the offset and size.
+        # So the segment's LAST [zero, marker] is the field placement correct one and
+        # the pair walks the same tagged-number grammar forward from there.
+        mid = segment.rfind(MIDDLE)
+        if mid < 0:
+            return None, None
+        offset, at = number(segment, mid + len(MIDDLE))
+        size, _ = number(segment, at)
+        return offset, size
     _, at = number(segment, at + len(ANCHOR))
     if at is None or segment[at:at + len(MIDDLE)] != MIDDLE:
         return None, None

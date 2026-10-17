@@ -108,7 +108,7 @@ const BLOCK_MEASURED: &[(&str, u32, usize)] = &[
 
 #[test]
 fn the_record_size_rule_holds_for_every_table_worth_trusting_it_on() {
-    assert_eq!(NX1_RECORD_LAYOUT.len(), 81, "tables whose layout this reads");
+    assert_eq!(NX1_RECORD_LAYOUT.len(), 82, "tables whose layout this reads");
     for (name, base, size, _, _, rows) in NX1_RECORD_LAYOUT {
         if let Some((_, measured_base, measured)) =
             BLOCK_MEASURED.iter().find(|(n, _, _)| *n == *name)
@@ -382,19 +382,19 @@ fn an_empty_table_is_not_a_read_failure() {
         .map(|(name, _, _, _, _, _)| *name)
         .collect();
     assert_eq!(empty.len(), 26, "empty tables: {empty:?}");
-    assert_eq!(with_data.len(), 55);
+    assert_eq!(with_data.len(), 56);
     assert!(empty.contains(&"envresults"));
     assert!(empty.contains(&"results"));
     assert!(with_data.contains(&"datanames"));
     assert!(with_data.contains(&"years"));
     assert!(with_data.contains(&"scenariodata"));
 
-    // Fuels joined the readable set once the null-string slack was read into the walk.
-    // Five remain unreadable, and they are named rather than quietly missing.
+    // Fuels joined the readable set once the null-string slack was read into the walk,
+    // areadata once the placement walked from the descriptor's own tail. Four remain
+    // unreadable, and they are named rather than quietly missing.
     for name in [
         "PluginProperties",
         "Plugins",
-        "areadata",
         "tedtechdata",
         "uservardata",
     ] {

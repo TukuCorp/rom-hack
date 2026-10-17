@@ -375,7 +375,10 @@ more read cleanly and hold no rows at all -- `envresults` and `results` among th
 different thing from a read failure and is recorded as such. Blob fields decode as an identifier
 and no further, and the `NXHD` blocks alongside the record blocks are the blob heap, holding RTF
 rather than records.
-Why those six resist is now stated at the byte level too. The table-file header carries the usable page size at +16 -- 0x0ffc (4092 bytes per page) for every table this reader handles, and 0x1ffc (8188 bytes per page) for`PluginProperties`,`Plugins` and`uservardata`, whose 8192-byte pages carry stream and index blocks (NXSH, NXIH) and at most one NXDH each, so the fixed-record reader's assumptions do not apply and cannot. areadata, fuels and tedtechdata are on 4092-byte pages like everyone else, but their dictionaries contain two-byte placement gaps before some nxtNullString fields that the reader refuses to guess around, which is why they come back empty instead of nearly right. The reader has one slack rule
+Why those six resist is now stated at the byte level too. The table-file header carries the usable page size at +16 -- 0x0ffc (4092 bytes per page) for every table this reader handles, and 0x1ffc (8188 bytes per page) for`PluginProperties`,`Plugins` and`uservardata`, whose 8192-byte pages carry stream and index blocks (NXSH, NXIH) and at most one NXDH each, so the fixed-record reader's assumptions do not apply and cannot. areadata, fuels and tedtechdata are on 4092-byte pages like everyone else, but their dictionaries contain two-byte placement gaps before some nxtNullString fields that the reader refuses to guess around, which is why they come back empty instead of nearly right. areadata joined once the reader's placement walked from the descriptor
+tail itself -- the segment's LAST (fdPos zero, marker) is the placement own and the
+pair follows the same tagged-number grammar -- through the page seam and
+all, at the rule's own size. The reader has one slack rule
 now: a gap of at most two bytes in front of a short or null string is read rather than refused, which is what brought
 fuels.nx1's 44-field dictionary into the layout table (55 tables with data, 81 layouts overall). areadata and tedtechdata still hold wider breaks the walk
 will not guess around, and the three big-page tables remain a different storage class.
