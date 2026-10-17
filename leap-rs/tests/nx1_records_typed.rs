@@ -36,10 +36,10 @@ fn fields_of(rows: &[(&str, &str, u32, u32, u32)]) -> Vec<Field> {
         .collect()
 }
 
-fn layout_of(table: &str) -> (usize, usize, Vec<Field>) {
-    for (name, base, size, _, rows) in NX1_RECORD_LAYOUT {
+fn layout_of(table: &str) -> (usize, usize, usize, Vec<Field>) {
+    for (name, base, size, cap, _, rows) in NX1_RECORD_LAYOUT {
         if *name == table {
-            return (*base, *size, fields_of(rows));
+            return (*base, *size, *cap, fields_of(rows));
         }
     }
     panic!("no oracle layout for {}", table);
@@ -49,20 +49,20 @@ fn layout_of(table: &str) -> (usize, usize, Vec<Field>) {
 /// live records, the free-slot numbers the reader already knows about, and the doubles and
 /// datetimes the fields hold. Datanames and years agree with the record-size rule; the first
 /// four defeat it.
-const BLOCK_PROVEN: &[(&str, u32, usize)] = &[
-    ("staticdata", 0x48, 20),
-    ("balcat", 0x8c, 304),
-    ("scenarios", 0x24, 312),
-    ("regions", 0x2c, 368),
-    ("datanames", 0x3c, 576),
-    ("years", 0x3c, 12),
+const BLOCK_PROVEN: &[(&str, u32, usize, usize)] = &[
+    ("staticdata", 0x48, 20, 201),
+    ("balcat", 0x8c, 304, 13),
+    ("scenarios", 0x24, 312, 13),
+    ("regions", 0x2c, 368, 11),
+    ("datanames", 0x3c, 576, 7),
+    ("years", 0x3c, 12, 336),
 ];
 
 #[test]
 fn the_dictionary_states_where_every_field_sits() {
     let bytes = unhex(NX1_DATANAMES_DICTIONARY);
     let got = records::field_descriptors(&bytes);
-    let (_, _, want) = layout_of("datanames");
+    let (_, _, _, want) = layout_of("datanames");
     assert_eq!(got.len(), want.len(), "every field should be read");
     assert_eq!(got, want);
 
@@ -109,7 +109,7 @@ const BLOCK_MEASURED: &[(&str, u32, usize)] = &[
 #[test]
 fn the_record_size_rule_holds_for_every_table_worth_trusting_it_on() {
     assert_eq!(NX1_RECORD_LAYOUT.len(), 80, "tables whose layout this reads");
-    for (name, base, size, _, rows) in NX1_RECORD_LAYOUT {
+    for (name, base, size, _, _, rows) in NX1_RECORD_LAYOUT {
         if let Some((_, measured_base, measured)) =
             BLOCK_MEASURED.iter().find(|(n, _, _)| *n == *name)
         {
@@ -141,13 +141,13 @@ fn the_record_size_rule_holds_for_every_table_worth_trusting_it_on() {
     }
     assert!(NX1_RECORD_LAYOUT
         .iter()
-        .any(|(n, _, s, _, _)| *n == "datanames" && *s == 576));
+        .any(|(n, _, s, _, _, _)| *n == "datanames" && *s == 576));
     assert!(NX1_RECORD_LAYOUT
         .iter()
-        .any(|(n, _, s, _, _)| *n == "years" && *s == 12));
+        .any(|(n, _, s, _, _, _)| *n == "years" && *s == 12));
     assert!(NX1_RECORD_LAYOUT
         .iter()
-        .any(|(n, _, s, _, _)| *n == "units" && *s == 224));
+        .any(|(n, _, s, _, _, _)| *n == "units" && *s == 224));
 }
 
 #[test]
@@ -158,12 +158,12 @@ fn the_pitch_consecutive_live_records_show_matches_the_layout() {
     // from the 4092 bytes where the record area of a 4096-byte block stops. balcat's thirteen
     // records sit 0x130 apart from 0x8c and end at 4092; scenariodata's expression table tiles
     // the other way, whole blocks of 168 rows. The rule already agrees for datanames and years.
-    for (name, want_base, want) in BLOCK_PROVEN {
-        let (base, size, _) = layout_of(name);
+    for (name, want_base, want, want_cap) in BLOCK_PROVEN {
+        let (base, size, cap, _) = layout_of(name);
         assert_eq!(
-            (base, size),
-            (*want_base as usize, *want),
-            "{name}: the records sit {want} apart from {want_base:#x}, the layout says otherwise"
+            (base, size, cap),
+            (*want_base as usize, *want, *want_cap),
+            "{name}: the records sit {want} apart from {want_base:#x} with room for {want_cap}, the layout says otherwise"
         );
     }
 }
@@ -193,9 +193,9 @@ fn the_engine_record_size_formula_agrees_where_it_can() {
         ("scenarios", 312),
         ("staticdata", 20),
     ] {
-        let (_, _, fields) = layout_of(name);
+        let (_, _, _, fields) = layout_of(name);
         assert_eq!(records::engine_record_size(&fields), Some(want), "{name}");
-        let (_, size, _) = layout_of(name);
+        let (_, size, _, _) = layout_of(name);
         assert_eq!(size, want, "{name}: the measured pitch IS the formula's answer");
     }
     for (name, engine, measured) in [
@@ -203,7 +203,7 @@ fn the_engine_record_size_formula_agrees_where_it_can() {
         ("balcat", (296 + 4), 304),
         ("regions", (356 + 4), 368),
     ] {
-        let (_, _, fields) = layout_of(name);
+        let (_, _, _, fields) = layout_of(name);
         assert_eq!(records::engine_record_size(&fields), Some(engine), "{name}");
         assert_eq!(
             measured - engine,
@@ -223,7 +223,7 @@ fn staticdata_decodes_as_an_ascending_table_of_variable_values() {
     // this test reads the doubles back and pins the ones that appeared in the byte walks. The
     // variable id is sparse but never falls.
     let block = unhex(NX1_STATICDATA_BLOCK);
-    let (base, size, fields) = layout_of("staticdata");
+    let (base, size, _, fields) = layout_of("staticdata");
     let rows = records::live_records(&block, base, &fields, size);
     let wants = NX1_STATICDATA_ROWS;
     assert_eq!(rows.len(), wants.len(), "every slot that reads as written");
@@ -262,7 +262,7 @@ fn regions_decodes_as_the_one_row_its_header_states_plus_freed_debris() {
     // slots as live. The block's own header says one live record; the reader carries the
     // freed ones named rather than quietly.
     let block = unhex(NX1_REGION_BLOCK);
-    let (base, size, fields) = layout_of("regions");
+    let (base, size, _, fields) = layout_of("regions");
     let rows = records::live_records(&block, base, &fields, size);
     let wants = NX1_REGION_ROWS;
     assert_eq!(rows.len(), wants.len(), "every slot that reads as written");
@@ -278,18 +278,39 @@ fn regions_decodes_as_the_one_row_its_header_states_plus_freed_debris() {
 }
 
 #[test]
+fn the_record_area_of_every_measured_table_tiles_to_4092() {
+    // The relation the whole format hangs on and all six proven tables agree to: the block
+    // ends with four spare bytes at 4092, records tile back from there in whole strides, and
+    // the capacity is exactly what fits. base + capacity * stride == 4092 is a two-way check:
+    // a wrong base, a wrong stride, or a wrong capacity breaks it.
+    for (name, base, size, cap) in BLOCK_PROVEN {
+        let (got_base, got_size, got_cap, _) = layout_of(name);
+        assert_eq!(
+            (got_base, got_size, got_cap),
+            (*base as usize, *size, *cap),
+            "{name}: the layout disagrees with the block-proven geometry"
+        );
+        assert_eq!(
+            got_base + got_cap * got_size,
+            4092usize,
+            "{name}: the record area must end at the block's four spare bytes"
+        );
+    }
+}
+
+#[test]
 fn an_empty_table_is_not_a_read_failure() {
     // The shipped area is mostly tables that hold no rows. They read cleanly and simply have no
     // data block, which is a different thing from a layout this reader cannot place.
     let empty: Vec<&str> = NX1_RECORD_LAYOUT
         .iter()
-        .filter(|(_, _, _, has_data, _)| !has_data)
-        .map(|(name, _, _, _, _)| *name)
+        .filter(|(_, _, _, _, has_data, _)| !has_data)
+        .map(|(name, _, _, _, _, _)| *name)
         .collect();
     let with_data: Vec<&str> = NX1_RECORD_LAYOUT
         .iter()
-        .filter(|(_, _, _, has_data, _)| *has_data)
-        .map(|(name, _, _, _, _)| *name)
+        .filter(|(_, _, _, _, has_data, _)| *has_data)
+        .map(|(name, _, _, _, _, _)| *name)
         .collect();
     assert_eq!(empty.len(), 26, "empty tables: {empty:?}");
     assert_eq!(with_data.len(), 54);
@@ -309,7 +330,7 @@ fn an_empty_table_is_not_a_read_failure() {
         "uservardata",
     ] {
         assert!(
-            !NX1_RECORD_LAYOUT.iter().any(|(n, _, _, _, _)| *n == name),
+            !NX1_RECORD_LAYOUT.iter().any(|(n, _, _, _, _, _)| *n == name),
             "{} should not have a layout yet",
             name
         );
@@ -322,7 +343,7 @@ fn datanames_decodes_into_typed_rows() {
     assert_eq!(block.len(), records::BLOCK);
     assert_eq!(records::data_blocks(&block), vec![0]);
 
-    let (base, size, fields) = layout_of("datanames");
+    let (base, size, _, fields) = layout_of("datanames");
     let rows = records::records(&block, base, &fields, size);
     assert_eq!(rows.len(), 7, "a block holds seven of these");
     assert_eq!(rows.len(), NX1_DATANAMES_ROWS.len());
@@ -412,7 +433,7 @@ fn the_year_list_comes_out_of_the_written_slots() {
     // area base year to 2050, and this block holds free slots past the written ones that would
     // otherwise be read as years 33 and up.
     let block = unhex(NX1_YEARS_BLOCK);
-    let (base, size, fields) = layout_of("years");
+    let (base, size, _, fields) = layout_of("years");
     let rows = records::live_records(&block, base, &fields, size);
     assert_eq!(rows.len(), 31, "every written slot and no free one");
     assert_eq!(rows.len(), NX1_YEARS_ROWS.len());

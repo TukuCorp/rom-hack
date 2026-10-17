@@ -338,8 +338,10 @@ Where a table's records start in the block. The samples decode from 60 bytes in 
 base misaligns every string, which is how the 60 was found -- and datanames and years tile 4092
 exactly from there. But the four measured tables put their first record at 0x24 (scenarios),
 0x48 (staticdata), 0x8c (balcat) and 0x2c (regions), and no rule is established for that
-base -- each table's record area does end at 4092 in whole strides, so base and capacity are
-the same question. The header
+base -- each table's record area does end at 4092 in whole strides. What is established is the identity every proven table agrees to, and which the layout now carries as a capacity column:
+base + capacity * stride == 4092. The block ends with four spare bytes at 4092 and the records tile back from there in whole strides, so a wrong base, a wrong stride or a wrong capacity breaks the other two -- years 60 + 336*12, datanames 60 + 7*576, regions 44 + 11*368, scenarios 36 + 13*312,
+balcat 140 + 13*304, staticdata 72 + 201*20, all 4092. Where the capacity comes from when a table is not exactly full is the still-open half: the freed area counts years at 336 through its free-slot chain, the full tables at their live count, and the rest needs the block head unpacked.
+The header
 is more than a fixed 60 bytes: word 0x1e states the live record count (years 31, balcat 13,
 scenarios 9, regions 1, staticdata 201, all confirmed against what the records themselves
 show), and word 0x20 onward is a used-slot bitmap with one set bit per live record, which

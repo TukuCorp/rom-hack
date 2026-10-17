@@ -259,7 +259,12 @@ BYTE_MEASURED = {
     # 368 from 0x2c end at 4092. Slot 0 is the one live record (Region 1), slots 1..9 keep
     # the RegionIDs 3..11 of the regions the area had and then deleted, with their first
     # field intact, and slot 10 is all zero.
-    "regions": (0x2c, 368),
+    # regions: base 0x2c. The freed slots hold u32 numbers exactly 0x170 (368) apart at
+    # 0x19c, 0x30c, 0x47c ... -- pitch the rule's 448 does not produce -- and 11 slots of
+    # 368 from 0x2c end at 4092. Slot 0 is the one live record (Region 1), slots 1..9 keep
+    # the RegionIDs 3..11 of the regions the area had and then deleted, with their first
+    # field intact, and slot 10 is all zero.
+    "regions": (0x2c, 368, 11),
 }
 
 
@@ -309,15 +314,22 @@ def main(out):
                 continue
             rule = record_size(rows)
             if name in BYTE_MEASURED:
-                base, size = BYTE_MEASURED[name]
+                if len(BYTE_MEASURED[name]) == 3:
+                    base, size, cap = BYTE_MEASURED[name]
+                else:
+                    base, size = BYTE_MEASURED[name]
+                    cap = None
             else:
                 base, size = HEADER, rule
+                cap = None
+            if cap is None and size:
+                cap = (BLOCK - 4 - base) // size
             if size is None:
                 skipped.append(name)
                 continue
-            tables.append((name, base, size, rows))
+            tables.append((name, base, size, cap, rows))
             # A table with no data block is empty rather than unreadable, and the oracle says so.
-            tables[-1] = (name, base, size, bool(blocks), rows)
+            tables[-1] = (name, base, size, cap, bool(blocks), rows)
             if name == "datanames":
                 first = segments(raw)[0][0]
                 stop = raw.find(INDICES, first) + len(INDICES)
@@ -441,12 +453,12 @@ def main(out):
     lines.append("// dictionary bytes and its first data block, so the Rust reader runs on the vendor")
     lines.append("// bytes rather than on a fixture.")
     lines.append("//")
-    lines.append("// (table, record base, record size, holds a data block, [(field, type, declared length, offset, size)])")
-    lines.append("pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, bool, &[(&str, &str, u32, u32, u32)])] = &[")
-    for name, base, size, has_data, rows in tables:
+    lines.append("// (table, record base, record size, capacity, holds a data block, [(field, type, declared length, offset, size)])")
+    lines.append("pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, u32, u32, u32)])] = &[")
+    for name, base, size, cap, has_data, rows in tables:
         lines.append("    // %s: %d fields" % (name, len(rows)))
-        lines.append("    (%s, %d, %d, %s, &[" % (quote(name), base, size,
-                                                  "true" if has_data else "false"))
+        lines.append("    (%s, %d, %d, %d, %s, &[" % (quote(name), base, size, cap,
+                                                      "true" if has_data else "false"))
         for row in rows:
             lines.append("        (%s, %s, %d, %d, %d),"
                          % tuple([quote(row[0]), quote(row[1])] + list(row[2:])))
@@ -543,7 +555,7 @@ def main(out):
     print("wrote %s" % out)
     print("  %d tables with a complete descriptor stream, %d skipped" % (len(tables), len(skipped)))
     print("  %d of them hold no data block and are therefore empty"
-          % sum(1 for t in tables if not t[3]))
+          % sum(1 for t in tables if not t[4]))
     print("  regions: block %d bytes, %d slots that read as written"
           % (len(regions[0]), len(regions[1])))
     print("  datanames: dictionary %d bytes, block %d bytes, %d rows"
