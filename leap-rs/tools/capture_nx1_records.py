@@ -206,6 +206,22 @@ def data_blocks(raw):
             if raw[b * BLOCK:b * BLOCK + 4] == b"NXDH"]
 
 
+def dictionary_stream(raw):
+    """One dictionary stream, two page leads removed."""
+    first = raw.find(NEEDLE)
+    marker = raw.find(INDICES, first)
+    usable = int.from_bytes(raw[20:24], "little")
+    pitch = usable + 4
+    if marker < 0 or first // pitch == marker // pitch:
+        return raw
+    faces = []
+    for page in range(first // pitch, marker // pitch + 1):
+        stem = page * pitch + 24
+        edge = (page + 1) * pitch
+        faces.append(raw[stem:edge])
+    return b"".join(faces)
+
+
 def wide(rec, off, size):
     """The UTF-16 text in a slot, which is NUL terminated inside it."""
     out = []
@@ -324,8 +340,13 @@ def main(out):
             if not member.lower().endswith(".nx1"):
                 continue
             raw = zf.read(member)
-            rows, complete = field_descriptors(raw)
             name = member.rsplit("/", 1)[-1].replace(".nx1", "")
+            # The two LEAP-driven dictionaries cross page boundaries; reading them through
+            # the repaired stream is what their fixture tests stand on.
+            stream = raw
+            if name in ("areadata", "tedtechdata"):
+                stream = dictionary_stream(raw)
+            rows, complete = field_descriptors(stream)
             blocks = data_blocks(raw)
             if not complete or not rows:
                 skipped.append(name)
