@@ -180,6 +180,41 @@ fn the_block_header_states_the_live_record_count() {
 }
 
 #[test]
+fn the_stated_live_count_agrees_with_the_layout_per_table() {
+    // A sweep over the shipped area's own first-block headers narrows the word's meaning to
+    // the live count: for the tables written exactly full the stated count equals the
+    // layout's capacity (balcat 13, datanames 7, staticdata 201, units 18, scenariodata
+    // 168...), and for the partially filled ones it does not (years states 31 live of
+    // 336, regions 1 of 11, scenarios 9 of 13). The two families are the file's own
+    // numbers -- the layout carries the capacity, the header carries the live count.
+    let layout = |name: &str| {
+        NX1_RECORD_LAYOUT
+            .iter()
+            .find(|(n, _, _, _, _, _)| *n == name)
+            .map(|(_, _, _, c, _, _)| *c)
+            .expect("a layout for the table")
+    };
+    for (name, count) in [
+        ("balcat", 13usize),
+        ("datanames", 7),
+        ("staticdata", 201),
+        ("units", 18),
+        ("scenariodata", 168),
+    ] {
+        assert_eq!(layout(name), count, "{name} is written exactly full");
+    }
+    for (name, count, cap) in [
+        ("years", 31usize, 336),
+        ("regions", 1, 11),
+        ("scenarios", 9, 13),
+    ] {
+        assert_eq!(layout(name), cap, "{name}: the layout states the capacity");
+        assert_ne!(count, cap, "{name}: the stated count is the live number");
+    }
+}
+
+
+#[test]
 fn the_engine_record_size_formula_agrees_where_it_can() {
     // The decompiled engine computes the record size itself (FUN_012ec9e0, reached through
     // FUN_012eb790's add-field accounting): round the summed field sizes up to a multiple of

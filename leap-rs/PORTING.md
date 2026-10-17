@@ -352,7 +352,12 @@ in the first field of their slots. The reader decodes them as rows and the test 
 behaviour. The live count the header states is now read -- header_live_count() returns the
 u16 at 0x1e, and the oracle carries the block and the count for six tables so the assertion
 runs on vendor bytes -- but the reader still filters slots by the write signature rather
-than by that count or by the bitmap, which is not consumed yet.
+than by that count or by the bitmap, which is not consumed yet. A sweep of the shipped
+area's own first-block headers backs the reading across every readable table with rows: for the
+tables written exactly full the stated count equals the layout's capacity column (balcat
+13, datanames 7, staticdata 201, units 18, scenariodata 168 and the rest), and for
+the partially filled ones it does not (years states 31 live of 336, regions 1 of 11,
+scenarios 9 of 13) -- the two families commute, and the test holds both.
 
 What the reader does instead is skip slots nothing was ever written to, which is a signature
 rather than the file's answer: a slot is unwritten when every byte is zero, or when its first two
