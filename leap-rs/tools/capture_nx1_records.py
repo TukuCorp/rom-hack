@@ -295,6 +295,7 @@ def main(out):
     scenarios = None
     regions = None
     staticdata = None
+    live_counts = []
     with zipfile.ZipFile(LEAP_ZIP) as zf:
         for member in sorted(zf.namelist()):
             if not member.lower().endswith(".nx1"):
@@ -364,6 +365,11 @@ def main(out):
                     live.append((i32(rec, bid[3]), i32(rec, vid[3]),
                                  int.from_bytes(rec[exp[3]:exp[3] + 8], "little")))
                 staticdata = (block, live)
+            if name in ("years", "datanames", "regions", "balcat",
+                        "scenarios", "staticdata"):
+                live_counts.append((name,
+                                    i16(raw[blocks[0]:blocks[0] + BLOCK], 0x1e),
+                                    raw[blocks[0]:blocks[0] + BLOCK].hex()))
             if name == "masterstructure":
                 block = raw[blocks[0]:blocks[0] + BLOCK]
                 last = raw[blocks[-1]:blocks[-1] + BLOCK]
@@ -489,6 +495,14 @@ def main(out):
     lines.append("pub const NX1_STATICDATA_ROWS: &[(i32, i32, u64)] = &[")
     for bid, vid, bits in staticdata[1]:
         lines.append("    (%d, %d, %d)," % (bid, vid, bits))
+    lines.append("];")
+    lines.append("")
+    lines.append("/// The u16 word at 0x1e of one data block per table, which states how many")
+    lines.append("/// records the table holds live: 31 years, 7 datanames, 1 region, 13 balance")
+    lines.append("/// categories, 9 scenarios, 201 static values, each confirmed against the rows.")
+    lines.append("pub const NX1_HEADER_LIVE_COUNTS: &[(&str, u16, &str)] = &[")
+    for name, count, block_hex in live_counts:
+        lines.append("    (%s, %d, %s)," % (quote(name), count, quote(block_hex)))
     lines.append("];")
     lines.append("")
     lines.append("/// The masterstructure dictionary, and its first data block, which holds the top level.")

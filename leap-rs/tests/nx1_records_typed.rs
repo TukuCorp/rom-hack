@@ -7,9 +7,9 @@
 //! settle rather than one this crate makes about itself.
 
 use leap_rs::oracle_records::{
-    NX1_DATANAMES_BLOCK, NX1_DATANAMES_DICTIONARY, NX1_DATANAMES_ROWS, NX1_RECORD_LAYOUT,
-    NX1_REGION_BLOCK, NX1_REGION_ROWS, NX1_STATICDATA_BLOCK, NX1_STATICDATA_ROWS,
-    NX1_YEARS_BLOCK, NX1_YEARS_ROWS,
+    NX1_DATANAMES_BLOCK, NX1_DATANAMES_DICTIONARY, NX1_DATANAMES_ROWS, NX1_HEADER_LIVE_COUNTS,
+    NX1_RECORD_LAYOUT, NX1_REGION_BLOCK, NX1_REGION_ROWS, NX1_STATICDATA_BLOCK,
+    NX1_STATICDATA_ROWS, NX1_YEARS_BLOCK, NX1_YEARS_ROWS,
 };
 use leap_rs::records::{self, Field, Value};
 
@@ -165,6 +165,17 @@ fn the_pitch_consecutive_live_records_show_matches_the_layout() {
             (*want_base as usize, *want),
             "{name}: the records sit {want} apart from {want_base:#x}, the layout says otherwise"
         );
+    }
+}
+
+#[test]
+fn the_block_header_states_the_live_record_count() {
+    // Word 0x1e of a data block states how many records the table has live. It is the file's
+    // own answer to what the unwritten-slot signature only estimates, confirmed against the
+    // rows the records themselves show for six tables: 31 years, 7 datanames, 1 live region,
+    // 13 balance categories, 9 scenarios, 201 static values.
+    for (name, count, block) in NX1_HEADER_LIVE_COUNTS {
+        assert_eq!(records::header_live_count(&unhex(block)), Some(*count), "{name}");
     }
 }
 

@@ -301,6 +301,18 @@ pub fn records(
         .collect()
 }
 
+/// The live record count the block header itself states, in the u16 at 0x1e.
+///
+/// This is the file's own answer to the question the unwritten-slot signature only estimates,
+/// confirmed for six tables against the rows the records show: years 31, datanames 7,
+/// regions 1, balcat 13, scenarios 9 and staticdata 201, where 201 is also the whole capacity
+/// the table's geometry allows. Word 0x1c beside it is not claimed yet.
+pub fn header_live_count(block: &[u8]) -> Option<u16> {
+    block
+        .get(0x1e..0x20)
+        .map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]))
+}
+
 /// Whether a slot is one nothing was ever written to.
 ///
 /// A fresh block leaves either zeroes or, for every slot past the last written one, the slot

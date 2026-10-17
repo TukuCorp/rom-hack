@@ -336,7 +336,10 @@ staticdata displays as 201 consecutive set bits. A record deleted and then freed
 bytes that still look written, which is why regions.nx1 states one live row and yields ten:
 the freed ones are the regions the area once had, and their RegionIDs 3 through 11 still sit
 in the first field of their slots. The reader decodes them as rows and the test names that
-behaviour; the bitmap is not consumed yet.
+behaviour. The live count the header states is now read -- header_live_count() returns the
+u16 at 0x1e, and the oracle carries the block and the count for six tables so the assertion
+runs on vendor bytes -- but the reader still filters slots by the write signature rather
+than by that count or by the bitmap, which is not consumed yet.
 
 What the reader does instead is skip slots nothing was ever written to, which is a signature
 rather than the file's answer: a slot is unwritten when every byte is zero, or when its first two
