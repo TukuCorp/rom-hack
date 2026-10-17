@@ -168,9 +168,16 @@ def field_descriptors(raw):
     # The fields have to tile the record from zero, which is a claim the bytes can settle and
     # a partial or misread descriptor stream will not survive.
     end = 0
-    for _, _, _, offset, size in out:
+    for this in out:
+        _, _, _, offset, size = this
         if offset != end:
-            return out, False
+            # One slack is read rather than refused: a gap of two in front of a short or
+            # null string (the shipped dictionaries of fuels, areadata and tedtechdata cut
+            # it once each). Anything wider, or a gap before any other type, stays a refusal.
+            slack_ok = (offset in (end + 1, end + 2)
+                        and this[1] in ("nxtNullString", "nxtShortString"))
+            if not slack_ok:
+                return out, False
         end = offset + size
     return out, bool(out)
 
@@ -301,6 +308,7 @@ def main(out):
     regions = None
     staticdata = None
     live_counts = []
+    fuels_dictionary = None
     with zipfile.ZipFile(LEAP_ZIP) as zf:
         for member in sorted(zf.namelist()):
             if not member.lower().endswith(".nx1"):
@@ -382,6 +390,10 @@ def main(out):
                 live_counts.append((name,
                                     i16(raw[blocks[0]:blocks[0] + BLOCK], 0x1e),
                                     raw[blocks[0]:blocks[0] + BLOCK].hex()))
+            if name == "fuels":
+                first = segments(raw)[0][0]
+                stop = raw.find(INDICES, first) + len(INDICES)
+                fuels_dictionary = raw[first:stop]
             if name == "masterstructure":
                 block = raw[blocks[0]:blocks[0] + BLOCK]
                 last = raw[blocks[-1]:blocks[-1] + BLOCK]
@@ -508,6 +520,13 @@ def main(out):
     for bid, vid, bits in staticdata[1]:
         lines.append("    (%d, %d, %d)," % (bid, vid, bits))
     lines.append("];")
+    lines.append("")
+    if fuels_dictionary is None:
+        fuels_dictionary = b""
+    lines.append("/// The fuels dictionary bytes, field segment through the indices marker. Its")
+    lines.append("/// placement carries one two-byte slack in front of PluginGUID (nxtNullString),")
+    lines.append("/// which the reader reads instead of returning an empty layout.")
+    lines.append("pub const NX1_FUELS_DICTIONARY: &str = %s;" % quote(fuels_dictionary.hex()))
     lines.append("")
     lines.append("/// The u16 word at 0x1e of one data block per table, which states how many")
     lines.append("/// records the table holds live: 31 years, 7 datanames, 1 region, 13 balance")

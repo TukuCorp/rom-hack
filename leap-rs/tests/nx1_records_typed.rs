@@ -8,8 +8,8 @@
 
 use leap_rs::oracle_records::{
     NX1_DATANAMES_BLOCK, NX1_DATANAMES_DICTIONARY, NX1_DATANAMES_ROWS, NX1_HEADER_LIVE_COUNTS,
-    NX1_RECORD_LAYOUT, NX1_REGION_BLOCK, NX1_REGION_ROWS, NX1_STATICDATA_BLOCK,
-    NX1_STATICDATA_ROWS, NX1_YEARS_BLOCK, NX1_YEARS_ROWS,
+    NX1_FUELS_DICTIONARY, NX1_RECORD_LAYOUT, NX1_REGION_BLOCK, NX1_REGION_ROWS,
+    NX1_STATICDATA_BLOCK, NX1_STATICDATA_ROWS, NX1_YEARS_BLOCK, NX1_YEARS_ROWS,
 };
 use leap_rs::records::{self, Field, Value};
 
@@ -108,7 +108,7 @@ const BLOCK_MEASURED: &[(&str, u32, usize)] = &[
 
 #[test]
 fn the_record_size_rule_holds_for_every_table_worth_trusting_it_on() {
-    assert_eq!(NX1_RECORD_LAYOUT.len(), 80, "tables whose layout this reads");
+    assert_eq!(NX1_RECORD_LAYOUT.len(), 81, "tables whose layout this reads");
     for (name, base, size, _, _, rows) in NX1_RECORD_LAYOUT {
         if let Some((_, measured_base, measured)) =
             BLOCK_MEASURED.iter().find(|(n, _, _)| *n == *name)
@@ -278,6 +278,40 @@ fn regions_decodes_as_the_one_row_its_header_states_plus_freed_debris() {
 }
 
 #[test]
+fn fuels_dictionary_is_read_with_its_null_string_slack() {
+    // The fuels dictionary tiles except for one gap of two bytes before a nxtNullString
+    // field (Affordability ends at 893, PluginGUID starts at 895), the same furrow areadata
+    // and tedtechdata cut. A reader that refuses gaps returns nothing; one that accepts
+    // exactly this slack reads all 44 fields, and the shapes pin the agreement rather
+    // than a corner case.
+    let bytes = unhex(NX1_FUELS_DICTIONARY);
+    let got = records::field_descriptors(&bytes);
+    assert_eq!(got.len(), 44, "every field the dictionary states");
+    let names: Vec<&str> = got.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(
+        names[..4],
+        vec!["FuelID", "EnergyContent", "Name", "LHVHHVRatio"]
+    );
+    let guid = got
+        .iter()
+        .find(|f| f.name == "PluginGUID")
+        .expect("the null-string field the gap precedes");
+    assert_eq!(guid.type_name, "nxtNullString");
+    assert_eq!(guid.offset, 895, "the slack-carrying offset");
+    assert_eq!(guid.size, 51);
+    // And the walk is honest: no slack beyond the known two bytes anywhere in the tail.
+    let mut end = 0u32;
+    let mut slack = 0u32;
+    for field in &got {
+        if field.offset > end {
+            slack += field.offset - end;
+        }
+        end = field.end();
+    }
+    assert!(slack <= 2, "no slack beyond the known two bytes: {slack}");
+}
+
+#[test]
 fn the_record_area_of_every_measured_table_tiles_to_4092() {
     // The relation the whole format hangs on and all six proven tables agree to: the block
     // ends with four spare bytes at 4092, records tile back from there in whole strides, and
@@ -313,19 +347,19 @@ fn an_empty_table_is_not_a_read_failure() {
         .map(|(name, _, _, _, _, _)| *name)
         .collect();
     assert_eq!(empty.len(), 26, "empty tables: {empty:?}");
-    assert_eq!(with_data.len(), 54);
+    assert_eq!(with_data.len(), 55);
     assert!(empty.contains(&"envresults"));
     assert!(empty.contains(&"results"));
     assert!(with_data.contains(&"datanames"));
     assert!(with_data.contains(&"years"));
     assert!(with_data.contains(&"scenariodata"));
 
-    // Six tables remain unreadable, and they are named rather than quietly missing.
+    // Fuels joined the readable set once the null-string slack was read into the walk.
+    // Five remain unreadable, and they are named rather than quietly missing.
     for name in [
         "PluginProperties",
         "Plugins",
         "areadata",
-        "fuels",
         "tedtechdata",
         "uservardata",
     ] {

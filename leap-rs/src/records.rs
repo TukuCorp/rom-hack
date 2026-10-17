@@ -159,7 +159,16 @@ let Some(declared) = toks.iter().find(|t| t.start >= type_name.end && t.is_numbe
     let mut end = 0u32;
     for field in &out {
         if field.offset != end {
-            return Vec::new();
+            // One slack is read rather than refused: a two-byte gap in front of a short or
+            // null string (the shipped dictionaries of fuels, areadata and tedtechdata cut
+            // it once each). Anything wider, or a gap before any other type, stays a
+            // refusal.
+            let slack_ok = (field.offset == end + 1 || field.offset == end + 2)
+                && (field.type_name == "nxtNullString"
+                    || field.type_name == "nxtShortString");
+            if !slack_ok {
+                return Vec::new();
+            }
         }
         end = field.end();
     }
