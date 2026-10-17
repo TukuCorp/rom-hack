@@ -307,21 +307,29 @@ the rule's 336 -- thirteen fuel names, exactly 0x130 apart, ending at 4092. scen
 measures 312 from base 0x24 against the rule's 336 -- nine names 0x138 apart, Current Accounts
 through Biogas Digestion -- and its second record reads as Baseline with a memo reference to
 blob block 13 and the Current Accounts parent, which is the semantics the area itself implies.
-None of 20, 304 or 312 divides 4032, so the smallest-divisor rule is refuted rather than
-extended, and the measured pitch wins where it exists: the layout table carries it, and the
-tests make the difference between derived and measured a claim rather than an accident.
+regions measures 368 from base 0x2c against the rule's 448: its freed slots hold u32 numbers
+exactly 0x170 apart at 0x19c, 0x30c, 0x47c and on, and eleven records of 368 from 0x2c end at
+4092. years' freed slots confirm the 0x3c indexing independently -- they hold their own slot
+numbers, 33, 34, 35 and on, exactly at 0x3c + n*12. None of 20, 304, 312 or 368 divides 4032,
+so the smallest-divisor rule is refuted rather than extended, and the measured pitch wins
+where it exists: the layout table carries it, and the tests make the difference between
+derived and measured a claim rather than an accident.
 What is left, and the first item is the one that matters.
 
 Where a table's records start in the block. The samples decode from 60 bytes in -- a 64-byte
 base misaligns every string, which is how the 60 was found -- and datanames and years tile 4092
-exactly from there. But the three measured tables put their first record at 0x24 (scenarios),
-0x48 (staticdata) and 0x8c (balcat), and no rule is established for that base. The header
+exactly from there. But the four measured tables put their first record at 0x24 (scenarios),
+0x48 (staticdata), 0x8c (balcat) and 0x2c (regions), and no rule is established for that
+base -- each table's record area does end at 4092 in whole strides, so base and capacity are
+the same question. The header
 is more than a fixed 60 bytes: word 0x1e states the live record count (years 31, balcat 13,
 scenarios 9, regions 1, staticdata 201, all confirmed against what the records themselves
 show), and word 0x20 onward is a used-slot bitmap with one set bit per live record, which
 staticdata displays as 201 consecutive set bits. A record deleted and then freed also keeps
-bytes that still look written, which is why regions.nx1 states one live row and yields eight:
-the extra ticks are leftovers, not rows, and the bitmap is not consumed yet.
+bytes that still look written, which is why regions.nx1 states one live row and yields ten:
+the freed ones are the regions the area once had, and their RegionIDs 3 through 11 still sit
+in the first field of their slots. The reader decodes them as rows and the test names that
+behaviour; the bitmap is not consumed yet.
 
 What the reader does instead is skip slots nothing was ever written to, which is a signature
 rather than the file's answer: a slot is unwritten when every byte is zero, or when its first two

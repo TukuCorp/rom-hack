@@ -20,23 +20,30 @@
 //! cannot place comes back empty rather than wrong.
 //!
 //! Two more things the file does not state. The record size is zero in all eighty tables, because
-//! the area was written by an export that left that descriptor field blank, so it is derived: a
-//! data block is 4096 bytes with a 60-byte header, the records area is 4032 bytes, and it holds a
-//! whole number of records, so the size is the smallest divisor of 4032 that is at least four
-//! bytes past the last field. And the records start 60 bytes into the block rather than 64: the
-//! fourth byte the `NXDH` tag invites you to assume belongs to the first record.
+//! the area was written by an export that left that descriptor field blank, so it is derived: for
+//! most tables a data block's records area runs to 4092, and the size is the smallest divisor of
+//! 4032 that is at least four bytes past the last field -- which every record then wastes in a
+//! trailing flag block. Where the vendor bytes refute that the records' own pitch wins, the
+//! oracle carries both. And the records do not all start 60 bytes into the block either: the
+//! samples decode from there, but staticdata starts at 0x48, balcat at 0x8c, scenarios at 0x24
+//! and regions at 0x2c, so the base travels with the layout rather than living here.
 //!
-//! What this does not do is filter deleted records, which matters. The block header carries a used
-//! count and two further words whose meaning is not established; for `years.nx1` the row count is
-//! 31 and the header words are 32, 0x1f and 0x7fffffff, none of which is 31 and none of which is a
-//! plain bitmap over the slots. That is why the decoded sample in the oracle is `datanames.nx1`,
+//! What this does not do is filter deleted records, which matters. The block header does carry
+//! the answer: word 0x1e states the live record count and word 0x20 onward is a used-slot
+//! bitmap, and years' freed slots hold their own slot numbers -- but the reader has not wired
+//! the map in and still reads the signature instead. That is why the decoded samples in the
 //! whose seven records are all live, and not the year list.
 
 use std::fmt;
 
 /// The size of a data block, and where the records sit inside it.
 pub const BLOCK: usize = 0x1000;
-const HEADER: usize = 0x3c;
+/// 60 bytes: where the records of most tables start, and the base of the sample fixtures.
+/// The measured tables start elsewhere and the layout carries their base instead, so this
+/// is a default rather than a rule.
+pub const HEADER: usize = 0x3c;
+/// The record area of a table that starts at 60 bytes, which is what the record-size rule
+/// divides; the measured tables' areas differ by their base and the layout carries them.
 const DATA: usize = BLOCK - HEADER - 4;
 
 /// The class name that starts a field descriptor, and the one that ends the field list.
@@ -270,15 +277,25 @@ pub fn data_blocks(bytes: &[u8]) -> Vec<usize> {
         .collect()
 }
 
-/// The records of one data block, decoded field by field.
-pub fn records(block: &[u8], fields: &[Field], record_size: usize) -> Vec<Vec<Value>> {
+/// The records of one data block, decoded field by field, from the record base the layout
+/// states for that table. The count is what fits in the record area, which ends four bytes
+/// short of the block.
+pub fn records(
+    block: &[u8],
+    base: usize,
+    fields: &[Field],
+    record_size: usize,
+) -> Vec<Vec<Value>> {
     if record_size == 0 {
         return Vec::new();
     }
-    let count = DATA / record_size;
+    if base + 4 >= BLOCK {
+        return Vec::new();
+    }
+    let count = (BLOCK - 4 - base) / record_size;
     (0..count)
         .map(|k| {
-            let base = HEADER + k * record_size;
+            let base = base + k * record_size;
             fields.iter().map(|field| decode(block, base, field)).collect()
         })
         .collect()
@@ -305,22 +322,31 @@ pub fn slot_is_unwritten(record: &[u8], index: usize) -> bool {
         && u16::from_le_bytes([record[0], record[1]]) as usize == index
 }
 
-/// The records of a data block that were written, in the order the block holds them.
-pub fn live_records(block: &[u8], fields: &[Field], record_size: usize) -> Vec<Vec<Value>> {
+/// The records of a data block that read as written, in the order the block holds them,
+/// from the record base the layout states for that table.
+pub fn live_records(
+    block: &[u8],
+    base: usize,
+    fields: &[Field],
+    record_size: usize,
+) -> Vec<Vec<Value>> {
     if record_size == 0 {
         return Vec::new();
     }
-    let count = DATA / record_size;
+    if base + 4 >= BLOCK {
+        return Vec::new();
+    }
+    let count = (BLOCK - 4 - base) / record_size;
     (0..count)
         .filter(|k| {
-            let base = HEADER + k * record_size;
+            let base = base + k * record_size;
             !block
                 .get(base..base + record_size)
                 .map(|record| slot_is_unwritten(record, *k))
                 .unwrap_or(true)
         })
         .map(|k| {
-            let base = HEADER + k * record_size;
+            let base = base + k * record_size;
             fields.iter().map(|field| decode(block, base, field)).collect()
         })
         .collect()

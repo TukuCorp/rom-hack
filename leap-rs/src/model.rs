@@ -57,7 +57,7 @@ pub fn branches_with(fields: &[Field], bytes: &[u8]) -> Vec<Branch> {
         let Some(whole) = bytes.get(block..block + records::BLOCK) else {
             continue;
         };
-        for row in records::live_records(whole, fields, size) {
+        for row in records::live_records(whole, records::HEADER, fields, size) {
             let (Some(Value::Int(id)), Some(Value::Int(parent))) = (row.get(id), row.get(parent))
             else {
                 continue;
@@ -132,7 +132,7 @@ pub fn scenarios_with(fields: &[Field], bytes: &[u8]) -> Vec<ScenarioRow> {
         let Some(whole) = bytes.get(block..block + records::BLOCK) else {
             continue;
         };
-        for row in records::live_records(whole, fields, size) {
+        for row in records::live_records(whole, records::HEADER, fields, size) {
             let (Some(branch), Some(variable)) = (integer(&row, branch), integer(&row, variable))
             else {
                 continue;
