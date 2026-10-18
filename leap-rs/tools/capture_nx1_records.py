@@ -122,12 +122,27 @@ def placement(segment):
         mid = segment.rfind(MIDDLE)
         if mid < 0:
             return None, None
+        # The LEAP boolean runs write a three-little-endian-property trio after the
+        # marker (5, 0, 1, twelve bytes); the placement pair follows directly, and
+        # reading the tagged numbers there lands their real pair.
+        trio = bytes([0x05, 0, 0, 0, 0, 0, 0, 0, 0x01, 0, 0, 0])
+        if segment[mid + len(MIDDLE):mid + len(MIDDLE) + 12] == trio:
+            offset, at = number(segment, mid + len(MIDDLE) + 12)
+            size, _ = number(segment, at)
+            return offset, size
         offset, at = number(segment, mid + len(MIDDLE))
         size, _ = number(segment, at)
         return offset, size
     _, at = number(segment, at + len(ANCHOR))
     if at is None or segment[at:at + len(MIDDLE)] != MIDDLE:
         return None, None
+    # The LEAP boolean runs write the same three-property trio after the fdPos zero
+    # and marker; the placement pair follows them directly.
+    trio = bytes([0x05, 0, 0, 0, 0, 0, 0, 0, 0x01, 0, 0, 0])
+    if segment[at:at + 12] == trio:
+        offset, at = number(segment, at + 12)
+        size, _ = number(segment, at)
+        return offset, size
     offset, at = number(segment, at + len(MIDDLE))
     size, at = number(segment, at)
     return offset, size
