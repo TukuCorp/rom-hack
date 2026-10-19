@@ -14,6 +14,7 @@
 //! fixed point: parse it and you get an equal tree which prints the same text.
 
 use leap_rs::expr::{self, BinOp, Expr, UnOp};
+use leap_rs::{container, heap, records};
 use leap_rs::oracle_nx1_expr::NX1_EXPRESSIONS;
 
 fn unhex(s: &str) -> Vec<u8> {
@@ -278,4 +279,153 @@ fn forms_outside_the_language_are_refused() {
     // A named function is real in the binary but never appears stored, so it is refused
     // rather than guessed at.
     assert!(expr::parse("convunits(1,2)").is_err());
+}
+
+/// Every series literal the area holds, as its raw inside-the-delimiters text.
+fn area_series() -> Vec<String> {
+    let mut out = Vec::new();
+    for (_, _, _, text) in NX1_EXPRESSIONS {
+        let tree = expr::parse(text).expect("the corpus parses");
+        collect_series(&tree, &mut out);
+    }
+    out
+}
+
+fn collect_series(tree: &Expr, out: &mut Vec<String>) {
+    match tree {
+        Expr::Series(inner) => out.push(inner.clone()),
+        Expr::Func { args: Some(args), .. } => {
+            for arg in args {
+                collect_series(arg, out);
+            }
+        }
+        Expr::Var { args: Some(args) } => {
+            for arg in args {
+                collect_series(arg, out);
+            }
+        }
+        Expr::Binary { lhs, rhs, .. } => {
+            collect_series(lhs, out);
+            collect_series(rhs, out);
+        }
+        Expr::Unary { expr, .. } => collect_series(expr, out),
+        Expr::Paren(inner) => collect_series(inner, out),
+        _ => {}
+    }
+}
+
+#[test]
+fn every_series_literal_the_area_holds_parses_to_year_value_pairs() {
+    // Sixteen stored expressions carry a series literal: fifteen `@F007` and one `@F008`.
+    // Each one is a flat run of year then value, comma-separated, years ascending -- the
+    // shape the decompiled year/value-list validation reads (`FUN_01c25af0` in
+    // `chunk-00338.c`: first parameter a valid year, years in ascending chronological
+    // order, error text "Separate years and values with the list separator character").
+    let inners = area_series();
+    assert_eq!(inners.len(), 16, "every series literal the area holds");
+    for inner in &inners {
+        let points = expr::parse_series(inner)
+            .unwrap_or_else(|e| panic!("{inner:?} should parse as year/value pairs: {e}"));
+        assert!(points.len() >= 1, "{inner:?} holds at least one pair");
+        for pair in points.windows(2) {
+            assert!(pair[0].year < pair[1].year, "{inner:?}: years ascend");
+        }
+    }
+
+    // Spot checks against the stored text, read by hand: a lone end-year pair, a two-pair
+    // run, the eleven-year demand run, and the one Step literal.
+    let lone = expr::parse_series("2050,600").unwrap();
+    assert_eq!(lone.len(), 1);
+    assert_eq!(lone[0].year, 2050);
+    assert_eq!(lone[0].value, 600.0);
+    let two = expr::parse_series("2030,28, 2050,50").unwrap();
+    assert_eq!(
+        two.iter().map(|p| (p.year, p.value)).collect::<Vec<_>>(),
+        vec![(2030, 28.0), (2050, 50.0)]
+    );
+    let long = expr::parse_series(
+        "2010, 14.3, 2011, 15.4, 2012, 15.9, 2013, 16.9, 2014, 18.2, 2015, 19, 2016, 19.7, 2017, 21, 2018, 21.6, 2019, 22.8, 2020, 23.9",
+    )
+    .unwrap();
+    assert_eq!(long.len(), 11, "one pair per year 2010 to 2020");
+    assert_eq!((long[0].year, long[0].value), (2010, 14.3));
+    assert_eq!((long[10].year, long[10].value), (2020, 23.9));
+    assert!(
+        inners.iter().any(|inner| inner == "2031, 30"),
+        "the Step literal is one of the sixteen"
+    );
+    let step = expr::parse_series("2031, 30").unwrap();
+    assert_eq!((step[0].year, step[0].value), (2031, 30.0));
+}
+
+#[test]
+fn every_series_literal_in_the_vendor_file_parses() {
+    // The corpus covers the sixteen NUL-terminated series literals, but the area holds
+    // more: memos without a terminator are invisible to the capture tool's scan while
+    // the heap walk reads them through the record framing ("2050,25" sits
+    // unterminated where "2050, 25" is terminated). So this walks every blob block of
+    // the shipped scenario table through `heap`, the reader that resolves the rows,
+    // and holds every distinct literal it finds against the typed grammar. Like the
+    // area sweep, it prints a note and passes when LEAP is not installed.
+    const AREA: &str = "C:/Program Files/LEAP/Freedonia.zip";
+    let Some(zip) = std::fs::read(AREA).ok() else {
+        eprintln!("note: {AREA} not found, series sweep skipped");
+        return;
+    };
+    let names = container::member_names(&zip).expect("the vendor zip lists");
+    let full = names
+        .iter()
+        .find(|name| name.to_lowercase().ends_with("/scenariodata.nx1"))
+        .expect("the area holds a scenario table");
+    let bytes = container::read_member(&zip, full).expect("a member the zip lists");
+    let page = records::page_size(&bytes);
+    let mut inners = std::collections::BTreeSet::new();
+    for s in 0..bytes.len() / page {
+        let block = &bytes[s * page..(s + 1) * page];
+        if block.get(..4) != Some(&b"NXHD"[..]) {
+            continue;
+        }
+        for memo in heap::memos(block) {
+            let mut rest = memo.as_str();
+            while let Some(open) = rest.find(expr::SERIES_DELIM) {
+                let after = &rest[open + expr::SERIES_DELIM.len_utf8()..];
+                let Some(close) = after.find(expr::SERIES_DELIM) else {
+                    break;
+                };
+                inners.insert(after[..close].to_string());
+                rest = &after[close + expr::SERIES_DELIM.len_utf8()..];
+            }
+        }
+    }
+    assert_eq!(inners.len(), 35, "every distinct series literal the area holds");
+    for inner in &inners {
+        let points = expr::parse_series(inner)
+            .unwrap_or_else(|e| panic!("{inner:?} should parse as year/value pairs: {e}"));
+        for pair in points.windows(2) {
+            assert!(pair[0].year < pair[1].year, "{inner:?}: years ascend");
+        }
+    }
+}
+
+#[test]
+fn a_malformed_series_is_refused_not_guessed() {
+    // Odd token counts (with no growth tail, which the area never uses), empties,
+    // non-numbers and years out of order are all refused.
+    for inner in [
+        "",
+        "   ",
+        "2050",
+        "2050,600,2060",
+        "2050,abc",
+        "abc,600",
+        "2050,",
+        ",600",
+        "2050,,600",
+        "2060,1,2050,2",
+        "2050,1,2050,2",
+        "2050,1e3",
+        "2050,NaN",
+    ] {
+        assert!(expr::parse_series(inner).is_err(), "{inner:?} should not parse");
+    }
 }

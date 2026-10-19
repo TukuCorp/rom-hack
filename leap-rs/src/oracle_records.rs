@@ -33,20 +33,20 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("BranchID", "nxtInt32", 10, 16, 4),
     ]),
     // Constraints: 4 fields
-    ("Constraints", 60, 14, 288, false, &[
+    ("Constraints", 76, 16, 251, false, &[
         ("BranchID", "nxtInt32", 5, 0, 4),
         ("RegionID", "nxtInt16", 5, 4, 2),
         ("VariableID", "nxtInt16", 5, 6, 2),
         ("Remove", "nxtBoolean", 0, 8, 1),
     ]),
     // DeviceBranchTable: 3 fields
-    ("DeviceBranchTable", 60, 16, 252, true, &[
+    ("DeviceBranchTable", 76, 16, 251, true, &[
         ("DeviceBranchID", "nxtInt32", 10, 0, 4),
         ("BranchID", "nxtInt32", 10, 4, 4),
         ("BranchType", "nxtInt32", 10, 8, 4),
     ]),
     // Discrepancies: 16 fields
-    ("Discrepancies", 60, 4032, 1, false, &[
+    ("Discrepancies", 2012, 2080, 1, false, &[
         ("ErrType", "nxtInt32", 1, 0, 4),
         ("BranchID", "nxtInt32", 10, 4, 4),
         ("VariableID", "nxtInt32", 1, 8, 4),
@@ -65,7 +65,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("ErrLine", "nxtWideString", 500, 1074, 1002),
     ]),
     // Lines: 18 fields
-    ("Lines", 60, 336, 12, false, &[
+    ("Lines", 296, 292, 13, false, &[
         ("ID", "nxtInt32", 10, 0, 4),
         ("LineOrd", "nxtInt32", 10, 4, 4),
         ("Name", "nxtWideString", 100, 8, 202),
@@ -94,7 +94,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("LastUpdateStatus", "nxtDateTime", 0, 24, 8),
     ]),
     // Nodes: 15 fields
-    ("Nodes", 60, 1008, 4, false, &[
+    ("Nodes", 172, 784, 5, false, &[
         ("ID", "nxtInt32", 10, 0, 4),
         ("NodeOrd", "nxtInt32", 1, 4, 4),
         ("Name", "nxtWideString", 100, 8, 202),
@@ -111,8 +111,46 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("Enabled", "nxtBoolean", 0, 768, 1),
         ("NotesHTML", "nxtBlobWideMemo", 0, 769, 8),
     ]),
+    // PluginProperties: 12 fields
+    ("PluginProperties", 3420, 4768, 1, false, &[
+        ("ID", "nxtAutoInc", 10, 0, 4),
+        ("Name", "nxtWideString", 250, 4, 502),
+        ("Purpose", "nxtBlobWideMemo", 0, 506, 8),
+        ("Description", "nxtBlobWideMemo", 0, 514, 8),
+        ("LinkBranchIDs", "nxtWideString", 800, 522, 1602),
+        ("Prerequisites", "nxtBlobWideMemo", 0, 2124, 8),
+        ("Version", "nxtDouble", 0, 2132, 8),
+        ("CreatedBy", "nxtInt32", 7, 2140, 4),
+        ("CreatedOn", "nxtDateTime", 0, 2144, 8),
+        ("DownloadedFrom", "nxtWideString", 500, 2152, 1002),
+        ("DownloadedOn", "nxtDateTime", 0, 3154, 8),
+        ("VariableIDs", "nxtWideString", 800, 3162, 1602),
+    ]),
+    // Plugins: 20 fields
+    ("Plugins", 2584, 5604, 1, false, &[
+        ("ID", "nxtAutoInc", 10, 0, 4),
+        ("Name", "nxtWideString", 255, 4, 512),
+        ("PluginOrd", "nxtInt32", 2, 516, 4),
+        ("PluginGUID", "nxtShortString", 50, 520, 51),
+        ("CreatorUserID", "nxtInt32", 3, 571, 4),
+        ("CreatorEmail", "nxtShortString", 100, 575, 101),
+        ("LastEditorUserID", "nxtInt32", 10, 676, 4),
+        ("LastEditorEmail", "nxtShortString", 100, 680, 101),
+        ("CreateDate", "nxtDateTime", 0, 781, 8),
+        ("LastEditDate", "nxtDateTime", 0, 789, 8),
+        ("PlugInDate", "nxtDateTime", 0, 797, 8),
+        ("OrigRootBranchIDs", "nxtShortString", 255, 805, 256),
+        ("RootBranchIDs", "nxtShortString", 255, 1061, 256),
+        ("ParentIDs", "nxtShortString", 255, 1317, 256),
+        ("PlugInVersion", "nxtInt32", 10, 1573, 4),
+        ("PluginFileFormat", "nxtInt32", 10, 1577, 4),
+        ("DictionaryVersion", "nxtInt32", 10, 1581, 4),
+        ("Description", "nxtBlobWideMemo", 0, 1585, 8),
+        ("RootBranchParentNames", "nxtWideString", 1000, 1593, 2002),
+        ("RootBranchNames", "nxtWideString", 1000, 3595, 2002),
+    ]),
     // RegressionResults: 8 fields
-    ("RegressionResults", 60, 42, 96, true, &[
+    ("RegressionResults", 52, 40, 101, true, &[
         ("BranchID", "nxtInt32", 10, 0, 4),
         ("VariableID", "nxtInt32", 1, 4, 4),
         ("ScenarioID", "nxtInt32", 10, 8, 4),
@@ -123,13 +161,13 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("Value", "nxtDouble", 0, 28, 8),
     ]),
     // ScenarioTags: 3 fields
-    ("ScenarioTags", 60, 16, 252, false, &[
+    ("ScenarioTags", 76, 16, 251, false, &[
         ("ID", "nxtInt32", 10, 0, 4),
         ("TagID", "nxtInt32", 10, 4, 4),
         ("TagOrder", "nxtInt32", 10, 8, 4),
     ]),
     // RegressionResults: 8 fields
-    ("RegressionResults", 60, 42, 96, true, &[
+    ("RegressionResults", 52, 40, 101, true, &[
         ("BranchID", "nxtInt32", 10, 0, 4),
         ("VariableID", "nxtInt32", 1, 4, 4),
         ("ScenarioID", "nxtInt32", 10, 8, 4),
@@ -153,7 +191,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("ResultValue", "nxtDouble", 0, 20, 8),
     ]),
     // areadata: 47 fields
-    ("areadata", 60, 1008, 4, true, &[
+    ("areadata", 92, 800, 5, true, &[
         ("Notes", "nxtBlob", 0, 0, 8),
         ("LastEdited", "nxtDate", 0, 8, 4),
         ("LastBackedUp", "nxtDate", 0, 12, 4),
@@ -215,7 +253,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("Abbreviation", "nxtWideString", 30, 233, 62),
     ]),
     // balcat2: 9 fields
-    ("balcat2", 60, 336, 12, true, &[
+    ("balcat2", 140, 304, 13, true, &[
         ("BalCatID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("ShowResults", "nxtBoolean", 0, 204, 1),
@@ -227,7 +265,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("Abbreviation", "nxtWideString", 30, 233, 62),
     ]),
     // balcat3: 9 fields
-    ("balcat3", 60, 336, 12, true, &[
+    ("balcat3", 140, 304, 13, true, &[
         ("BalCatID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("ShowResults", "nxtBoolean", 0, 204, 1),
@@ -239,7 +277,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("Abbreviation", "nxtWideString", 30, 233, 62),
     ]),
     // balcat4: 9 fields
-    ("balcat4", 60, 336, 12, true, &[
+    ("balcat4", 140, 304, 13, true, &[
         ("BalCatID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("ShowResults", "nxtBoolean", 0, 204, 1),
@@ -259,12 +297,12 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("Expression", "nxtBlobWideMemo", 0, 10, 8),
     ]),
     // branchrefs: 2 fields
-    ("branchrefs", 60, 12, 336, true, &[
+    ("branchrefs", 84, 12, 334, true, &[
         ("BranchID", "nxtInt32", 10, 0, 4),
         ("RefID", "nxtInt16", 5, 4, 2),
     ]),
     // branchtags: 3 fields
-    ("branchtags", 60, 16, 252, true, &[
+    ("branchtags", 76, 16, 251, true, &[
         ("BranchID", "nxtInt32", 10, 0, 4),
         ("TagID", "nxtInt32", 10, 4, 4),
         ("TagOrder", "nxtInt32", 10, 8, 4),
@@ -311,7 +349,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("DateChanged", "nxtDateTime", 0, 518, 8),
     ]),
     // datanamessets: 5 fields
-    ("datanamessets", 60, 672, 6, false, &[
+    ("datanamessets", 324, 628, 6, false, &[
         ("Order", "nxtInt32", 10, 0, 4),
         ("ID", "nxtInt32", 10, 4, 4),
         ("Name", "nxtWideString", 50, 8, 102),
@@ -319,7 +357,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("Notes", "nxtWideString", 250, 122, 502),
     ]),
     // deviceparents: 3 fields
-    ("deviceparents", 60, 16, 252, true, &[
+    ("deviceparents", 76, 16, 251, true, &[
         ("DeviceBranchID", "nxtInt32", 10, 0, 4),
         ("BranchID", "nxtInt32", 10, 4, 4),
         ("BranchType", "nxtInt32", 10, 8, 4),
@@ -335,12 +373,12 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("MessageType", "nxtInt16", 5, 22, 2),
     ]),
     // effectrefs: 2 fields
-    ("effectrefs", 60, 8, 504, false, &[
+    ("effectrefs", 100, 8, 499, false, &[
         ("EffectID", "nxtInt16", 5, 0, 2),
         ("RefID", "nxtInt16", 5, 2, 2),
     ]),
     // emissionmappings: 27 fields
-    ("emissionmappings", 60, 4032, 1, false, &[
+    ("emissionmappings", 412, 2592, 3, false, &[
         ("ID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("FileName", "nxtWideString", 1000, 204, 2002),
@@ -381,12 +419,12 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("ResultValue", "nxtDouble", 0, 16, 8),
     ]),
     // fuelrefs: 2 fields
-    ("fuelrefs", 60, 8, 504, true, &[
+    ("fuelrefs", 100, 8, 499, true, &[
         ("FuelID", "nxtInt16", 5, 0, 2),
         ("RefID", "nxtInt16", 5, 2, 2),
     ]),
-    // fuels: 44 fields
-    ("fuels", 60, 1344, 3, true, &[
+    // fuels: 45 fields
+    ("fuels", 252, 1280, 3, true, &[
         ("FuelID", "nxtInt16", 5, 0, 2),
         ("EnergyContent", "nxtDouble", 0, 2, 8),
         ("Name", "nxtWideString", 100, 10, 202),
@@ -427,19 +465,20 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("TradedInArea", "nxtBoolean", 0, 890, 1),
         ("IsMapped", "nxtBoolean", 0, 891, 1),
         ("Affordability", "nxtBoolean", 0, 892, 1),
+        ("ImageIndex", "nxtInt16", 5, 893, 2),
         ("PluginGUID", "nxtNullString", 50, 895, 51),
         ("NotesHTML", "nxtBlobWideMemo", 0, 946, 8),
         ("Abbreviation", "nxtWideString", 30, 954, 62),
         ("HasLoadShape", "nxtBoolean", 0, 1016, 1),
     ]),
     // hiddenbranches: 3 fields
-    ("hiddenbranches", 60, 12, 336, false, &[
+    ("hiddenbranches", 84, 12, 334, false, &[
         ("BranchID", "nxtInt32", 10, 0, 4),
         ("RegionID", "nxtInt16", 5, 4, 2),
         ("Hidden", "nxtBoolean", 0, 6, 1),
     ]),
     // keyparamtags: 3 fields
-    ("keyparamtags", 60, 16, 252, false, &[
+    ("keyparamtags", 76, 16, 251, false, &[
         ("BranchID", "nxtInt32", 10, 0, 4),
         ("VariableID", "nxtInt32", 10, 4, 4),
         ("TagID", "nxtInt32", 10, 8, 4),
@@ -479,13 +518,13 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("NotesHTML", "nxtBlobWideMemo", 0, 177, 8),
     ]),
     // lifecycletimedata: 3 fields
-    ("lifecycletimedata", 60, 16, 252, true, &[
+    ("lifecycletimedata", 76, 16, 251, true, &[
         ("LifeCycleID", "nxtInt16", 5, 0, 2),
         ("TimeID", "nxtInt16", 5, 2, 2),
         ("LFValue", "nxtDouble", 0, 4, 8),
     ]),
     // maccreport: 11 fields
-    ("maccreport", 60, 84, 48, true, &[
+    ("maccreport", 64, 76, 53, true, &[
         ("ReportID", "nxtInt32", 10, 0, 4),
         ("ScenarioID", "nxtInt32", 10, 4, 4),
         ("PlotOrder", "nxtInt32", 10, 8, 4),
@@ -529,7 +568,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("NotesHTML", "nxtBlobWideMemo", 0, 492, 8),
     ]),
     // refs: 17 fields
-    ("refs", 60, 4032, 1, true, &[
+    ("refs", 1020, 3584, 2, true, &[
         ("RefID", "nxtInt16", 5, 0, 2),
         ("Author", "nxtWideString", 250, 2, 502),
         ("AuthorShort", "nxtWideString", 50, 504, 102),
@@ -549,7 +588,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("NotesHTML", "nxtBlobWideMemo", 0, 3269, 8),
     ]),
     // regioncategories: 8 fields
-    ("regioncategories", 60, 336, 12, true, &[
+    ("regioncategories", 140, 304, 13, true, &[
         ("RegionCatID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("RegionCatOrder", "nxtInt16", 5, 204, 2),
@@ -560,7 +599,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("Abbreviation", "nxtWideString", 30, 232, 62),
     ]),
     // regioncategories2: 8 fields
-    ("regioncategories2", 60, 336, 12, true, &[
+    ("regioncategories2", 140, 304, 13, true, &[
         ("RegionCatID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("RegionCatOrder", "nxtInt16", 5, 204, 2),
@@ -571,7 +610,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("Abbreviation", "nxtWideString", 30, 232, 62),
     ]),
     // regioncategories3: 8 fields
-    ("regioncategories3", 60, 336, 12, true, &[
+    ("regioncategories3", 140, 304, 13, true, &[
         ("RegionCatID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("RegionCatOrder", "nxtInt16", 5, 204, 2),
@@ -582,7 +621,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("Abbreviation", "nxtWideString", 30, 232, 62),
     ]),
     // regioncategories4: 8 fields
-    ("regioncategories4", 60, 336, 12, true, &[
+    ("regioncategories4", 140, 304, 13, true, &[
         ("RegionCatID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 100, 2, 202),
         ("RegionCatOrder", "nxtInt16", 5, 204, 2),
@@ -644,7 +683,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("Expression", "nxtBlobWideMemo", 0, 10, 8),
     ]),
     // scenarioeffects: 37 fields
-    ("scenarioeffects", 60, 2016, 2, true, &[
+    ("scenarioeffects", 1020, 1536, 2, true, &[
         ("EffectID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 150, 2, 302),
         ("Category", "nxtInt16", 5, 304, 2),
@@ -684,7 +723,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("CGTP100", "nxtDouble", 0, 1507, 8),
     ]),
     // scenarioinheritance: 3 fields
-    ("scenarioinheritance", 60, 12, 336, true, &[
+    ("scenarioinheritance", 84, 12, 334, true, &[
         ("ScenarioID", "nxtInt16", 5, 0, 2),
         ("ParentScenarioID", "nxtInt16", 5, 2, 2),
         ("InheritOrder", "nxtInt16", 5, 4, 2),
@@ -714,7 +753,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("NotesHTML", "nxtBlobWideMemo", 0, 298, 8),
     ]),
     // scenariotemplate: 20 fields
-    ("scenariotemplate", 60, 504, 8, true, &[
+    ("scenariotemplate", 124, 496, 8, true, &[
         ("BranchID", "nxtInt32", 10, 0, 4),
         ("VariableID", "nxtInt32", 10, 4, 4),
         ("ParamOrder", "nxtInt32", 10, 8, 4),
@@ -763,7 +802,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("Abbrev", "nxtWideString", 20, 1255, 42),
     ]),
     // summaryreports: 34 fields
-    ("summaryreports", 60, 2016, 2, true, &[
+    ("summaryreports", 1020, 1536, 2, true, &[
         ("Name", "nxtWideString", 150, 0, 302),
         ("ReportOrd", "nxtInt32", 10, 302, 4),
         ("ReportID", "nxtInt32", 10, 306, 4),
@@ -818,12 +857,12 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("GroupType", "nxtInt16", 5, 1326, 2),
     ]),
     // taggroupshowresults: 2 fields
-    ("taggroupshowresults", 60, 12, 336, false, &[
+    ("taggroupshowresults", 84, 12, 334, false, &[
         ("TagID", "nxtInt32", 10, 0, 4),
         ("TagGroupID", "nxtInt32", 10, 4, 4),
     ]),
     // tags: 16 fields
-    ("tags", 60, 2016, 2, true, &[
+    ("tags", 1020, 1536, 2, true, &[
         ("TagID", "nxtInt32", 10, 0, 4),
         ("TagOrd", "nxtInt32", 10, 4, 4),
         ("Name", "nxtWideString", 100, 8, 202),
@@ -842,7 +881,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("IntVal", "nxtInt16", 5, 1490, 2),
     ]),
     // tedeffects: 37 fields
-    ("tedeffects", 60, 2016, 2, true, &[
+    ("tedeffects", 1020, 1536, 2, true, &[
         ("EffectID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 150, 2, 302),
         ("Category", "nxtInt16", 5, 304, 2),
@@ -892,30 +931,81 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("PerUnitType", "nxtInt16", 5, 24, 2),
     ]),
     // tedinputfuelsdata: 3 fields
-    ("tedinputfuelsdata", 60, 16, 252, false, &[
+    ("tedinputfuelsdata", 76, 16, 251, false, &[
         ("TechID", "nxtInt16", 5, 0, 2),
         ("FuelID", "nxtInt16", 5, 2, 2),
         ("InputShare", "nxtDouble", 0, 4, 8),
     ]),
     // tedoutputfuelsdata: 4 fields
-    ("tedoutputfuelsdata", 60, 18, 224, false, &[
+    ("tedoutputfuelsdata", 72, 20, 201, false, &[
         ("TechID", "nxtInt16", 5, 0, 2),
         ("FuelID", "nxtInt16", 5, 2, 2),
         ("OutputShare", "nxtDouble", 0, 4, 8),
         ("ByProduct", "nxtBoolean", 0, 12, 1),
     ]),
+    // tedtechdata: 48 fields
+    ("tedtechdata", 60, 336, 12, true, &[
+        ("TechID", "nxtInt16", 5, 0, 2),
+        ("ParentID", "nxtInt16", 5, 2, 2),
+        ("Name", "nxtWideString", 60, 4, 122),
+        ("DisplayOrder", "nxtInt16", 5, 126, 2),
+        ("ContainsData", "nxtInt16", 5, 128, 2),
+        ("InfoPageURL", "nxtBlobWideMemo", 0, 130, 8),
+        ("TechType", "nxtInt16", 5, 138, 2),
+        ("ControlTechnology", "nxtInt16", 5, 140, 2),
+        ("ControlTechnology2", "nxtInt16", 5, 142, 2),
+        ("ControlTechnology3", "nxtInt16", 5, 144, 2),
+        ("DateEdited", "nxtDate", 0, 146, 4),
+        ("Generation", "nxtInt16", 5, 150, 2),
+        ("Location", "nxtWideString", 15, 152, 32),
+        ("AvailableYear", "nxtInt16", 5, 184, 2),
+        ("Lifetime", "nxtDouble", 0, 186, 8),
+        ("AvgAvailabilityFactor", "nxtDouble", 0, 194, 8),
+        ("Capacity", "nxtDouble", 0, 202, 8),
+        ("Efficiency", "nxtDouble", 0, 210, 8),
+        ("EffisHHV", "nxtInt16", 5, 218, 2),
+        ("CapacityUnitID", "nxtInt16", 5, 220, 2),
+        ("CapSizeInorOut", "nxtInt16", 5, 222, 2),
+        ("Losses", "nxtDouble", 0, 224, 8),
+        ("LossType", "nxtInt16", 5, 232, 2),
+        ("CurrencyID", "nxtInt16", 5, 234, 2),
+        ("CurrencyYear", "nxtInt16", 5, 236, 2),
+        ("BaseCapitalCost", "nxtDouble", 0, 238, 8),
+        ("TotalCapitalCost", "nxtDouble", 0, 246, 8),
+        ("FixedOM", "nxtDouble", 0, 254, 8),
+        ("FeedstockUnit", "nxtInt16", 5, 262, 2),
+        ("VarOMCost", "nxtDouble", 0, 264, 8),
+        ("VarOMCostInorOut", "nxtInt16", 5, 272, 2),
+        ("Notes", "nxtBlob", 0, 274, 8),
+        ("DemandUsage", "nxtDouble", 0, 282, 8),
+        ("DemandUseUnit", "nxtInt16", 5, 290, 2),
+        ("DemandUseDenomUnit", "nxtInt16", 5, 292, 2),
+        ("ConstructionTime", "nxtDouble", 0, 294, 8),
+        ("DutyCycle", "nxtInt16", 5, 302, 2),
+        ("VarOMCostUnit", "nxtInt16", 5, 304, 2),
+        ("FixOMCostUnit", "nxtInt16", 5, 306, 2),
+        ("IncludeCapacityData", "nxtBoolean", 0, 308, 1),
+        ("IncludeEfficiencydata", "nxtBoolean", 0, 309, 1),
+        ("IncludeCostdata", "nxtBoolean", 0, 310, 1),
+        ("IncludeEmissionsData", "nxtBoolean", 0, 311, 1),
+        ("CheckBox", "nxtBoolean", 0, 312, 1),
+        ("CapCostDenomUnitID", "nxtInt16", 5, 313, 2),
+        ("EffDenomUnitType", "nxtInt16", 5, 315, 2),
+        ("InputFuelID", "nxtInt16", 5, 317, 2),
+        ("OutputFuelID", "nxtInt16", 5, 319, 2),
+    ]),
     // tedtechrefs: 2 fields
-    ("tedtechrefs", 60, 8, 504, true, &[
+    ("tedtechrefs", 100, 8, 499, true, &[
         ("TechID", "nxtInt16", 5, 0, 2),
         ("RefID", "nxtInt16", 5, 2, 2),
     ]),
     // timeslicegroups: 2 fields
-    ("timeslicegroups", 60, 96, 42, true, &[
+    ("timeslicegroups", 44, 88, 46, true, &[
         ("ID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 40, 2, 82),
     ]),
     // timesliceresults: 6 fields
-    ("timesliceresults", 60, 126, 32, true, &[
+    ("timesliceresults", 124, 128, 31, true, &[
         ("TimeSliceID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtWideString", 50, 2, 102),
         ("Value", "nxtDouble", 0, 104, 8),
@@ -924,7 +1014,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("Order2", "nxtInt32", 10, 117, 4),
     ]),
     // timeslices: 28 fields
-    ("timeslices", 60, 1008, 4, true, &[
+    ("timeslices", 252, 768, 5, true, &[
         ("TimeSliceID", "nxtInt32", 10, 0, 4),
         ("TSOrder", "nxtInt32", 10, 4, 4),
         ("Name", "nxtWideString", 250, 8, 502),
@@ -955,7 +1045,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("DayGroupID", "nxtInt32", 10, 747, 4),
     ]),
     // tsgroups1: 6 fields
-    ("tsgroups1", 60, 252, 16, true, &[
+    ("tsgroups1", 148, 232, 17, true, &[
         ("ID", "nxtInt32", 10, 0, 4),
         ("Ord", "nxtInt32", 10, 4, 4),
         ("Name", "nxtWideString", 100, 8, 202),
@@ -964,7 +1054,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("ShowResults", "nxtBoolean", 0, 226, 1),
     ]),
     // tsgroups2: 6 fields
-    ("tsgroups2", 60, 252, 16, false, &[
+    ("tsgroups2", 148, 232, 17, false, &[
         ("ID", "nxtInt32", 10, 0, 4),
         ("Ord", "nxtInt32", 10, 4, 4),
         ("Name", "nxtWideString", 100, 8, 202),
@@ -973,7 +1063,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("ShowResults", "nxtBoolean", 0, 226, 1),
     ]),
     // tsgroups3: 6 fields
-    ("tsgroups3", 60, 252, 16, false, &[
+    ("tsgroups3", 148, 232, 17, false, &[
         ("ID", "nxtInt32", 10, 0, 4),
         ("Ord", "nxtInt32", 10, 4, 4),
         ("Name", "nxtWideString", 100, 8, 202),
@@ -991,7 +1081,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("Group3ID", "nxtInt16", 5, 16, 2),
     ]),
     // tsprofiles: 23 fields
-    ("tsprofiles", 60, 448, 9, true, &[
+    ("tsprofiles", 92, 400, 10, true, &[
         ("TSProfileID", "nxtInt16", 5, 0, 2),
         ("ProfileOrder", "nxtInt16", 5, 2, 2),
         ("Name", "nxtWideString", 100, 4, 202),
@@ -1036,8 +1126,48 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("PluginGUID", "nxtNullString", 50, 152, 51),
         ("NotesHTML", "nxtBlobWideMemo", 0, 203, 8),
     ]),
+    // uservardata: 37 fields
+    ("uservardata", 2044, 6144, 1, true, &[
+        ("Name", "nxtWideString", 50, 0, 102),
+        ("Description", "nxtWideString", 120, 102, 242),
+        ("UVOrder", "nxtInt16", 5, 344, 2),
+        ("BranchType", "nxtInt16", 5, 346, 2),
+        ("UnitString", "nxtWideString", 30, 348, 62),
+        ("ScaleID", "nxtInt16", 5, 410, 2),
+        ("VariableID", "nxtInt16", 5, 412, 2),
+        ("MinValue", "nxtDouble", 0, 414, 8),
+        ("MaxValue", "nxtDouble", 0, 422, 8),
+        ("DefaultValue", "nxtDouble", 0, 430, 8),
+        ("EnglishName", "nxtWideString", 50, 438, 102),
+        ("Tag", "nxtInt16", 5, 540, 2),
+        ("User1", "nxtDouble", 0, 542, 8),
+        ("User2", "nxtDouble", 0, 550, 8),
+        ("User3", "nxtDouble", 0, 558, 8),
+        ("IsTimeSliced", "nxtBoolean", 0, 566, 1),
+        ("AvailOnorBelowBranchID", "nxtInt32", 10, 567, 4),
+        ("DefaultExpression", "nxtWideString", 800, 571, 1602),
+        ("DefaultScenarioExpression", "nxtWideString", 800, 2173, 1602),
+        ("ReadOnly", "nxtBoolean", 0, 3775, 1),
+        ("Category", "nxtWideString", 40, 3776, 82),
+        ("TabColor", "nxtInt32", 10, 3858, 4),
+        ("VisibleCurrentAccounts", "nxtBoolean", 0, 3862, 1),
+        ("VisibleScenario", "nxtBoolean", 0, 3863, 1),
+        ("OnBranch", "nxtBoolean", 0, 3864, 1),
+        ("BelowBranch", "nxtBoolean", 0, 3865, 1),
+        ("LevelsBelow", "nxtInt16", 5, 3866, 2),
+        ("TabOrder", "nxtInt16", 5, 3868, 2),
+        ("CategoryID", "nxtInt32", 10, 3870, 4),
+        ("ReadOnlyCurrentAccounts", "nxtBoolean", 0, 3874, 1),
+        ("ReadOnlyScenario", "nxtBoolean", 0, 3875, 1),
+        ("Enabled", "nxtBoolean", 0, 3876, 1),
+        ("Order", "nxtInt16", 5, 3877, 2),
+        ("Intermediate", "nxtBoolean", 0, 3879, 1),
+        ("AvailOnorBelowBranchStr", "nxtWideString", 800, 3880, 1602),
+        ("PluginGUID", "nxtNullString", 50, 5482, 51),
+        ("NotesHTML", "nxtBlobWideMemo", 0, 5533, 8),
+    ]),
     // uservartags: 4 fields
-    ("uservartags", 60, 21, 192, false, &[
+    ("uservartags", 72, 20, 201, false, &[
         ("VariableID", "nxtInt32", 10, 0, 4),
         ("TagID", "nxtInt32", 10, 4, 4),
         ("TagType", "nxtInt32", 10, 8, 4),
@@ -1053,7 +1183,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("Tag", "nxtInt32", 10, 516, 4),
     ]),
     // variabledata: 11 fields
-    ("variabledata", 60, 4032, 1, true, &[
+    ("variabledata", 1020, 3072, 1, true, &[
         ("VariableID", "nxtInt16", 5, 0, 2),
         ("Description", "nxtWideString", 250, 2, 502),
         ("MinValue", "nxtDouble", 0, 504, 8),
@@ -1067,7 +1197,7 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("PluginGUID", "nxtNullString", 50, 2131, 51),
     ]),
     // variableshortcuts: 9 fields
-    ("variableshortcuts", 60, 112, 36, false, &[
+    ("variableshortcuts", 140, 104, 38, false, &[
         ("ShortCutID", "nxtInt32", 10, 0, 4),
         ("BranchID", "nxtInt32", 10, 4, 4),
         ("VariableID", "nxtInt32", 10, 8, 4),
@@ -1079,22 +1209,22 @@ pub const NX1_RECORD_LAYOUT: &[(&str, usize, usize, usize, bool, &[(&str, &str, 
         ("Tag", "nxtInt32", 10, 94, 4),
     ]),
     // version: 1 fields
-    ("version", 60, 8, 504, true, &[
+    ("version", 100, 8, 499, true, &[
         ("FileVersion", "nxtInt32", 10, 0, 4),
     ]),
     // vintage: 3 fields
-    ("vintage", 60, 12, 336, true, &[
+    ("vintage", 84, 12, 334, true, &[
         ("VintageID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtNullString", 4, 2, 5),
         ("ShowResults", "nxtBoolean", 0, 7, 1),
     ]),
     // writtenresults: 2 fields
-    ("writtenresults", 60, 9, 448, true, &[
+    ("writtenresults", 84, 12, 334, true, &[
         ("VariableID", "nxtInt32", 10, 0, 4),
         ("Written", "nxtBoolean", 0, 4, 1),
     ]),
     // years: 3 fields
-    ("years", 60, 12, 336, true, &[
+    ("years", 84, 12, 334, true, &[
         ("YearID", "nxtInt16", 5, 0, 2),
         ("Name", "nxtNullString", 4, 2, 5),
         ("ShowResults", "nxtBoolean", 0, 7, 1),
@@ -1163,15 +1293,6 @@ pub const NX1_REGION_BLOCK: &str = "4e584448060000006c87ab2c766d656e000000000000
 /// the area had and deleted, which the reader does not recognise yet.
 pub const NX1_REGION_ROWS: &[(i32, &str)] = &[
     (1, "Region 1"),
-    (3, ""),
-    (4, ""),
-    (5, ""),
-    (6, ""),
-    (7, ""),
-    (8, ""),
-    (9, ""),
-    (10, ""),
-    (11, ""),
 ];
 
 /// The first data block of staticdata.nx1, all 201 of whose slots are live.
@@ -1385,10 +1506,13 @@ pub const NX1_STATICDATA_ROWS: &[(i32, i32, u64)] = &[
     (35, 994, 13830554455654793216),
 ];
 
-/// The fuels dictionary bytes, field segment through the indices marker. Its
-/// placement carries one two-byte slack in front of PluginGUID (nxtNullString),
-/// which the reader reads instead of returning an empty layout.
-pub const NX1_FUELS_DICTIONARY: &str = "0612546e784669656c6444657363726970746f7206064675656c4944120000000006086e7874496e743136020502000802030100020b12000000000203020002020808020108080612546e784669656c6444657363726970746f72060d456e65726779436f6e74656e74120000000006096e7874446f75626c65020002000802030100020c12000000000203020202080808020108080612546e784669656c6444657363726970746f7206044e616d651200000000060d6e787457696465537472696e67026402000802030100020d12000000000203020a03ca000808020108080612546e784669656c6444657363726970746f72060b4c4856484856526174696f120000000006096e7874446f75626c65020002000802030100020e1200000000020303d40002080808020108080612546e784669656c6444657363726970746f72060c42616c616e63654361744944120000000006086e7874496e743136020502000802030100020f1200000000020303dc0002020808020108080612546e784669656c6444657363726970746f72060753746174654944120000000006086e7874496e74313602050200080203010002101200000000020303de0002020808020108080612546e784669656c6444657363726970746f7206094e756d556e69744944120000000006086e7874496e74313602050200080203010002111200000000020303e00002020808020108080612546e784669656c6444657363726970746f720606556e69744944120000000006086e7874496e74313602050200080203010002121200000000020303e20002020808020108080612546e784669656c6444657363726970746f72060744656e73697479120000000006096e7874446f75626c6502000200080203010002131200000000020303e40002080808020108080612546e784669656c6444657363726970746f72060d50657263656e74436172626f6e120000000006096e7874446f75626c6502000200080203010002141200000000020303ec0002080808020108080612546e784669656c6444657363726970746f72060d50657263656e7453756c667572120000000006096e7874446f75626c6502000200080203010002151200000000020303f40002080808020108080612546e784669656c6444657363726970746f72060f50657263656e744e6974726f67656e120000000006096e7874446f75626c6502000200080203010002161200000000020303fc0002080808020108080612546e784669656c6444657363726970746f72060a50657263656e74417368120000000006096e7874446f75626c6502000200080203010002171200000000020303040102080808020108080612546e784669656c6444657363726970746f72060b50657263656e744c656164120000000006096e7874446f75626c65020002000802030100021812000000000203030c0102080808020108080612546e784669656c6444657363726970746f72060f50657263656e744d6f697374757265120000000006096e7874446f75626c6502000200080203010002191200000000020303140102080808020108080612546e784669656c6444657363726970746f72060f50657263656e744f786964697a6564120000000006096e7874446f75626c65020002000802030100021a12000000000203031c0102080808020108080612546e784669656c6444657363726970746f72060a4675656c547970654944120000000006086e7874496e743136020502000802030100021b1200000000020303240102020808020108080612546e784669656c6444657363726970746f7206054e6f746573120000000006076e7874426c6f62020002000802030100021c1200000000020303260102080808020108080612546e784669656c6444657363726970746f72060f53756c667572526574656e74696f6e120000000006096e7874446f75626c65020002000802030100021d12000000000203032e0102080808020108080612546e784669656c6444657363726970746f72060c42696f6d6173735969656c64120000000006096e7874446f75626c65020002000802030100021e1200000000020303360102080808020108080612546e784669656c6444657363726970746f72060e50657263656e744d657468616e65120000000006096e7874446f75626c65020002000802030100021f12000000000203033e0102080808020108080612546e784669656c6444657363726970746f72060b53686f77526573756c74731200000000060a6e7874426f6f6c65616e02000200080203010002201200000000020303460102010808020108080612546e784669656c6444657363726970746f72060a55736564496e417265611200000000060a6e7874426f6f6c65616e02000200080203010002211200000000020303470102010808020108080612546e784669656c6444657363726970746f7206115072696d617279456666696369656e6379120000000006096e7874446f75626c6502000200080203010002221200000000020303480102080808020108080612546e784669656c6444657363726970746f72060b557073747265616d434f32120000000006096e7874446f75626c6502000200080203010002231200000000020303500102080808020108080612546e784669656c6444657363726970746f72060a44656d616e644675656c1200000000060a6e7874426f6f6c65616e02000200080203010002241200000000020303580102010808020108080612546e784669656c6444657363726970746f7206154e6f6e456e65726779436172626f6e53746f726564120000000006096e7874446f75626c6502000200080203010002251200000000020303590102080808020108080612546e784669656c6444657363726970746f720603546167120000000006086e7874496e74313602050200080203010002261200000000020303610102020808020108080612546e784669656c6444657363726970746f7206055573657231120000000006096e7874446f75626c6502000200080203010002271200000000020303630102080808020108080612546e784669656c6444657363726970746f7206055573657232120000000006096e7874446f75626c65020002000802030100022812000000000203036b0102080808020108080612546e784669656c6444657363726970746f7206055573657233120000000006096e7874446f75626c6502000200080203010002291200000000020303730102080808020108080612546e784669656c6444657363726970746f72060d42616c616e6365436174494432120000000006086e7874496e743136020502000802030100022a12000000000203037b0102020808020108080612546e784669656c6444657363726970746f72060d42616c616e6365436174494433120000000006086e7874496e743136020502000802030100022b12000000000203037d0102020808020108080612546e784669656c6444657363726970746f72060d42616c616e6365436174494434120000000006086e7874496e743136020502000802030100022c12000000000203037f0102020808020108080612546e784669656c6444657363726970746f7206094675656c4f72646572120000000006086e7874496e743136020502000802030100022d1200000000020303810102020808020108080612546e784669656c6444657363726970746f72060355524c1200000000060d6e787457696465537472696e6703fa0002000802030100022e1200000000020303830103f6010808020108080612546e784669656c6444657363726970746f72060a42794c616e64547970651200000000060a6e7874426f6f6c65616e020002000802030100022f1200000000020303790302010808020108080612546e784669656c6444657363726970746f72060c547261646564496e417265611200000000060a6e7874426f6f6c65616e020002000802030100023012000000000203037a0302010808020108080612546e784669656c6444657363726970746f72060849734d61707065641200000000060a6e7874426f6f6c65616e020002000802030100023112000000000203037b0302010808020108080612546e784669656c6444657363726970746f72060d4166666f72646162696c6974791200000000060a6e7874426f6f6c65616e020002000802030100023212000000000203037c0302010808020108080612546e784669656c6444657363726970746f72060a496d616765496e050000004e585348020000000000000000000000ffffffff444943540000000001000000646578120000000006086e7874496e743136020502000802030100023312000000000203037d0302020808020108080612546e784669656c6444657363726970746f72060a506c7567696e475549441200000000060d6e78744e756c6c537472696e67023202000802030100023412000000000203037f0302330808020108080612546e784669656c6444657363726970746f7206094e6f74657348544d4c1200000000060f6e7874426c6f62576964654d656d6f02000200080203010002351200000000020303b20302080808020108080612546e784669656c6444657363726970746f72060c416262726576696174696f6e1200000000060d6e787457696465537472696e67021e0200080203010002361200000000020303ba03023e0808020108080612546e784669656c6444657363726970746f72060c4861734c6f616453686170651200000000060a6e7874426f6f6c65616e02000200080203010002371200000000020303f803020108080201080803f90303fc03080711496e646963657344657363726970746f72";
+/// The fuels table file through the page its dictionary ends on. The dictionary
+/// crosses a page seam, so the reader has to splice the pages to read all 45 fields.
+pub const NX1_FUELS_DICTIONARY: &str = "4e582132000000000df30a36766d656e00000000fc0f0000ffffffff000000006a0000003075000000000000000000000000000000000000000000000000000000000000000000000b6e78317844656661756c7400000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fb0f0653747265616df30f04426c6f62ef0f065265636f7264db0f07496e6469636573d70f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000002d0000000600000065000000000000000000000068000000010000000500000000000000004e585348010000000df30a36766d656e0200000044494354a31b00000100000007074e65787573444202044e582132120000000009071053747265616d44657363726970746f72090617546e784261736553747265616d44657363726970746f7202030100020512000000000201060b6e78317844656661756c74070f46696c657344657363726970746f72090612546e7846696c657344657363726970746f720203010002041200000000020102010611546e7846696c6544657363726970746f7212000000000203010c250100002446696c6549443d433a5c55736572735c636861726c5c417070446174615c4c6f63616c5c54656d705c5f4c454150576f726b5c305c6675656c732e6e78313b7b45323038434143352d383044302d313146312d413137392d3030304332394539343946347d3b7b33453238344545302d303641382d344139352d393730442d3045323034413637424238397d3b7b45323038434143352d383044302d313146312d413137392d3030304332394539343946347d3b7b30303030303030302d303030302d303030302d303030302d3030303030303030303030307d3b30314444313444443b43343530344443303b373839433031414639433031363843383b7b30303036304232362d303030302d303135352d303030302d3030303030303030303030307d000207120000000002010612446174612f44617461446963742046696c6503001002040201020301062c24475549443d7b46383739324446442d343842352d343933412d394534412d3136433238434346434130397d06152443616368696e6753746174653d7463734e6f6e650002001200000000020107104c6f63616c6544657363726970746f7202010807105265636f726444657363726970746f72090617546e78426173655265636f726444657363726970746f7202030100020612000000000202060b6e78317844656661756c740200070e426c6f6244657363726970746f72090615546e7848656170426c6f6244657363726970746f7202030100025d12000000000202060b6e78317844656661756c7402000202090615546e78426173654865617044657363726970746f7202030100025e12000000000202060b6e78317844656661756c7409061a546e7842617365426c6f636b4865617044657363726970746f7202030100025f12000000000201060b6e78317844656661756c7407104669656c647344657363726970746f72090613546e784669656c647344657363726970746f7202030106154f726967696e616c4669656c64436f756e743d343500020112000000000202022d0612546e784669656c6444657363726970746f7206064675656c4944120000000006086e7874496e743136020502000802030100020b12000000000203020002020808020108080612546e784669656c6444657363726970746f72060d456e65726779436f6e74656e74120000000006096e7874446f75626c65020002000802030100020c12000000000203020202080808020108080612546e784669656c6444657363726970746f7206044e616d651200000000060d6e787457696465537472696e67026402000802030100020d12000000000203020a03ca000808020108080612546e784669656c6444657363726970746f72060b4c4856484856526174696f120000000006096e7874446f75626c65020002000802030100020e1200000000020303d40002080808020108080612546e784669656c6444657363726970746f72060c42616c616e63654361744944120000000006086e7874496e743136020502000802030100020f1200000000020303dc0002020808020108080612546e784669656c6444657363726970746f72060753746174654944120000000006086e7874496e74313602050200080203010002101200000000020303de0002020808020108080612546e784669656c6444657363726970746f7206094e756d556e69744944120000000006086e7874496e74313602050200080203010002111200000000020303e00002020808020108080612546e784669656c6444657363726970746f720606556e69744944120000000006086e7874496e74313602050200080203010002121200000000020303e20002020808020108080612546e784669656c6444657363726970746f72060744656e73697479120000000006096e7874446f75626c6502000200080203010002131200000000020303e40002080808020108080612546e784669656c6444657363726970746f72060d50657263656e74436172626f6e120000000006096e7874446f75626c6502000200080203010002141200000000020303ec0002080808020108080612546e784669656c6444657363726970746f72060d50657263656e7453756c667572120000000006096e7874446f75626c6502000200080203010002151200000000020303f40002080808020108080612546e784669656c6444657363726970746f72060f50657263656e744e6974726f67656e120000000006096e7874446f75626c6502000200080203010002161200000000020303fc0002080808020108080612546e784669656c6444657363726970746f72060a50657263656e74417368120000000006096e7874446f75626c6502000200080203010002171200000000020303040102080808020108080612546e784669656c6444657363726970746f72060b50657263656e744c656164120000000006096e7874446f75626c65020002000802030100021812000000000203030c0102080808020108080612546e784669656c6444657363726970746f72060f50657263656e744d6f697374757265120000000006096e7874446f75626c6502000200080203010002191200000000020303140102080808020108080612546e784669656c6444657363726970746f72060f50657263656e744f786964697a6564120000000006096e7874446f75626c65020002000802030100021a12000000000203031c0102080808020108080612546e784669656c6444657363726970746f72060a4675656c547970654944120000000006086e7874496e743136020502000802030100021b1200000000020303240102020808020108080612546e784669656c6444657363726970746f7206054e6f746573120000000006076e7874426c6f62020002000802030100021c1200000000020303260102080808020108080612546e784669656c6444657363726970746f72060f53756c667572526574656e74696f6e120000000006096e7874446f75626c65020002000802030100021d12000000000203032e0102080808020108080612546e784669656c6444657363726970746f72060c42696f6d6173735969656c64120000000006096e7874446f75626c65020002000802030100021e1200000000020303360102080808020108080612546e784669656c6444657363726970746f72060e50657263656e744d657468616e65120000000006096e7874446f75626c65020002000802030100021f12000000000203033e0102080808020108080612546e784669656c6444657363726970746f72060b53686f77526573756c74731200000000060a6e7874426f6f6c65616e02000200080203010002201200000000020303460102010808020108080612546e784669656c6444657363726970746f72060a55736564496e417265611200000000060a6e7874426f6f6c65616e02000200080203010002211200000000020303470102010808020108080612546e784669656c6444657363726970746f7206115072696d617279456666696369656e6379120000000006096e7874446f75626c6502000200080203010002221200000000020303480102080808020108080612546e784669656c6444657363726970746f72060b557073747265616d434f32120000000006096e7874446f75626c6502000200080203010002231200000000020303500102080808020108080612546e784669656c6444657363726970746f72060a44656d616e644675656c1200000000060a6e7874426f6f6c65616e02000200080203010002241200000000020303580102010808020108080612546e784669656c6444657363726970746f7206154e6f6e456e65726779436172626f6e53746f726564120000000006096e7874446f75626c6502000200080203010002251200000000020303590102080808020108080612546e784669656c6444657363726970746f720603546167120000000006086e7874496e74313602050200080203010002261200000000020303610102020808020108080612546e784669656c6444657363726970746f7206055573657231120000000006096e7874446f75626c6502000200080203010002271200000000020303630102080808020108080612546e784669656c6444657363726970746f7206055573657232120000000006096e7874446f75626c65020002000802030100022812000000000203036b0102080808020108080612546e784669656c6444657363726970746f7206055573657233120000000006096e7874446f75626c6502000200080203010002291200000000020303730102080808020108080612546e784669656c6444657363726970746f72060d42616c616e6365436174494432120000000006086e7874496e743136020502000802030100022a12000000000203037b0102020808020108080612546e784669656c6444657363726970746f72060d42616c616e6365436174494433120000000006086e7874496e743136020502000802030100022b12000000000203037d0102020808020108080612546e784669656c6444657363726970746f72060d42616c616e6365436174494434120000000006086e7874496e743136020502000802030100022c12000000000203037f0102020808020108080612546e784669656c6444657363726970746f7206094675656c4f72646572120000000006086e7874496e743136020502000802030100022d1200000000020303810102020808020108080612546e784669656c6444657363726970746f72060355524c1200000000060d6e787457696465537472696e6703fa0002000802030100022e1200000000020303830103f6010808020108080612546e784669656c6444657363726970746f72060a42794c616e64547970651200000000060a6e7874426f6f6c65616e020002000802030100022f1200000000020303790302010808020108080612546e784669656c6444657363726970746f72060c547261646564496e417265611200000000060a6e7874426f6f6c65616e020002000802030100023012000000000203037a0302010808020108080612546e784669656c6444657363726970746f72060849734d61707065641200000000060a6e7874426f6f6c65616e020002000802030100023112000000000203037b0302010808020108080612546e784669656c6444657363726970746f72060d4166666f72646162696c6974791200000000060a6e7874426f6f6c65616e020002000802030100023212000000000203037c0302010808020108080612546e784669656c6444657363726970746f72060a496d616765496e050000004e585348020000000000000000000000ffffffff444943540000000001000000646578120000000006086e7874496e743136020502000802030100023312000000000203037d0302020808020108080612546e784669656c6444657363726970746f72060a506c7567696e475549441200000000060d6e78744e756c6c537472696e67023202000802030100023412000000000203037f0302330808020108080612546e784669656c6444657363726970746f7206094e6f74657348544d4c1200000000060f6e7874426c6f62576964654d656d6f02000200080203010002351200000000020303b20302080808020108080612546e784669656c6444657363726970746f72060c416262726576696174696f6e1200000000060d6e787457696465537472696e67021e0200080203010002361200000000020303ba03023e0808020108080612546e784669656c6444657363726970746f72060c4861734c6f616453686170651200000000060a6e7874426f6f6c65616e02000200080203010002371200000000020303f803020108080201080803f90303fc03080711496e646963657344657363726970746f72090618546e784d61696e496e646963657344657363726970746f7202030100020812000000000201060b6e78317844656661756c74020c0612546e78496e64657844657363726970746f720613546e785265664b657944657363726970746f72061753657175656e7469616c2041636365737320496e646578020002030100020912000000000201060b6e78317844656661756c74061753657175656e7469616c2041636365737320496e6465780802030100020a12000000000703424b4402010802010612546e78496e64657844657363726970746f720614546e78436f6d704b657944657363726970746f72060941626272657649445802000203010002381200000000020106104b65796c65737342537461725472656512000000000902030100023912000000000703424b4402010802010201061c546e78457874546578744b65794669656c6444657363726970746f72022b02030100023a1200000000020212000000001200000000090201080200020006056e62546f7002010802020201080612546e78496e64657844657363726970746f720614546e78436f6d704b657944657363726970746f72060a62616c63617469647831020002030100023b1200000000020106104b65796c65737342537461725472656512000000000902030100023c12000000000703424b44020108020102020615546e784b65794669656c6444657363726970746f72020402030100023d1200000000020212000000001200000000090201080200020006056e62546f700615546e784b65794669656c6444657363726970746f72022202030100023e1200000000020212000000001200000000090201080200020006056e62546f700612546e78496e64657844657363726970746f720614546e78436f6d704b657944657363726970746f72060a62616c63617469647832020002030100023f1200000000020106104b65796c65737342537461725472656512000000000902030100024012000000000703424b44020108020102020615546e784b65794669656c6444657363726970746f72021f0203010002411200000000020212000000001200000000090201080200020006056e62546f700615546e784b65794669656c6444657363726970746f7202220203010002421200000000020212000000001200000000090201080200020006056e62546f700612546e78496e64657844657363726970746f720614546e78436f6d704b657944657363726970746f72060a62616c6361746964783302000203010002431200000000020106104b65796c65737342537461725472656512000000000902030100024412000000000703424b44020108020102020615546e784b65794669656c6444657363726970746f7202200203010002451200000000020212000000001200000000090201080200020006056e62546f700615546e784b65794669656c6444657363726970746f7202220203010002461200000000020212000000001200000000090201080200020006056e62546f700612546e78496e64657844657363726970746f720614546e78436f6d704b657944657363726970746f72060a62616c6361746964783402000203010002471200000000020106104b65796c65737342537461725472656512000000000902030100024812000000000703424b44020108020102020615546e784b65794669656c6444657363726970746f7202210203010002491200000000020212000000001200000000090201080200020006056e62546f700615546e784b65794669656c6444657363726970746f72022202030100024a1200000000020212000000001200000000090201080200020006056e62546f700612546e78496e64657844657363726970746f720614546e78436f6d704b657944657363726970746f72060b6675656c74797065696478020002030100024b1200000000020106104b65796c65737342537461725472656512000000000902030100024c12000000000703424b44020108020102010615546e784b65794669656c6444657363726970746f72021002030100024d1200000000020212000000001200000000090201080200020006056e62546f700612546e78496e64657844657363726970746f720614546e78436f6d704b657944657363726970746f7206054755494478020002030100024e1200000000020106104b65796c65737342537461725472656512000000000902030100024f12000000000703424b4402010802010201061c546e78457874546578744b65794669656c6444657363726970746f7202290203010002501200000000020212000000001200000000090201080200020006056e62546f7002010802020201080612546e78496e64657844657363726970746f720614546e78436f6d704b657944657363726970746f7206076e616d6569647802000203010002511200000000020106104b65796c65737342537461725472656512000000000902030100025212000000000703424b4402010802010201061c546e78457874546578744b65794669656c6444657363726970746f7202020203010002531200000000020212000000001200000000090201080200020006056e62546f7002010902020201080612546e78496e64657844657363726970746f720614546e78436f6d704b657944657363726970746f72060a4e58245052494d41525902000203010002541200000000020106104b65796c65737342537461725472656512000000000802030100025512000000000703424b44020108020102010615546e784b65794669656c6444657363726970746f7202000203010002561200000000020212000000001200000000090201080200020006056e62546f700612546e78496e64657844657363726970746f720614546e78436f6d704b657944657363726970746f7206084f7264657249445802000203010002571200000000020106104b65796c65737342537461725472656512000000000902030100025812000000000703424b44020108020102010615546e784b65794669656c6444657363726970746f7202220203010002591200000000020212000000001200000000090201080200020006056e62546f700612546e78496e64657844657363726970746f720614546e78436f6d704b657944657363726970746f7206087374617465696478020002030100025a1200000000020106104b65796c65737342537461725472656512000000000902030100025b12000000000703424b44020108020102010615546e784b65794669656c6444657363726970746f72020502030100025c1200000000020212000000001200000000090201080200020006056e62546f700201020907114175746f496e6344657363726970746f72080715437573746f6d446573637344657363726970746f72090618546e78437573746f6d446573637344657363726970746f7202030100020212000000000201020007105461626c657344657363726970746f72090613546e785461626c657344657363726970746f72020301000203120000000002010200070943757272656e744944026107074e6578757344420000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005000000";
+
+/// A units data block whose used-slot map has a hole: slot 8 was deleted, and
+/// its residue still looks written to the unwritten-slot signature.
+pub const NX1_UNITS_HOLED_BLOCK: &str = "4e584448150000002810b50f766d656e00000000140000000000000009001100fffe0300000000000000000000000000000000000000000000000000d7006b006d002f004c00200045007400680061006e006f006c002000650071002e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000092d9cd4a6262d13f6b006d002f004c00200045000000000000000000000019001400ff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ff00000000000000000000d8004d0065006700610077006100740074002d005900650061007200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccde404d0057002d007900720000000000000000000000000002001800ff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ff00000000000000000000270141006c00620061006e00690061006e0020004c0065006b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002ceb9e3fe462853f41004c004c00000000000000000000000000000000000c000a0000004c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fe000000000000000000002801440061006e0069007300680020004b0072006f006e006500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000eba9d5575785c23f44004b004b00000000000000000000000000000000000c000b0000006b007200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fe000000000000000000002a015300770069007300730020004600720061006e0063000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000db6e826f9abef13f430048004600000000000000000000000000000000000c000d00000043004800460000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fe000000000000000000002b014e006f007200770065006700690061006e0020006b0072006f006e006500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000e9a2c37150aab73f4e004f004b00000000000000000000000000000000000c000e0000006b007200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fe000000000000000000002c0150006f006c0069007300680020005a006c006f00740079000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001c83047b0217d03f50004c004e00000000000000000000000000000000000c000f0000007a004201000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fe000000000000000000002d015200750073007300690061006e0020005200750062006c00650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000392eabfca725863f520055004200000000000000000000000000000000000c0010000000bd200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fe00000000000000000000000000007200670065006e00740069006e00650020005000650073006f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004832a474b424533f410052005300000000000000000000000000000000000c001300000024000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fe00000000000000000000310143006f006c006f006d006200690061006e0020005000650073006f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000cda2475076f5303f43004f005000000000000000000000000000000000000c001400000024000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fe0000000000000000000034014b0065006e00790061006e0020005300680069006c006c0069006e006700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b02c1c7a670a7f3f4b0045005300000000000000000000000000000000000c00170000004b005300680000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fe00000000000000000000350154006800610069002000420061006800740000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000021bfe46a572d9c3f540048004200000000000000000000000000000000000c00180000003f0e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fe0000000000000000000036014d0061006c00610079007300690061006e002000520069006e0067006700690074000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a278b6c33614cb3f4d0059005200000000000000000000000000000000000c001900000052004d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fe00000000000000000000370149006e0064006f006e0065007300690061006e0020005200750070006900610068000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fb102114c47f103f490044005200000000000000000000000000000000000c001a00000052007000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fe0000000000000000000038014d006f006e0067006f006c00690061006e0020005400f60067007200f600670000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000402baa2aa665333f4d004e005400000000000000000000000000000000000c001b000000ae200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fe00000000000000000000390153006f0075007400680020004b006f007200650061006e00200057006f006e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001f702eadd57483f4b0052005700000000000000000000000000000000000c001c000000a9200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fe000000000000000000003a01500061006b0069007300740061006e006900200052007500700065006500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000336d96c2b0796d3f50004b005200000000000000000000000000000000000c001d00000052007300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fe000000000000000000003b0156006900650074006e0061006d0065007300650020001101d31e6e006700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b55c5665521b053f56004e004400000000000000000000000000000000000c0014000000ab200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fe0000000000000000000006000000";
 
 /// The u16 word at 0x1e of one data block per table, which states how many
 /// records the table holds live: 31 years, 7 datanames, 1 region, 13 balance
@@ -1844,11 +1968,6 @@ pub const NX1_BRANCHES: &[(i32, i32, i16, i16, &str)] = &[
     (853, -8, 0, 49, "Electricity"),
     (854, 241, 0, 15, "Biogas"),
     (855, 3, 0, 10, "Sample GHG Reduction Target"),
-    (4, 0, 0, 0, ""),
-    (5, 0, 0, 0, ""),
-    (6, 0, 0, 0, ""),
-    (7, 0, 0, 0, ""),
-    (8, 0, 0, 0, ""),
 ];
 
 /// The first scenario data block, and the blocks its expressions live in.
@@ -1860,7 +1979,9 @@ pub const NX1_SCENARIO_BLOB_BLOCKS: &[usize] = &[5, 6, 11, 13, 19, 21, 25];
 
 /// The first of those blocks, which holds the memos the first rows point at.
 pub const NX1_SCENARIO_BLOB_BLOCK: &str = "4e584844050000009c187704766d656ebe0000000d000330002e003200000000000006000d0003350000000000000000000002000d0003310030003000300000000008000d0003350000000000000000000002000d0003300000000000000000000002000d0003310000000000000000000002000d0003320030003400300000000008000d000345004e0000000000000000040035000446006900630074006900740069006f007500730020006f00720020004500780061006d0070006c00650020004400610074006100000d0003310000000000000000000002000d0003380000000000000000000002001f00044000460030003000310028004000460030003100300028003300290029000000000d0003350030000000000000000004000d0003330035000000000000000004000d0003330037003900300000000008000d0003390035000000000000000004000d0003370030000000000000000004000d0003340030000000000000000004000d0003320035000000000000000004000d0003310035000000000000000004000d0003310033002e0037003500000a000d0003310032002e00350000000008000d0003310031002e0032003500000a000d0003310031000000000000000004001100044000460031003600340028003100290000210004400046003000300037002800a40032003000330030002c0039003000a4002900000d0003300000000000000000000002000d0003300000000000000000000002000d0003300000000000000000000002000d0003460061006c0073006500000a000d0003300000000000000000000002000d0003310000000000000000000002000d0003300000000000000000000002000d000340004600310037003200000a000d0003370030000000000000000004000d0003370030000000000000000004000d0003310000000000000000000002000d0003310000000000000000000002000d0003310000000000000000000002000d0003370030000000000000000004000d0003310030003000300000000008000d0003310030003000000000000006000d00033000000000000000000000020019000430002e003300340020002a00200031003600320030003000000d0003370030000000000000000004000d0003320030003000300000000008000d0003310000000000000000000002000d0003300000000000000000000002000d0003460061006c0073006500000a000d0003300000000000000000000002000d0003460061006c0073006500000a000d0003310030003000000000000006000d0003300000000000000000000002000d0003300000000000000000000002000f000444006f006c006c006100720073000b00000d0003330000000000000000000002004f00044000460030003000310028004000560028003500350036002c0032003000320037002c002d00390039002c002d00390039002c0030002c0030002c0030002c00300029002f0031003000300029000000000d000333003000000000000000000400210004400046003000300037002800a40032003000350030002c0034003500a4002900001500044000460030003000390028003100300030002900000d0003390035000000000000000004000d0003310030003000000000000006000d0003310030003000000000000006000d0003310030003000000000000006000d0003300000000000000000000002000d0003300000000000000000000002000d0003300000000000000000000002000d0003310000000000000000000002001500044000460030003000390028003100300030002900000d0003310030003000000000000006000d0003350030003000000000000006000d000330000000000000000000000200230004400046003000300037002800a40032003000350030002c00360030003000a40029000000001b000440004600300034003300280031002a0035002c002000310029000000000d0003300000000000000000000002000d0003310000000000000000000002001500044000460030003000390028003100300030002900000d0003340030003000000000000006000d000330000000000000000000000200230004400046003000300037002800a40032003000350030002c00350030003000a40029000000000d0003300000000000000000000002000d0003310000000000000000000002000d0003310030003000000000000006000d0003380030003000000000000006000d00033000000000000000000000020023000440004600300030003100280040004600300031003000280032002e003500290029000000000d0003300000000000000000000002000d0003310000000000000000000002000d0003330030000000000000000004000d000331002e003400340000000008000d000330000000000000000000000200230004400046003000300037002800a40032003000350030002c00200035003500a40029000000002500044000460030003000310028002d0040004600300031003000280030002e00350029002900000d0003300000000000000000000002000d0003310000000000000000000002001500044000460030003000390028003100300030002900000d0003360030000000000000000004000d0003300000000000000000000002002500044000460030003000310028002d0040004600300031003000280030002e00350029002900000d000332003500000000000000000400330004400046003000300037002800a40032003000330030002c00320038002c00200032003000350030002c0035003000a40029000000001500044000460030003000390028003100300030002900000d0003310030003000000000000006000d0003300000000000000000000002000d0003310000000000000000000002000d0003310030003000000000000006000d0003360039000000000000000004000d0003300000000000000000000002000d0003310030003000000000000006000d0003300000000000000000000002000d0003310000000000000000000002000d0003310030003000000000000006000d0003330033003500000000000006000d0003300000000000000000000002001f00044000460030003000310028004000460030003100300028003100290029000000000d0003300000000000000000000002000d0003310000000000000000000002000d0003320030000000000000000004000d0003310030000000000000000004000d0003310030003000000000000006000d0003300000000000000000000002000d0003310000000000000000000002000d0003310030003000000000000006000d0003310031003100000000000006000d0003310030003000000000000006000d0003300000000000000000000002000d0003310000000000000000000002000d0003330030000000000000000004000d000331003600360000000000000600230004400046003000300037002800a40032003000350030002c00200032003500a40029000000000d0003300000000000000000000002000d0003310000000000000000000002000d0003310035000000000000000004000d000335003900000000000000000400230004400046003000300037002800a40032003000350030002c00200035003500a40029000000000d0003300000000000000000000002000d0003310000000000000000000002001500044000460030003000390028003100300030002900000d0003350032003500000000000006000d0003310030003000000000000006000d0003300000000000000000000002000d0003310000000000000000000002000d0003330030000000000000000004000d000331003600360000000000000600230004400046003000300037002800a40032003000350030002c00200032003500a40029000000000d0003300000000000000000000002000d0003310000000000000000000002000d0003310035000000000000000004000d000335003900000000000000000400230004400046003000300037002800a40032003000350030002c00200035003500a40029000000000d0003300000000000000000000002000d0003310000000000000000000002001500044000460030003000390028003100300030002900000d0003350032003500000000000006000d0003300000000000000000000002000d0003300000000000000000000002000d0003300000000000000000000002000d0003460061006c0073006500000a000d0003300000000000000000000002000d0003310000000000000000000002000d0003300000000000000000000002000d000340004600310037003200000a000d0003370030000000000000000004000d0003370030000000000000000004000d0003320000000000000000000002000d0003320000000000000000000002000d0003320000000000000000000002000d0003370030000000000000000004000d0003320035003000300000000008000d0003330030000000000000000004000d00033000000000000000000000020019000430002e003400340020002a00200031003600320030003000000d0003370030000000000000000004000d0003310030003000300000000008000d0003340030000000000000000004000d0003330000000000000000000002000d0003300000000000000000000002000d0003460061006c0073006500000a000d000330000000000000000000000200390004400046003000300038002800a40032003000330030002c00200031003000300030002c00200032003000340030002c0020003000a4002900000d0003300000000000000000000002000d0003300000000000000000000002000d0003300000000000000000000002000d0003460061006c0073006500000a000d0003300000000000000000000002000d0003310000000000000000000002000d0003300000000000000000000002000d000340004600310037003200000a000d0003380030000000000000000004000d000338003000000000000000000400180000000000000000000000000000000000000000000000000000005c0e4c0e3c0e2c0e1c0e0c0efc0dec0ddc0dcc0dbc0d800d700d600d500d400d300d200d100df40ce40cd40cc40cb40ca40c940c840c740c640c540c440c340c240c140c040cf40be40bd40bbc0bac0b9c0b740b640b540b440b340b0c0bfc0aec0adc0acc0abc0aac0a940a840a740a4c0a3c0a2c0a1c0a0c0ae409d409c409b409a4099409840974096409540944093409240914090409e008d008c008b008a008900880087008600850084008300820080808d007c0079807880778076007500740071807f006e006d006c006b006a0067806680658064806380628060006f005e005c805b805a8058805600550054005300518050805f804e804d804c804b804a804980480045c044c04f803e803d403c403b403a403940384037403640354034403340318030803f802e802d802c802b802a8029802880278026802580248023802280218020802e401d001c001b001a001900180017001600150014001300120011001ec00dc00cc0094008400740064005400440034002400140000000000be0017000000";
-/// The last one, whose first record is a text longer than its allocation allows.
+/// The block whose first memo is a sentence: an allocation one byte past its text, which
+/// the `+3` record stride used to land inside the next record's header and the `+2` stride
+/// does not.
 pub const NX1_SCENARIO_LONG_BLOB_BLOCK: &str = "4e58484413000000d21d7704766d656e9800000042000400200064006900760069006400650064002000400043003100300030003000200074006f00740061006c00200070006f00700075006c006100740069006f006e00190005aa0000000d0000003d00000001000000130000007e00000000470004400046003000340031002800330032002c0032003000320037002c002d00390039002c002d00390039002c0030002c0030002c0030002c0030002c00200031002e00310029000000000d0003310000000000000000000002000d0003320035003000000000000006001f00044000460030003000310028004000460030003100300028003200290029000000000d0003310000000000000000000002001500044000460030003000390028003100300030002900000d0003310000000000000000000002000d0003330033002e0033000000000800210004400046003000300037002800a40032003000350030002c0037003500a4002900000d0003310000000000000000000002001500044000460030003000390028003100300030002900000d0003310000000000000000000002000d0003320030000000000000000004000d0003310000000000000000000002000d0003380035000000000000000004000d0003310000000000000000000002001500044000460030003000390028003100300030002900000d0003310000000000000000000002000d0003310030003000000000000006000d0003340000000000000000000002002300044000460030003000310028002d004000460030003100300028002e003500290029000000000d0003310000000000000000000002000d0003310030003000000000000006000d0003330000000000000000000002002300044000460030003000310028002d004000460030003100300028002e003500290029000000000d0003310000000000000000000002001500044000460030003000390028003100300030002900004300044000560028003600300036002c0032003000340030002c002d00390039002c002d00390039002c0030002c0030002c0030002c00300029002a0031002e00320035000000002300044000460030003000310028002d004000460030003100300028002e003500290029000000000d0003310000000000000000000002000d0003320030000000000000000004000d000330002e003100000000000006002300044000460030003000310028002d004000460030003100300028002e003500290029000000000d0003310000000000000000000002000d00033100300030000000000000060015000431002f002800310032002a0032002e0035002900002100044000460030003000310028002d00400046003000310030002800310029002900000d0003330030003000000000000006000d0003330030003000000000000006000d000340004600320037003000000a00230004400046003000300037002800a40032003000350030002c00340030003000a4002900000000230004400046003000300037002800a40032003000350030002c00340030003000a40029000000000d00033100000000000000000000020015000440004600300030003900280031003000300029000011000431002f00280033002a00340030002900002500044000460030003000310028002d0040004600300031003000280030002e00350029002900000d0003310000000000000000000002000d0003310030003000000000000006000d0004320030002f00310030003000002100044000460030003000310028002d00400046003000310030002800310029002900000d0003350030000000000000000004000d0003310000000000000000000002000d0003310030003000000000000006001500044000460030003000390028003100300030002900000d0003350030000000000000000004000d0003310000000000000000000002000d000336003500000000000000000400210004400046003000300037002800a40032003000350030002c0031003000a400290000210004400046003000300037002800a40032003000350030002c0037003500a4002900001500044000460030003000390028003100300030002900000d0003310000000000000000000002000d000338003000000000000000000400210004400046003000300037002800a40032003000350030002c0032003500a400290000230004400046003000300037002800a40032003000350030002c00200038003500a40029000000000d0003310030003000000000000006000d0003320030000000000000000004001500044000460030003000390028003100300030002900003700044000560028003500350035002c003800300034002c002d00390039002c002d00390039002c0030002c0030002c0030002c00300029000000000d0003310030003000000000000006000d0003340037000000000000000004000d0003300000000000000000000002002f0004400046003000300037002800a40032003000330030002c0035002c0032003000350030002c0032003000a40029000000003700044000560028003500350035002c003800300034002c002d00390039002c002d00390039002c0030002c0030002c0030002c00300029000000000d0003310030003000000000000006000d0003310030003000000000000006000d000340004600310036003900000a000d0004400043003100300030003000000d0003360000000000000000000002000d0003390035000000000000000004000d0003310030003000000000000006000d000334002e00310036003600000a003700044000560028003600330036002c003800300034002c002d00390039002c002d00390039002c0030002c0030002c0030002c00300029000000000d0003310030003000000000000006000d0003330030000000000000000004000d0003330030000000000000000004000d0003330030000000000000000004000d000340004600320037003000000a00210004400046003000300037002800a40032003000350030002c0035003000a400290000210004400046003000300037002800a40032003000350030002c0035003000a400290000210004400046003000300037002800a40032003000350030002c0035003000a4002900000d0003330030003000000000000006000d0003330030003000000000000006000d000340004600320037003000000a00230004400046003000300037002800a40032003000350030002c00340030003000a4002900000000230004400046003000300037002800a40032003000350030002c00340030003000a40029000000000d0003330030003000000000000006000d0003330030003000000000000006000d000340004600320037003000000a00230004400046003000300037002800a40032003000350030002c00340030003000a4002900000000230004400046003000300037002800a40032003000350030002c00340030003000a40029000000000d0003310030003000000000000006000d0003360000000000000000000002000d0003380030000000000000000004000d0003310030003000000000000006000d000333002e00340031000000000800370004400046003000300037002800a40032003000330030002c002000310034002c00200032003000350030002c00200032003300a40029000000003700044000560028003500370035002c003800300034002c002d00390039002c002d00390039002c0030002c0030002c0030002c00300029000000000d0003310030003000000000000006000d0003330030000000000000000004000d000340004600310037003200000a000d0003300000000000000000000002000d0003330035000000000000000004000d0003380030003000000000000006000d0003320035000000000000000004000d0003320030003000000000000006000d0003330000000000000000000002000d0003540072007500650000000008000d0003300000000000000000000002000d0003330000000000000000000002000d00032d0031000000000000000004000d0003300000000000000000000002003700044000560028003600370033002c003800300034002c002d00390039002c002d00390039002c0030002c0030002c0030002c00300029000000000d0003310030003000000000000006000d000340004600310036003500000a000d000340004600320037003000000a0019000440004600300034003300280036002a0035002c0033002900000d0003310000000000000000000002000d0003300000000000000000000002003d0004400056002800340030002c0032003000340030002c002d00390039002c002d00390039002c0030002c0030002c0030002c00300029002a002e00330000410004400046003000300037002800a40032003000320032002c0030002c0032003000320037002c00340030002c00200032003000350030002c0037003500a4002900001d00044000460030003400330028003100300030002c002000310030002900000d0003310000000000000000000002000d0003300000000000000000000002000d000333003800300000000000000600310004400046003000300037002800a40032003000320034002c0030002c0032003000330035002c00310030003000a4002900001b00044000460030003400330028003100300030002c003100300029000000000d0003310000000000000000000002000d0003300000000000000000000002000d0003330038003000000000000006001b000440004600300034003300280030002e0031002c003100350029000000000d0003310000000000000000000002000d0003300000000000000000000002000d000330002e003200390000000008003d0004400046003000300037002800a40032003000320032002c0030002c0032003000320037002c0037002c0032003000350030002c0037003000a4002900000d000340004600310037003200000a000d0003350035000000000000000004000d0003300000000000000000000002000d0003380030000000000000000004000d0003350030003000000000000006000d000331003000000000000000000400240000000000000000000000000000000000000000000000000000000000000000000000000000009c0e8c0e7c0e6c0e5c0e4c0e3c0efc0dec0ddc0dcc0dac0d9c0d8c0d7c0d5c0d280d180d080df80cd80c940c540c440c340c180c080cf80be80bac0b9c0b8c0b7c0b6c0b5c0b4c0b3c0b2c0b1c0b0c0bfc0aec0adc0acc0a900a540a440a340a240a140a040adc09b409a409940984095c093409240914090409e008bc089808880878086808580848080c08fc07ec07dc07cc07bc07ac079c078c0750071c070c07fc06ec06b00698068806780650062c061c060c06f405d005ac059c058c057c05640554054405340510050005f004e004b804a4048c047c0454042c041c040c04fc03d803c003b003a00378036803580348032003d802c002b00288027802680258023002200210020002e801d801c801b801a8019801800170014c013c012c0114010401e000d000c00074005800140000000000980017000000";
 
 /// Rows as (branch, variable, region, scenario, memo index, memo block).

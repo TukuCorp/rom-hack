@@ -6,10 +6,10 @@
 //!
 //! What it is built from is worth stating, because it decides how much a result can be trusted.
 //! Reading the table needs the dictionary to place every field, the record size to be derived, and
-//! the live slots to be told from the ones nothing was ever written to, and that last rule
-//! under-filters: five of the 439 rows of the shipped area structure table are slots that were
-//! written and then freed, and they come back as nameless branches. The test says so rather than
-//! hiding it, and it checks the tree on the rows that do have names.
+//! the live slots to be told from the free ones. The last comes from each block's used-slot map,
+//! which leaves out the slots that were written and then freed: the shipped structure table reads
+//! as 434 branches, every one named, where the signature of an unwritten slot let five freed slots
+//! through as nameless branches.
 
 use crate::records::{self, Field, Value};
 
@@ -36,6 +36,9 @@ pub fn branches_with(fields: &[Field], bytes: &[u8]) -> Vec<Branch> {
     let Some(size) = records::record_size(fields) else {
         return Vec::new();
     };
+    let Some((base, _)) = records::geometry(size) else {
+        return Vec::new();
+    };
     let Some(id) = records::index_of(fields, "BranchID") else {
         return Vec::new();
     };
@@ -57,7 +60,7 @@ pub fn branches_with(fields: &[Field], bytes: &[u8]) -> Vec<Branch> {
         let Some(whole) = bytes.get(block..block + records::BLOCK) else {
             continue;
         };
-        for row in records::live_records(whole, records::HEADER, fields, size) {
+        for row in records::live_records(whole, base, fields, size) {
             let (Some(Value::Int(id)), Some(Value::Int(parent))) = (row.get(id), row.get(parent))
             else {
                 continue;
@@ -87,8 +90,9 @@ pub fn branches_with(fields: &[Field], bytes: &[u8]) -> Vec<Branch> {
 /// expression is not text in the record: the field is a blob reference of two numbers, and the
 /// second is the number of a data block in the same file -- the seven blocks `scenariodata.nx1`
 /// refers to are exactly its seven `NXHD` blocks -- while the first is the memo position within
-/// that block. Reading the memo itself means reading the blob heap, which this port does not do;
-/// the keys are read so the arithmetic has something to attach to once it does.
+/// that block. Reading the memo itself means reading the blob heap, which `crate::blobs` does:
+/// `blobs::expression_text` resolves one of these rows to the text it points at, or to nothing when
+/// the memo is not text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScenarioRow {
     pub branch: i64,
@@ -109,6 +113,9 @@ pub fn scenarios(bytes: &[u8]) -> Vec<ScenarioRow> {
 /// Every row of a scenario table, from a dictionary and table read apart.
 pub fn scenarios_with(fields: &[Field], bytes: &[u8]) -> Vec<ScenarioRow> {
     let Some(size) = records::record_size(fields) else {
+        return Vec::new();
+    };
+    let Some((base, _)) = records::geometry(size) else {
         return Vec::new();
     };
     let Some(branch) = records::index_of(fields, "BranchID") else {
@@ -132,7 +139,7 @@ pub fn scenarios_with(fields: &[Field], bytes: &[u8]) -> Vec<ScenarioRow> {
         let Some(whole) = bytes.get(block..block + records::BLOCK) else {
             continue;
         };
-        for row in records::live_records(whole, records::HEADER, fields, size) {
+        for row in records::live_records(whole, base, fields, size) {
             let (Some(branch), Some(variable)) = (integer(&row, branch), integer(&row, variable))
             else {
                 continue;

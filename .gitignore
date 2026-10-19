@@ -66,3 +66,4 @@ _probes/
 leap-rs/target/
 __pycache__/
 .commit-msg.tmp
+leap-rs/target-*/

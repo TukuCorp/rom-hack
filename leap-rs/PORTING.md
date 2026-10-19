@@ -14,7 +14,8 @@ What this crate actually is: the pipeline (oracle capture, port, parity test), t
 calendar functions, the `.leap` container validation chain behind `TestLEAP`, and a reader
 for the model arithmetic the area tables store, together with the registry that says what each
 function code in it is and the record reader that puts a number at a named field. That is four
-units of work against 168,840 functions. A passing `cargo test` means those pieces agree with
+units of work against 168,840 functions -- six, with the page-size and stride rules, the blob-heap
+walk and the first evaluated subset. A passing `cargo test` means those pieces agree with
 the original over what they have been measured on; it does not mean LEAP has been ported.
 
 ## Rules the port follows
@@ -41,7 +42,7 @@ Current corpus: **310** `IS_LEAP_YEAR_VECTORS`, **487** `DAY_NUMBER_VECTORS`, **
 `CONTAINER_VECTORS`, **12** `DEFLATE_VECTORS` and **14** `RUN_VECTORS`. The last three
 are captured a different way: they run the real `testleap.exe` and store the exact input
 bytes, the exit code, and the whole of stdout for each of the four output modes, CRLF
-included. The container part alone is 127 archives times four modes, every one of them
+included. The container part alone is 132 inputs times four modes, every one of them
 compared byte for byte. Stdout is kept as bytes rather than text, because text mode would
 translate CRLF to LF and quietly weaken the claim.
 
@@ -339,8 +340,8 @@ base misaligns every string, which is how the 60 was found -- and datanames and 
 exactly from there. But the four measured tables put their first record at 0x24 (scenarios),
 0x48 (staticdata), 0x8c (balcat) and 0x2c (regions), and no rule is established for that
 base -- each table's record area does end at 4092 in whole strides. What is established is the identity every proven table agrees to, and which the layout now carries as a capacity column:
-base + capacity * stride == 4092. The block ends with four spare bytes at 4092 and the records tile back from there in whole strides, so a wrong base, a wrong stride or a wrong capacity breaks the other two -- years 60 + 336*12, datanames 60 + 7*576, regions 44 + 11*368, scenarios 36 + 13*312,
-balcat 140 + 13*304, staticdata 72 + 201*20, all 4092. Where the capacity comes from when a table is not exactly full is the still-open half: the freed area counts years at 336 through its free-slot chain, the full tables at their live count, and the rest needs the block head unpacked.
+base + capacity * stride == 4092. The block ends with four spare bytes at 4092 and the records tile back from there in whole strides, so a wrong base, a wrong stride or a wrong capacity breaks the other two -- years 84 + 334*12, datanames 60 + 7*576, regions 44 + 11*368, scenarios 36 + 13*312,
+balcat 140 + 13*304, staticdata 72 + 201*20, all 4092. Where the capacity comes from is now settled; see the correction below.
 The header
 is more than a fixed 60 bytes: word 0x1e states the live record count (years 31, balcat 13,
 scenarios 9, regions 1, staticdata 201, all confirmed against what the records themselves
@@ -351,15 +352,16 @@ the freed ones are the regions the area once had, and their RegionIDs 3 through 
 in the first field of their slots. The reader decodes them as rows and the test names that
 behaviour. The live count the header states is now read -- header_live_count() returns the
 u16 at 0x1e, and the oracle carries the block and the count for six tables so the assertion
-runs on vendor bytes -- but the reader still filters slots by the write signature rather
-than by that count or by the bitmap, which is not consumed yet. A sweep of the shipped
+runs on vendor bytes -- and the reader now filters slots by the bitmap; see the correction
+below. A sweep of the shipped
 area's own first-block headers backs the reading across every readable table with rows: for the
 tables written exactly full the stated count equals the layout's capacity column (balcat
 13, datanames 7, staticdata 201, units 18, scenariodata 168 and the rest), and for
-the partially filled ones it does not (years states 31 live of 336, regions 1 of 11,
+the partially filled ones it does not (years states 31 live of 334, regions 1 of 11,
 scenarios 9 of 13) -- the two families commute, and the test holds both.
 
-What the reader does instead is skip slots nothing was ever written to, which is a signature
+What the reader did before the bitmap was read was skip slots nothing was ever written to -- it
+still does, for the six tables whose map cannot account for their count -- which is a signature
 rather than the file's answer: a slot is unwritten when every byte is zero, or when its first two
 bytes carry its own slot number and the rest is zero, which is what a fresh block leaves behind.
 
@@ -383,18 +385,231 @@ now: a gap of at most two bytes in front of a short or null string is read rathe
 fuels.nx1's 44-field dictionary into the layout table (55 tables with data, 81 layouts overall). areadata and tedtechdata still hold wider breaks the walk
 will not guess around, and the three big-page tables remain a different storage class.
 
+### Correction, 2026-10-19: the page seam, the block geometry and the slot map
+
+Three of the explanations above were wrong, and the code that rested on them has been replaced.
+
+**The page seam.** A dictionary page is a 32-byte lead (`NXSH`, the page number, `DICT`, two
+words), the stream, and a 4-byte trailer. The earlier seam helper removed 24 bytes of lead and left
+the trailer, so twelve bytes of page framing stayed in the stream. Those twelve bytes are the whole
+of what was taken for structure: the "trio" of properties after the placement marker in tedtechdata,
+the broken anchor that made areadata need a walk from the descriptor's tail, the "class name inside
+stream data" in fuels, and fuels' "two-byte slack" before PluginGUID. The slack was a field: the
+seam falls inside the name `ImageIn|dex`, so the descriptor was rejected and its Int16 at 893 was
+lost. Read through the seam, every dictionary in the shipped area tiles with no gap, the slack
+exception is gone from the tiling rule, the trio and the tail walk are gone from the tool, and
+fuels (45 fields), areadata and tedtechdata all read: 83 layouts. The seam rule is in
+`records::dictionary_stream` and the tool's `dictionary_stream`, and `tests/nx1_area_sweep.rs`
+runs the Rust reader over all 86 tables in the vendor zip. Until then it had only ever run on four
+fixture dictionaries, so the earlier "82 tables" was a count of the Python tool's output.
+
+**The block geometry.** A data block is a 0x20-byte header, a used-slot bitmap of one bit per
+slot, and the records tiling back from 4092. The capacity is the most records that leave room for
+the header and their bitmap, and the base follows from it (`records::geometry`). That reproduces
+every base measured by hand -- staticdata 0x48, balcat 0x8c, scenarios 0x24, regions 0x2c,
+datanames 0x3c -- and moves every small-stride table off the assumed 60. years sits at 0x54 with
+334 slots, not at 0x3c with 336. Its two "slots" at 0x3c were the zero tail of the bitmap. The
+free-slot numbers that seemed to confirm the 0x3c indexing are two more than the slot they sit in
+at 0x54, which fits a free-list link better than a slot index; that is not settled. deviceparents at
+0x3c even read its own bitmap (`ffffff07`) as record 0. writtenresults is measured at a stride of
+12, the engine formula's answer, where the 4032-divisor rule gave 9.
+
+**The slot map.** Bit k of the bitmap marks slot k. Across all 2190 data blocks of the placed
+tables, the marked slots number exactly the count the header states, except in six tables
+(RegressionResults, balcat2-4, refs, timeslices) whose stated count exceeds the derived capacity,
+which says their record size is wrong. `records::slot_map` returns the map when it accounts for
+the stated count, and `live_records` reads through it, falling back to the signature only where
+it does not. The structure table now reads as 434 branches, all named: the five nameless rows were
+freed slots. regions reads as its one live region, and a units block whose record 8 (Argentine
+Peso) was deleted, its first four bytes overwritten but the rest intact, loses exactly that record.
+
 Mutations for this suite, all caught: looking for the declared length strictly after the type
 name, returning a layout that does not tile, accepting any string after the class name as a field
 name, reading the placement from the wrong side of its anchor, treating nothing as unwritten,
 deciding that on the all-zero case alone, and comparing a slot number against the next slot
 instead of its own.
 
+### Correction, 2026-10-19 (second pass): the record size, the page size and the memo stride
+
+Four of the readings above were wrong, and one of the corrections below reverses a claim the
+previous correction made.
+
+**The record size is the engine's rule, not the 4032-divisor rule.** `FUN_012ec9e0` computes a
+record as its summed field sizes rounded up to four bytes plus a four-byte null-bitmap word per
+thirty-two fields, which is what `records::record_size` now returns. The divisor rule it replaces
+was refuted by the blocks themselves: RegressionResults' records sit 40 apart where it said 42,
+writtenresults' 12 where it said 9, balcat2-4's 300 where it said 336 and timeslices' 768 where it
+said 1008, and none of those divides 4032. The rule is right for most of the area, and for the
+twenty-eight tables where it is not, `records::MEASURED_STRIDE` carries the stride the block proves:
+the pitch of consecutive records' wide strings (timeslices' names 0x300 apart, tags' and
+summaryreports' 0x600, fuels' 0x500, taggroups' 0x540, scenariotemplate's 0x1f0), the free-list
+number the free slots hold (areadata 800, variabledata 3072), or the count the header states.
+Writtenresults' measured stride is gone from the table because the rule explains it.
+
+**The page size is the file's, not 4096.** Five tables state 0x1ffc at +20: PluginProperties,
+Plugins, emissionmappings, refs and uservardata. Their pages are 8192 bytes, their records tile
+back from 8188, and `records::page_size`, `geometry_in` and `data_blocks_in` take the page the file
+states. The three of them that had no layout now place (PluginProperties 4768, Plugins 5604,
+emissionmappings 2592), and refs and uservardata read at measured strides of 3584 and 6144, pinned
+by their own fields' positions. Every table in the area places now, and the sweep covers 2191 data
+blocks with the slot map accounting for every one: the six tables the previous correction named as
+exceptions are gone.
+
+**The memo stride is `round_up_to_four(allocation + 2)`, not `+3`.** The wider stride landed the
+fifth blob block's second record on the zeros in the middle of a real header, so the walk stopped
+one memo into a block that states 152. At the narrower stride the record ends at 0x58, where that
+header sits -- allocation 25, kind 5, one raw character -- and all seven blocks of `scenariodata.nx1`
+read to exactly the counts they state. The 66-allocation record the old note measured as 72 bytes
+apart is the one that settles it; every other allocation in the file is congruent mod 4 in a way
+that hides the difference.
+
+**The free-list number is the slot's own number plus two**, not the slot number: the years block's
+slot 31 holds 33, its slot 100 holds 102 and its last slot holds zero, and areadata's slots 1, 2 and
+3 hold 3, 4 and 5. `slot_is_unwritten` had the number and the sentence backwards; against the
+shipped area the corrected signature agrees with the header count in 2099 of 2191 blocks where the
+old one managed 2062, and the units block freed from the middle stays the case it cannot see.
+
+**And the arithmetic has its first values.** `src/eval.rs` evaluates a tree where the port can stand
+behind it: the numbers the file spells, `+ - * /` with the parser's precedence, and `@F010`, whose
+registry entry is `%`/`_pc` and whose decompiled body `FUN_01bcf430` is `param_1 / 100.0`. The
+codes that evaluate through the area's variables, years and series -- Growth (`_gr`), Interp (`_in`),
+Step (`_sp`), GrowthAs (`_gras`, `_grasel`) and AnnualizedCost -- come back `None`, because their
+bodies read a model this port cannot yet resolve. Decoding also got two guards: a field narrower
+than its type reads as `Unset` rather than panicking, and wide strings decode as UTF-16, so a
+surrogate pair comes back as the one character it is.
+
+**The wider stride has no rule in the dictionary (stride follow-up, 2026-10-19).** A full round
+against the decompiled engine and the vendor bytes found nothing that derives the twenty-eight
+measured strides from the dictionaries the files carry. `FUN_012ec9e0` has one record-size rule:
+both branches derive from the field list the file carries now, and the `+0x58` value it reads back
+is a cached recompute (`FUN_012ec2e0`), not a second rule. The stream states no stored length, the
+file and block headers carry no stride-shaped field, `OriginalFieldCount` equals the placed field
+count wherever the file states it, and the padding past the rule's end is all zeros in every slot
+of every data block -- so the extra is not fields the dictionary dropped. Whatever set the wider
+strides did so uniformly across every block of each table; the blocks' bytes are the only record
+of it. The measurements stand, re-documented without the wider-dictionary story, and two new area
+sweep tests pin the refutation.
+
+**The block-header word at 0x1c is the free-list head (stride round 3, 2026-10-19).** The u16
+beside the live count is one-based -- the free slot plus one, zero when the block is full -- and
+each free slot's first u16 links the next, ending at zero. Walking the chain from the head visits
+exactly the slots the used-slot map leaves free in all 2191 data blocks (2105 full blocks hold a
+zero head; the other 86 chains land on precisely their free sets), which also explains the
+unwritten-slot signature: a never-allocated slot's `index + 2` is the link to the next slot, and
+a slot freed from a full block holds the null the head replaced. `records::free_list_head` reads
+it, and a new area-sweep test walks every chain. No stride source came out of the same round: the
+dictionary engine was traced further (`FUN_012ec9e0`'s cache write `FUN_012ec2e0` has no direct
+caller in this binary; `FUN_012eb790`/`FUN_012ed8a0` show the `+0x40` flag selecting cached
+structures), the stride as u16/u32 appears in no dictionary region except where rule tables carry
+the same value by coincidence, the property census shows no length-like names, and the file
+headers are identical across measured and rule tables -- so the wider stride is not stored in the
+file either. What remains is the creation-time hypothesis the bytes can neither confirm nor rule
+out: blocks written when the fields were wider, narrowed by a later restructure. The measurements
+stand, with the traced function addresses recorded in the round-3 report.
+
+**Blob fields beyond the scenario memos (blobs round, 2026-10-19).** Twenty-nine tables carry blob, memo or graphic fields; eight hold no data blocks at all, eight more hold rows whose blob fields are all zero, and the remaining thirteen files carry the heap: 550 `NXHD` blocks holding 5,505 memos. The in-record value is an eight-byte reference whose low word is the one-based memo position and whose high word is the heap block page number in the same file, and every one of the 4,547 non-zero references the shipped area holds resolves. The `round_up_to_four(allocation + 2)` framing the scenario table established holds for every one of the 550 blocks with no shortfall, so no fix was needed and the sweep pins it. Kind bytes sort the memos: 3 is a short text, 4 a long text, 0 an empty memo (three area-wide, twelve zero bytes each), and 5 a binary array of little-endian `u32` triples plus a NUL byte, 449 of them, most often one triple in thirteen bytes. The text is narrow or wide per memo rather than per field, so `blobs::Memo::text` reads by content: wide when the units until the terminator are ASCII, narrow when the bytes are, nothing otherwise. Two scenario expressions and a share of the notes point at binary memos, and those resolve as binary rather than as text. The triples are not decoded: they are not text, not a deflate stream, carry no image magic, and no row or parallel text names their numbers.
+
+
+**Memo encoding and the kind-5 directories (blobs round 3, 2026-10-19).** The content
+guess is gone. Kind 3 is a counted short string: the trailing two bytes count the text,
+odd for that many narrow bytes and even for half as many wide units, with zero padding
+between the text and the count, always thirteen payload bytes. The count, not the content,
+decides the width: a five-unit text (`Water`, `False`, `13.75`) has no NUL unit inside its
+record, which is where guessing truncated it to one unit. Kind 4 is terminated text in the
+width its field states -- narrow for `nxtBlob`/`nxtBlobMemo`, wide for `nxtBlobWideMemo` --
+and every one of the 4,547 live references agrees. The wide set past ASCII is exactly the
+argument separator the scenario expressions spell (`U+00A4`, sixty memos such as
+`@F007(2030,90)` with U+00A4 separators) and three trailing control bytes the area carries as dirt (`0x0b` once,
+`0x0e` three times, `0x0f` once, as in `Dollars`, `Ammonia`, `Methane`). The stated rule
+matches the old guess on 5,363 memos; the 142 it overrides are the 50 five-unit counted
+texts, 64 live wide-past-ASCII texts (plus 2 dead), and 26 binary triples opening with
+whitespace. Superseded memos keep kind and allocation with the first payload byte zeroed:
+no live row points at the 222 that carry the zero (plus 3 empty kind-0 memos every live
+row still reads as empty), and skipping the byte reads the text they held, so the walk keeps
+working on the intact allocation. Kind 5 is a segment directory -- op, segment, text offset
+-- and every one of the 950 offsets splits as chunk times 4059 (the longest memo content)
+plus a remainder: plain (1) and current (2) entries dominate live directories, higher ops sit
+in superseded ones, segment numbers run per table in creation order, and 188 of 192 live
+op-2 entries shadow a dead op-1 entry with the same numbers. The two Current Accounts
+expression rows the brief names hold `(2,19,126)` and `(2,25,252)` beside Baseline siblings
+that read `@F041(32,2027,...)` and `@F037(32,2027,...)` and dead shadows with a dropped entry
+each. Offsets past any row or field id, op numbers past the table count, and triples that
+match neither own branch/variable/scenario rule out the link-table readings; the decompiled
+binary carries no blob-segment reader (no `NXHD` string in its 344 chunks), so the rule is
+proved on the vendor bytes instead. Scenario-effects blocks 157 and 161 hold dead max-size
+narrow memos, mirrored in tedeffects: hex digits and line breaks decoding to wide map labels
+(`North America`, `Central America`), and hex plus an RTF tail citing a soil map. No renderer.
+**The resolver and the growth family (resolver round, 2026-10-19).** `src/resolve.rs`
+addresses what the remaining functions read. The years are the minimum and maximum of the
+year list the years table holds -- 2020 to 2050 in the shipped area, the base year the area
+settings state through to the year LEAP stops at. A scenario expression is a scenario-table row
+resolved through `heap`: the row's memo block is the number of a page in the same file, and the
+memo at that position is the text. Constants come out of the constants table (17 rows, the
+molecular weights their names say, so `@C0004/@C0003` in the stored sulfur expression is
+64.063/32.064). The discount rate is `areadata.DiscountRate` (5.0, read as 0.05), with the caveat
+that the same row is otherwise a template default -- BaseYear 2000 and EndYear 2030 against the
+years table's 2020 to 2050, LastVariableID 27 against the settings' 2327 -- so the rate is what the
+area states and nothing more is claimed for it. A `@V` reference with -99 for the region or
+scenario reads the current one, and a scenario with no row of its own inherits its parent's,
+following the scenarios table's parent links. `src/eval.rs` now values Growth (`_gr` at 0x1be7c10),
+Interp (`_in` at 0x1c06d80), Step (`_sp` at 0x1c014f0), GrowthAs (`_gras` at 0x1bbe700, `_grasel`
+at 0x1bbcac0) and AnnualizedCost (`_annualizedcostsimple` at 0x1bbca50) through `FUN_01be8250`
+and `FUN_01bbc620`: Growth compounds the base-year value year by year -- `V(base) = base`,
+`V(y) = V(y-1) * (1+r)` -- taking the base from the first expression an ancestor scenario states
+for the same branch and variable; Interp lerps between the series points with flat ends and Step
+holds each value until the next year's point; GrowthAs scales the own base by
+`(ref_now/ref_base)^elasticity`, reading zero when the reference starts at zero or moves against
+itself; AnnualizedCost spreads the cost at the discount rate through the capital recovery factor.
+Golden tests evaluate real stored expressions against hand arithmetic: (2,2027) at 3% from the base
+8, (32,2027) at the inherited 3.5% from the base 3, the (48,2027) and (244,804) Interp series, the
+(65,2145), (582,2027) and (842,2145) Step series, the (40,776), (676,776) and (677,776) annualized
+costs, and (579,2027) GrowthAs following (294,2027). Two rows refuse on purpose: (595,2027)
+GrowthAs, whose Current Accounts memo is one stray byte rather than a base value, and the two rows
+with explicit selectors outside the area (region 0, scenario -1) come back `None`. Two differences
+from the engine are known: Interp and Step read only the series points, with no base-year override,
+so their goldens stay off the base year; and the Growth base comes from scenario inheritance, not
+from a separately stored model value. One correction to the expression corpus on the way: the 44
+captured expressions miss 19 live series literals, because the capture tool only sees NUL-terminated
+memos while the heap walk reads unterminated ones too -- all 35 distinct series literals the file
+holds parse under the typed grammar.
+**The evaluator round (round 3, 2026-10-19).** One entry point: `eval::text_in_context` values a
+stored expression's text for a branch, variable, region, scenario and year, parsing it and reading
+it through `at`; the context-free `text` path is unchanged for what needs no area. The base-year
+override for Interp and Step is ported, superseding the round-2 note's no-override caveat. Both
+entries reach `FUN_01c203c0` through `FUN_01c25af0` with a zero trailing flag (Step mode 0 at
+0x1c014f0, Interp mode 1 at 0x1c06d80), and on that path the worker inserts the Current Accounts
+value at the base year with the sorted insert `FUN_01bfc500` whenever the first series year is
+past it -- so the base year reads Current Accounts and earlier years lerp or step from it, while
+a series that already reaches the base year rules on its own. The 0x7bc/0x7c0/0x7c8 globals read as
+base, end and first-scenario year where the constants table registers them by name. Goldens now
+cover the base year: (48,2027) headed by 25 reads 27.1 in 2027, the single-point (244,804) headed
+by 300 lerps to 970/3, Step (65,2145) headed by 2500 holds it until 2030, (582,2027) headed by 400
+reads it in 2020, (842,2145) with no Current Accounts row stays series-only, and the 2010-2020
+(829,991) history needs no heading. Three codes joined the ported set: Million (`_million` at
+0x1bcf370, param times 10^6) and Billion (`_billion` at 0x1bcf3b0, param times 10^9), both pure
+through the integer power `FUN_0053a590`, and BaselineValue (`_blvl` at 0x1bd1be0), which walks to the
+scenario directly inheriting Current Accounts per `FUN_01bd1c70` -- falling back to Current Accounts
+in a baseline scenario and refusing in Current Accounts itself -- then reads the own
+branch/variable there; (583,2040,s10) at 2035 is 0.02 times 0.85. Unsettled, each with its reason:
+`@F184`/`@F176`/`@F185` are fuel properties needing a branch-to-fuel join the port does not carry
+(26/21/21 expressions), `@F009` Remainder subtracts sibling-branch sums (`FUN_01bdeaf0`) needing the
+branch hierarchy (18), `@F164` YearlyShape reads shape profiles (2). At 2027, 861 of the area's
+1,009 stored expressions evaluate: 69 memos are not arithmetic (37 names and settings, 29 padded
+property refs, 3 trailing notes), 67 hold unsettled codes, and 12 are unresolvable (a junk-byte
+GrowthAs base, a Growth with no Current Accounts row, an unknown `@C1000`, references to rows the
+area never states, selectors outside the area). The 5% discount rate stands as read: the area-load
+path writes stored setting 0x895 into the global at 0x698, the code-43 wrapper passes that global
+over 100 with other-cost zero (`FUN_01bbca50`), and the only other writer is the COM
+`LEAP.DiscountRate` setter -- a runtime override, not a stored source. The scenarios table carries
+no rate column, the GAMS per-technology-region declaration is optimizer export rather than
+evaluator input, and `sysinfo.txt` independently states Base Year 2020. No code changed for the
+rate; the resolver note's staleness caveat stands.
 ## The model: the branch tree
 
 `src/model.rs` is the first module here that reads a model rather than a file format. A LEAP area's
 structure table lists every branch of the tree with its parent, its level, its kind and its name,
 and that tree is what the arithmetic in the scenario table attaches to. In the shipped area it is
-439 rows, 434 of them named, and the top level comes out as the eight modules the area is made of:
+434 branches, and the top level comes out as the eight modules the area is made of:
 Load Shapes, Land Areas, Effects, Indicators, Non Energy, Stock Changes, Statistical Differences
 and Freedonia itself.
 
@@ -404,9 +619,10 @@ not a branch; and following the links from any branch reaches that root without 
 Those are claims about the vendor's own data, and a wrong offset, a wrong record size or a wrong
 slot rule would break them.
 
-Two things to know before believing the count. The five nameless rows are slots that were written
-and then freed -- ids 4 to 8, no name, parent zero -- which the unwritten-slot rule cannot tell
-apart from written rows because they still carry bytes. And the level field is not the depth in
+One thing to know before believing the count. Before the slot map was read, five nameless rows
+came through -- ids 4 to 8, no name, parent zero -- which were freed slots the unwritten-slot rule
+could not tell apart from written ones because they still carry bytes. The map leaves them out.
+The level field is not the depth in
 the tree: Demand is level 0 and its child Household is level 2, so the module reads the field and
 does not interpret it.
 
@@ -554,11 +770,10 @@ fails with NexusDB: AliasName or AliasPath not set.
 - The remaining 168,838 functions of `leap.exe`.
 - The VCL user interface, the TMS `TAdv*` components and TeeChart. The port is
   headless by design.
-- Turning the tables into typed rows. `nx1::dictionary` reads a table schema,
-  `nx1::wide_strings` reads the text out of the record area, and both are tested against the
-  vendor area. `expr` parses the arithmetic those records hold. Placing a value at a named
-  field means interpreting the dictionary layout, and giving an expression a number means an
-  evaluator and a resolver; those are the next steps rather than finished ones.
+- Evaluating every function code. `eval` with the `resolve` resolver values ten codes, 861 of the
+  area's 1,009 stored expressions (see the evaluator notes above); the fuel-property codes
+  (`@F176`, `@F184`, `@F185`), Remainder and YearlyShape still return `None`, for the reasons
+  those notes give.
 - Wildcard expansion inside the library. `container::run` takes each argument already
   resolved, because the order a filesystem hands back matching files is a property of the
   filesystem rather than of the program. The `testleap` binary does the expanding, in the

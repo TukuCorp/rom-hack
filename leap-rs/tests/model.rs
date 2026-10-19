@@ -61,27 +61,26 @@ fn the_top_level_reads_out_of_the_vendor_bytes() {
 }
 
 #[test]
-fn the_last_block_leaves_out_the_slot_nothing_was_written_to() {
-    // The structure table fills its last block seven slots deep, and the eighth is a slot the
-    // file never wrote to. A reader that takes every slot would report a branch that is not one.
+fn the_last_block_holds_only_the_branches_its_slot_map_marks() {
+    // The structure table's last block states two live records, and its used-slot map marks
+    // slots 0 and 1. Five more slots hold residue of freed branches -- their ids are small
+    // numbers and their names are empty -- and the signature of an unwritten slot took them for
+    // branches. Read through the map, the block is the two branches it holds.
     let fields = records::field_descriptors(&unhex(NX1_BRANCH_DICTIONARY));
     let block = unhex(NX1_BRANCH_LAST_BLOCK);
+    assert_eq!(records::header_live_count(&block), Some(2));
     let got = model::branches_with(&fields, &block);
-    assert_eq!(got.len(), 7, "seven of the block's eight slots");
     let ids: Vec<i64> = got.iter().map(|b| b.id).collect();
-    assert_eq!(ids, vec![854, 855, 4, 5, 6, 7, 8]);
+    assert_eq!(ids, vec![854, 855]);
     assert_eq!(got[0].name, "Biogas");
     assert_eq!(got[1].name, "Sample GHG Reduction Target");
-
-    // The five nameless rows are here, and they are the freed slots the rule cannot tell apart.
-    assert_eq!(got.iter().filter(|b| b.name.is_empty()).count(), 5);
 }
 
 #[test]
 fn every_named_branch_has_a_parent_the_table_holds() {
     let ids: HashSet<i64> = NX1_BRANCHES.iter().map(|b| b.0 as i64).collect();
     let named = named();
-    assert_eq!(named.len(), 434, "five rows are slots that were written and then freed");
+    assert_eq!(named.len(), 434, "every branch the table holds");
     for b in &named {
         assert!(
             b.1 == 0 || ids.contains(&(b.1 as i64)),
@@ -94,10 +93,9 @@ fn every_named_branch_has_a_parent_the_table_holds() {
     let roots: Vec<&str> = named.iter().filter(|b| b.1 == 0).map(|b| b.4).collect();
     assert_eq!(roots, vec!["Freedonia"]);
 
-    // The five nameless rows are the ones the rule could not tell from written slots, and they
-    // are the whole of the difference between the rows read and the branches there are.
-    assert_eq!(NX1_BRANCHES.len() - named.len(), 5);
-    assert!(NX1_BRANCHES.iter().filter(|b| b.4.is_empty()).all(|b| b.1 == 0));
+    // Read through the slot maps there is no nameless row left: the five the signature let in
+    // were freed slots, and every row read is a named branch.
+    assert_eq!(NX1_BRANCHES.len(), named.len());
 }
 
 #[test]
@@ -251,20 +249,81 @@ fn a_scenario_row_resolves_to_the_expression_it_points_at() {
 }
 
 #[test]
-fn a_block_the_walk_cannot_finish_comes_back_short_rather_than_invented() {
-    // One block of the shipped table is not walked to its end: its first record holds a text longer
-    // than its own allocation accounts for, and what follows it is not a record this reader
-    // understands. The block states how many memos it holds, so the shortfall is visible rather
-    // than quietly filled in -- and if a later pass does learn to read it, this test says so.
+fn the_block_whose_first_memo_is_the_longest_reads_to_its_stated_count() {
+    // The fifth block is the one whose first memo is a sentence rather than a number or a
+    // formula, and its allocation is one byte more than its text needs, so the record ends a
+    // word short of where the old framing said. Read at the stride the block's own headers
+    // show, every one of the 152 memos it states comes back -- including the nested header at
+    // 0x58 that the short framing swallowed.
     let blob = unhex(NX1_SCENARIO_LONG_BLOB_BLOCK);
     assert_eq!(heap::stated(&blob), Some(152));
     let memos = heap::memos(&blob);
-    assert_eq!(memos.len(), 1, "the reader reports what it read, not what it hopes");
-    assert!(memos.len() < 152);
+    assert_eq!(memos.len(), 152, "every memo the block states");
     assert!(memos[0].starts_with(" divided @C1000 total population"), "{:?}", memos[0]);
+    // The second record starts at 0x58 and holds a single raw character, the only memo of its
+    // kind in the block; the third is the formula the old walk never reached.
+    assert_eq!(memos[1], "\u{aa}", "the record at 0x58");
+    assert_eq!(memos[2], "@F041(32,2027,-99,-99,0,0,0,0, 1.1)");
 
-    // The other six blocks of the same file read to the count they state, and one of them is
-    // checked on the vendor bytes in the test above.
+    // Every other block of the same file reads to the count it states as well, and one of them
+    // is checked on the vendor bytes in the test above.
     let first = unhex(NX1_SCENARIO_BLOB_BLOCK);
     assert_eq!(heap::memos(&first).len(), heap::stated(&first).unwrap() as usize);
+}
+
+#[test]
+fn a_block_the_walk_cannot_finish_comes_back_short_rather_than_invented() {
+    // The walk stops where it meets something that is not a record, rather than hunting for the
+    // next one: a truncated block reports what it read and not what it hopes. The ninth record
+    // of the first block is a valid header, so cutting the block two bytes into it leaves the
+    // reader with the eight memos before it and no invention after them.
+    let whole = unhex(NX1_SCENARIO_BLOB_BLOCK);
+    let mut cut = whole.clone();
+    let at = record_offset(&whole, 8);
+    cut.truncate(at + 2);
+    assert_eq!(heap::memos(&cut).len(), 8, "the eight memos the bytes hold");
+    assert!(heap::memos(&cut).len() < heap::stated(&whole).unwrap() as usize);
+
+    // A block whose first bytes are not a record at all reads as nothing.
+    assert!(heap::memos(&[0u8; 64]).is_empty());
+    assert!(heap::memos(&[]).is_empty());
+}
+
+/// The offset of the memo at a zero-based position, by walking the block the way `heap` does.
+fn record_offset(block: &[u8], position: usize) -> usize {
+    let mut at = 0x14;
+    for _ in 0..position {
+        let alloc = u16::from_le_bytes([block[at], block[at + 1]]) as usize;
+        at += (alloc + 2 + 3) / 4 * 4;
+    }
+    at
+}
+
+#[test]
+fn a_memo_decodes_as_utf16_and_a_position_past_the_count_has_none() {
+    // A memo whose text is outside the basic plane: "a", U+1F600, "b" is four UTF-16 units,
+    // so its allocation is 2 * 4 + 1 and the record occupies round_up_to_four(alloc + 2).
+    // The block states one memo, and asking for a second gets nothing rather than the bytes
+    // of whatever follows.
+    let mut block = vec![0u8; 64];
+    block[0x10..0x14].copy_from_slice(&1u32.to_le_bytes());
+    let units = [0x0061u16, 0xd83d, 0xde00, 0x0062];
+    let alloc = (2 * units.len() + 1) as u16;
+    block[0x14..0x16].copy_from_slice(&alloc.to_le_bytes());
+    block[0x16] = 0x03;
+    for (i, unit) in units.iter().enumerate() {
+        block[0x17 + 2 * i..0x19 + 2 * i].copy_from_slice(&unit.to_le_bytes());
+    }
+    assert_eq!(heap::stated(&block), Some(1));
+    assert_eq!(heap::memos(&block), vec!["a\u{1f600}b".to_string()]);
+    assert_eq!(heap::memo(&block, 1), Some("a\u{1f600}b".to_string()));
+    assert_eq!(heap::memo(&block, 2), None, "one memo is all the block states");
+    assert_eq!(heap::memo(&block, 0), None);
+
+    // The same memo read at the end of a block that states more memos than it holds: the walk
+    // stops where the records do, so a position beyond them has no memo rather than invented
+    // bytes.
+    let short = &block[..0x20];
+    assert_eq!(heap::memo(short, 1), Some("a\u{1f600}b".to_string()));
+    assert_eq!(heap::memo(short, 2), None);
 }

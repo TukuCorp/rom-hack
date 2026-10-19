@@ -17,28 +17,25 @@ TableName at 4 size 102, FieldID at 106 size 4, SetID at 110 size 4, Name at 114
 Abbreviation at 416 size 102 and DateChanged at 518 size 8, which is exactly the layout the
 bytes have.
 
+A dictionary that crosses a page boundary is spliced first (dictionary_stream): each page carries
+a 32-byte lead and a 4-byte trailer around its part of the stream, and reading those as stream
+is what once looked like a "slack" in fuels and extra properties in areadata and tedtechdata.
+
 Two things the dictionary does not state in these files, and both had to be read off the data.
 
-The record size is zero in all eighty tables, because the area was written by an export that
-left that descriptor field blank. It is mostly recoverable by arithmetic: a data block is 4096
-bytes, the records area runs to 4092, and for most tables the record size is the smallest
-divisor of 4032 that is at least four bytes past the last field. Not all tables obey that, and
-three are overridden below (BYTE_MEASURED): their records pitch their own fields at a stride
-the arithmetic does not produce, and the live records' pitch is the vendor bytes' own answer,
-so the measured stride wins where it exists.
+The record size is zero in all the tables, because the area was written by an export that left
+that descriptor field blank, so it is computed the way the engine computes it (record_size): the
+summed field sizes rounded up to four bytes, plus four bytes per thirty-two fields for the
+null-bitmap that ends every record. That is FUN_012ec9e0 in chunk-00122.c, reached from
+FUN_012eb790's add-field accounting. Most tables obey it; for the rest the block's own bytes
+pin a wider stride, measured off the block instead (BYTE_MEASURED) -- what sets it is not
+established, and the dictionary does not derive it (see the note at BYTE_MEASURED).
 
-Where the records start varies by table, and that is the next open question. The samples
-here decode from 60 bytes in, and datanames and years tile 4092 exactly from there,
-but the three overridden tables put their first record at 0x24, 0x48 and 0x8c
-(BYTE_MEASURED), and no rule is established for that base yet. The block header
-carries more structure than a fixed 60 bytes: word 0x1e states the live record count
-and word 0x20 onward is a used-slot bitmap, one set bit per live record.
-
-What this still does not do, stated because it matters. Deleted records are not filtered,
-and the live count and bitmap the header states are not consumed yet either, so the
-reader keeps its signature test: a slot is unwritten when every byte is zero or when its
-first two bytes carry the slot number and the rest is zero. That is also why the
-decoded sample is datanames.nx1, whose seven records are all live, and not the year list.
+Where the records start follows from the size (geometry): a block is a 0x20-byte header, a
+used-slot bitmap of one bit per slot, and the records tiling back from 4092, so the capacity is
+the most records that leave room for the header and their bitmap. The tool stops if a measured
+base disagrees. The bitmap also says which slots are live (slot_map) whenever it marks exactly
+the count the header states at 0x1e; where it cannot, the slot signature decides instead.
 
 Usage: python tools/capture_nx1_records.py leap-rs/src/oracle_records.rs
 """
@@ -51,6 +48,8 @@ LEAP_ZIP = "C:/Program Files/LEAP/Freedonia.zip"
 NEEDLE = b"\x06\x12TnxFieldDescriptor"
 INDICES = b"\x07\x11IndicesDescriptor"
 BLOCK = 0x1000
+PAGE_LEAD = 0x20                   # a dictionary page: NXSH, page number, DICT, two words
+PAGE_TAIL = 4                      # and a trailer word after the stream
 HEADER = 0x3c
 DATA = BLOCK - HEADER - 4          # 4032 records bytes, four spare at the end of the block
 
@@ -114,35 +113,10 @@ def placement(segment):
     """
     at = segment.find(ANCHOR)
     if at < 0:
-        # The two LEAP-flavored dictionaries - areadata and tedtechdata's boolean runs -
-        # carry extra leading properties the fixed anchor cannot hold, but every
-        # descriptor ends with the fdPos zero, the marker pair, and the offset and size.
-        # So the segment's LAST [zero, marker] is the field placement correct one and
-        # the pair walks the same tagged-number grammar forward from there.
-        mid = segment.rfind(MIDDLE)
-        if mid < 0:
-            return None, None
-        # The LEAP boolean runs write a three-little-endian-property trio after the
-        # marker (5, 0, 1, twelve bytes); the placement pair follows directly, and
-        # reading the tagged numbers there lands their real pair.
-        trio = bytes([0x05, 0, 0, 0, 0, 0, 0, 0, 0x01, 0, 0, 0])
-        if segment[mid + len(MIDDLE):mid + len(MIDDLE) + 12] == trio:
-            offset, at = number(segment, mid + len(MIDDLE) + 12)
-            size, _ = number(segment, at)
-            return offset, size
-        offset, at = number(segment, mid + len(MIDDLE))
-        size, _ = number(segment, at)
-        return offset, size
+        return None, None
     _, at = number(segment, at + len(ANCHOR))
     if at is None or segment[at:at + len(MIDDLE)] != MIDDLE:
         return None, None
-    # The LEAP boolean runs write the same three-property trio after the fdPos zero
-    # and marker; the placement pair follows them directly.
-    trio = bytes([0x05, 0, 0, 0, 0, 0, 0, 0, 0x01, 0, 0, 0])
-    if segment[at:at + 12] == trio:
-        offset, at = number(segment, at + 12)
-        size, _ = number(segment, at)
-        return offset, size
     offset, at = number(segment, at + len(MIDDLE))
     size, at = number(segment, at)
     return offset, size
@@ -196,45 +170,61 @@ def field_descriptors(raw):
     for this in out:
         _, _, _, offset, size = this
         if offset != end:
-            # One slack is read rather than refused: a gap of two in front of a short or
-            # null string (the shipped dictionaries of fuels, areadata and tedtechdata cut
-            # it once each). Anything wider, or a gap before any other type, stays a refusal.
-            slack_ok = (offset in (end + 1, end + 2)
-                        and this[1] in ("nxtNullString", "nxtShortString"))
-            if not slack_ok:
-                return out, False
+            return out, False
         end = offset + size
     return out, bool(out)
 
 
 def record_size(rows):
-    """The smallest divisor of DATA that leaves room for every field plus four bytes."""
+    """The record size the engine computes: fields rounded to four, plus the null bitmap.
+
+    FUN_012ec9e0 in chunk-00122.c: the summed field sizes are rounded up to a multiple of four
+    (FUN_012eb790 seeds that total off each field's own size), and four bytes are added per
+    thirty-two fields for the null-bitmap word at the end of every record. The 4032-divisor
+    rule this replaces is refuted by the blocks themselves: RegressionResults' records sit 40
+    apart where it says 42, writtenresults' 12 where it says 9, balcat2-4's 300 where it says
+    336, and timeslices' 768 where it says 1008 -- none of which divide 4032 at all.
+    """
     last = max(o + s for _, _, _, o, s in rows)
-    for size in range(4, DATA + 1):
-        if DATA % size == 0 and size >= last + 4:
-            return size
-    return None
+    return (last + 3) // 4 * 4 + 4 * ((len(rows) + 31) // 32)
 
 
-def data_blocks(raw):
-    return [b * BLOCK for b in range(len(raw) // BLOCK)
-            if raw[b * BLOCK:b * BLOCK + 4] == b"NXDH"]
+def page_size(raw):
+    """The page a table file is written in: its usable size at 0x14 plus the page trailer.
+
+    Every table in the shipped area states 0x0ffc there and is written in 4 KiB pages.
+    PluginProperties, Plugins, refs and uservardata state 0x1ffc: 8192-byte pages, whose
+    blocks are twice as wide and whose records tile back from 8188 instead of 4092.
+    """
+    if raw[:4] != b"NX!2":
+        return BLOCK
+    usable = int.from_bytes(raw[20:24], "little")
+    return usable + 4 if usable + 4 >= 0x40 else BLOCK
+
+
+def data_blocks(raw, page):
+    return [b * page for b in range(len(raw) // page)
+            if raw[b * page:b * page + 4] == b"NXDH"]
 
 
 def dictionary_stream(raw):
-    """One dictionary stream, two page leads removed."""
+    """The dictionary as one stream, across the pages it spans.
+
+    A page is PAGE_LEAD bytes of header, the stream, and a PAGE_TAIL-byte trailer, at the pitch the
+    file header states (usable size at 0x14, plus four). A dictionary inside one page is returned
+    as it is; one that crosses pages is the concatenation of their stream parts. Stepping over
+    the seam as if it were stream is what lost fuels' ImageIndex and cut a descriptor in
+    areadata and tedtechdata.
+    """
     first = raw.find(NEEDLE)
     marker = raw.find(INDICES, first)
-    usable = int.from_bytes(raw[20:24], "little")
-    pitch = usable + 4
-    if marker < 0 or first // pitch == marker // pitch:
+    if raw[:4] != b"NX!2" or first < 0 or marker < 0:
         return raw
-    faces = []
-    for page in range(first // pitch, marker // pitch + 1):
-        stem = page * pitch + 24
-        edge = (page + 1) * pitch
-        faces.append(raw[stem:edge])
-    return b"".join(faces)
+    pitch = int.from_bytes(raw[20:24], "little") + 4
+    if first // pitch == marker // pitch:
+        return raw
+    return b"".join(raw[page * pitch + PAGE_LEAD:(page + 1) * pitch - PAGE_TAIL]
+                    for page in range(first // pitch, marker // pitch + 1))
 
 
 def wide(rec, off, size):
@@ -264,56 +254,183 @@ def narrow(rec, off, size):
     return rec[off:off + end].decode("latin-1")
 
 
-def unwritten(rec, index):
-    """Whether a slot is one nothing was ever written to.
+def slot_map(block, base, cap):
+    """The live slots the block's own used-slot map marks, or None when it cannot say.
 
-    A fresh block leaves either zeroes or, for every slot past the last written one, the slot
-    number in its first two bytes with the rest zero. The year list is what makes this testable:
-    with it, years.nx1 reads as exactly the 31 years 2020 to 2050, and without it the free slots
-    past them read as years 33 upwards.
+    The u16 at 0x1e states how many records the block holds and the bitmap from 0x20 marks them,
+    bit k for slot k, up to where the records start. When the marked slots number exactly the
+    stated count, every live slot is accounted for and the rest are free; when they number fewer,
+    the map is too short for the block and the caller falls back to the slot signature.
+    """
+    live = int.from_bytes(block[0x1e:0x20], "little")
+    covered = min(cap, 8 * max(base - 0x20, 0))
+    marked = [k for k in range(covered) if block[0x20 + k // 8] >> (k % 8) & 1]
+    if len(marked) != live:
+        return None
+    return set(marked)
+
+
+def live_slots(block, base, size):
+    """The slots of a data block that hold live records, by its map or else by the signature."""
+    cap = (len(block) - 4 - base) // size
+    mapped = slot_map(block, base, cap)
+    if mapped is not None:
+        return sorted(mapped)
+    return [k for k in range(cap)
+            if not unwritten(block[base + k * size:base + (k + 1) * size], k)]
+
+
+def unwritten(rec, index):
+    """Whether a slot is one nothing was ever written to, or one the file has since freed.
+
+    All zeroes is a slot nothing was written to. A freed slot holds its own number plus two in
+    its first two bytes with the rest zero: years.nx1's slot 31 holds 33 and its slot 100 holds
+    102, and areadata's slots 1, 2 and 3 hold 3, 4 and 5. The rest is a signature rather than the
+    file's answer, and it under-filters: a units slot freed from the middle keeps its old bytes.
     """
     if all(b == 0 for b in rec):
         return True
-    return all(b == 0 for b in rec[2:]) and i16(rec, 0) == index
+    return all(b == 0 for b in rec[2:]) and i16(rec, 0) == index + 2
 
 
 BYTE_MEASURED = {
-    # Tables whose stride the block proves and the rule gets wrong. The evidence is the pitch
-    # of consecutive live records, and each entry is (name, base, stride): where record 0 sits
-    # in the block and how far apart they are. Years and datanames were checked the same way
-    # and agree with the rule, so they stay on it.
+    # Tables whose stride the block proves and the engine's rule does not reach: (name, base,
+    # stride), where base is where record 0 then sits and geometry has to reproduce it. What sets
+    # the wider stride is not established: OriginalFieldCount equals the placed field count
+    # wherever the file states it, and the padding past the rule's end is all zeros, so it is
+    # not fields the dictionary dropped. The evidence for each value is the block's own bytes:
+    # the pitch of consecutive records' wide strings, the free-list links the free slots hold
+    # (slot k holds k+2, and the last slot holds zero), or both.
     #
-    # staticdata: freedonia/staticdata.nx1 block 0, base 0x48. Its Expression doubles land
-    # exactly on base+6 with a 20 pitch, reading 1.0, 1.0, 2021.0, 0.0 -- the year 2021 is a
-    # LEAP value, not a coincidence -- and a 4-byte flag block ending in f8 after each record.
-    # The header word at 0x1e states 201, and (4092-0x48)/20 is 201. At that pitch the id
-    # field reads 1685, 1690, 1691, ... 1716 at offset 4, a sparse ascending list, and the
-    # rule's 18 would put an id chain across slot boundaries.
-    "staticdata": (0x48, 20),
+    # areadata: base 0x5c. Three of its four free slots hold links 3, 4 and 5 at 0x37c, 0x69c
+    # and 0x9bc -- exactly 800 apart, slots 1, 2 and 3 -- and its fields land on 0x5c: BaseYear
+    # reads d0 07 (2000) at offset 26, EndYear ee 07 (2030) at 36, the Notes blob reference is
+    # (1, 6) and LastEdited is a day count that decodes into the 2020s.
+    "areadata": (0x5c, 800),
     #
-    # balcat: base 0x8c. Thirteen records, the wide-string names at 0x8e, 0x1be, 0x2ee, ...
-    # every one exactly 0x130 (304) after the last, and 13 * 304 from 0x8c ends at 4092. The
-    # rule's 336 puts two of its fields in the next record's text.
+    # balcat, and balcat2-4, which share its schema: base 0x8c. Thirteen records, the
+    # wide-string names at 0x8e, 0x1be, 0x2ee, ... every one exactly 0x130 (304) after the
+    # last, and 13 * 304 from 0x8c ends at 4092. The engine's rule stops at 300, which leaves
+    # the names landing three bytes late and only three of the thirteen readable.
     "balcat": (0x8c, 304),
+    "balcat2": (0x8c, 304),
+    "balcat3": (0x8c, 304),
+    "balcat4": (0x8c, 304),
     #
-    # scenarios: base 0x24. Nine records, names 0x138 (312) apart from "Current Accounts" at
-    # 0x30, abbreviations 0x138 apart from "BAS" at 0x1f6. Record 1 reads Baseline -- memo
-    # (index 1, blob block 13), parent 1 -- the semantics the area itself implies. Its free
-    # slots 9..11 sit 0x138 apart too, marker-proven.
-    "scenarios": (0x24, 312),
+    # constants: base 0x3c. Seventeen records, their Name fields at 0x3e and every one 192
+    # apart; at the rule's 188 not one of the seventeen reads a printable name. The block is
+    # full at 21 slots, so the base and the stride follow from each other.
+    "constants": (0x3c, 192),
     #
-    # regions: base 0x2c. The freed slots hold u32 numbers exactly 0x170 (368) apart at
-    # 0x19c, 0x30c, 0x47c ... -- pitch the rule's 448 does not produce -- and 11 slots of
-    # 368 from 0x2c end at 4092. Slot 0 is the one live record (Region 1), slots 1..9 keep
-    # the RegionIDs 3..11 of the regions the area had and then deleted, with their first
-    # field intact, and slot 10 is all zero.
-    # regions: base 0x2c. The freed slots hold u32 numbers exactly 0x170 (368) apart at
-    # 0x19c, 0x30c, 0x47c ... -- pitch the rule's 448 does not produce -- and 11 slots of
-    # 368 from 0x2c end at 4092. Slot 0 is the one live record (Region 1), slots 1..9 keep
-    # the RegionIDs 3..11 of the regions the area had and then deleted, with their first
-    # field intact, and slot 10 is all zero.
-    "regions": (0x2c, 368, 11),
+    # datanames: base 0x3c. Twenty-one records over three blocks, TableName at 0x40 and the
+    # next 576 later, every one readable: Balcat, Oil Products, Solid Fuels, ... where the
+    # rule's 532 misaligns every record.
+    "datanames": (0x3c, 576),
+    #
+    # fuels: base 0xfc. Three records, their Name fields at 0x106, 0x606 and 0xb06 -- 0x500
+    # (1280) apart -- reading Non Energy, Electricity and Natural Gas. Neither 1344 nor 1028
+    # puts a record where the names are.
+    "fuels": (0xfc, 1280),
+    #
+    # landtypes: base 0x3c. Twelve records, their Name fields 336 apart, all twelve readable;
+    # the rule's 328 lands four of them on the previous record's tail.
+    "landtypes": (0x3c, 336),
+    #
+    # regioncategories and 2-4: base 0x8c, the same geometry as balcat, and their freed slots
+    # prove it: the RegionCatIDs 3..13 sit at 0x1bc, 0x2ec, 0x41c ... exactly 0x130 (304)
+    # apart, and the one live record's name \"All\" reads at 0x8e.
+    "regioncategories": (0x8c, 304),
+    "regioncategories2": (0x8c, 304),
+    "regioncategories3": (0x8c, 304),
+    "regioncategories4": (0x8c, 304),
+    #
+    # regions: base 0x2c. The freed slots' RegionIDs 3..11 sit exactly 0x170 (368) apart at
+    # 0x19c, 0x30c, 0x47c ..., eleven slots of 368 from 0x2c end at 4092, and the live record
+    # reads Region 1 at 0x2e. The rule's 448 puts two of its fields in the next record's text.
+    "regions": (0x2c, 368),
+    #
+    # scenarioeffects and tedeffects: base 0x3fc. Two records, their Name fields at 0x3fe and
+    # 0x9fe -- 0x600 (1536) apart -- reading Carbon Dioxide B... and Carbon Dioxide, with the
+    # abbreviation and the wikipedia URL of each in the same record. The rule's 1524 is twelve
+    # bytes short.
+    "scenarioeffects": (0x3fc, 1536),
+    "tedeffects": (0x3fc, 1536),
+    #
+    # scenariotemplate: base 0x7c. Three records, their Name fields at 0x89, 0x279 and 0x469
+    # -- 0x1f0 (496) apart -- reading Income Growth Ra..., Population Growt... and End Year
+    # Urbaniz..., and an eight-slot block.
+    "scenariotemplate": (0x7c, 496),
+    #
+    # summaryreportrows: base 0x3c. Three records, their Comment fields at 0x4f and 0x58f --
+    # 0x540 (1344) apart -- reading Key Results and Key Assumptions.
+    "summaryreportrows": (0x3c, 1344),
+    #
+    # summaryreports: base 0x3fc. Two records, Name at 0x3fc and 0x9fc -- 0x600 (1536) apart
+    # -- the first also carrying its Description at 0x534, the Name offset (0) plus 312.
+    "summaryreports": (0x3fc, 1536),
+    #
+    # tags: base 0x3fc. Two records, Name at 0x404 and 0xa04 -- 0x600 (1536) apart -- reading
+    # Fossil and Combustion Turbi...
+    "tags": (0x3fc, 1536),
+    #
+    # taggroups: base 0x3c. Three records, Name at 0x40, 0x580 and 0xac0 -- 0x540 (1344)
+    # apart -- reading Renewability, Status and Technology.
+    "taggroups": (0x3c, 1344),
+    #
+    # tedtechdata: base 0x3c. Twelve records a block, their Name fields 336 apart, all twelve
+    # readable where the rule's 332 leaves four of them unreadable.
+    "tedtechdata": (0x3c, 336),
+    #
+    # timeslices: base 0xfc. Five records, their Name fields at 0x104, 0x404, 0x704, 0xa04 and
+    # 0xd04 -- 0x300 (768) apart -- reading Hours 0000 to 1000, ... with each record's Hours
+    # double following at 1000.0. Neither of the rules' values (756, 1008) lands there.
+    "timeslices": (0xfc, 768),
+    #
+    # units: base 0x3c. Eighteen records a block, their Name fields 224 apart, all 54 over
+    # three blocks readable; the rule's 216 misaligns 13 of them.
+    "units": (0x3c, 224),
+    #
+    # variabledata: base 0x3fc. The one record's DefaultExpression and DefaultScenarioExpression
+    # both read \"0\" at 0x604 and 0x926 -- the field offsets 520 and 1322 from 0x3fc -- and the
+    # block holds nothing else, so the stride is what puts record 0 there with the block full.
+    "variabledata": (0x3fc, 3072),
+    #
+    # variablecategories: base 0x3c. Twelve records, Name 576 apart, all readable; the rule's
+    # 524 misaligns eleven of them.
+    "variablecategories": (0x3c, 576),
+    #
+    # refs and uservardata are two of the four 8192-byte-page tables, so their records tile back
+    # from 8188 rather than 4092. Both read out at a base of 0x3fc or 0x7fc, not the base the
+    # rule's stride puts there, and their wide strings prove where record 0 is:
+    #
+    # refs: base 0x3fc. Two records, and the fields of the first land exactly there -- AuthorShort
+    # \"IPCC\" at 0x5f4 (offset 504), RefYear \"1996\" at 0x65a (606), Title at 0x684 (648),
+    # Publisher at 0x87a (1150) and the URL at 0xa70 (1652). The stride is what puts two records
+    # from 0x3fc to 8188, and it is the count the block states.
+    "refs": (0x3fc, 3584),
+    #
+    # uservardata: base 0x7fc. One record, Name \"Livestock\" at 0x7fc, Description \"Number of
+    # livestock ...\" at 0x862 (102) and UnitString \"head\" at 0x958 (348); the record runs to the
+    # end of the page, which is the one slot the block states.
+    "uservardata": (0x7fc, 6144),
 }
+
+
+def geometry(page, size):
+    """(base, capacity) of a data block for a record size, in pages of this size.
+
+    The block is a 0x20-byte header, a used-slot bitmap of one bit per slot, and the records,
+    which tile back from four bytes short of the page. The capacity is the most records that
+    leave room for the header and their bitmap, and the base is where the first of them then
+    starts. It reproduces every base measured by hand -- staticdata 0x48, balcat 0x8c,
+    scenarios 0x24, regions 0x2c -- and puts years at 0x54, where the bit for slot 0 marks the
+    2021 record. On an 8192-byte page it is the same rule: refs' two records tile back from
+    8188 to 0x3fc, and uservardata's one from 8188 to 0x7fc.
+    """
+    cap = (page - 4 - 0x20) // size
+    while cap and 0x20 + (cap + 7) // 8 > page - 4 - cap * size:
+        cap -= 1
+    return page - 4 - cap * size, cap
 
 
 def esc(s):
@@ -350,81 +467,69 @@ def main(out):
     staticdata = None
     live_counts = []
     fuels_dictionary = None
+    units_holed = None
     with zipfile.ZipFile(LEAP_ZIP) as zf:
         for member in sorted(zf.namelist()):
             if not member.lower().endswith(".nx1"):
                 continue
             raw = zf.read(member)
             name = member.rsplit("/", 1)[-1].replace(".nx1", "")
-            # The two LEAP-driven dictionaries cross page boundaries; reading them through
-            # the repaired stream is what their fixture tests stand on.
-            stream = raw
-            if name in ("areadata", "tedtechdata"):
-                stream = dictionary_stream(raw)
-            rows, complete = field_descriptors(stream)
-            blocks = data_blocks(raw)
+            rows, complete = field_descriptors(dictionary_stream(raw))
+            page = page_size(raw)
+            blocks = data_blocks(raw, page)
             if not complete or not rows:
                 skipped.append(name)
                 continue
-            rule = record_size(rows)
-            if name in BYTE_MEASURED:
-                if len(BYTE_MEASURED[name]) == 3:
-                    base, size, cap = BYTE_MEASURED[name]
-                else:
-                    base, size = BYTE_MEASURED[name]
-                    cap = None
-            else:
-                base, size = HEADER, rule
-                cap = None
-            if cap is None and size:
-                cap = (BLOCK - 4 - base) // size
+            size = BYTE_MEASURED[name][1] if name in BYTE_MEASURED else record_size(rows)
             if size is None:
                 skipped.append(name)
                 continue
+            base, cap = geometry(page, size)
+            if cap == 0:
+                # The record does not fit one of the file's own pages: no layout to state.
+                skipped.append(name)
+                continue
+            if name in BYTE_MEASURED and BYTE_MEASURED[name][0] != base:
+                raise SystemExit("%s: measured base %#x, geometry gives %#x"
+                                 % (name, BYTE_MEASURED[name][0], base))
             tables.append((name, base, size, cap, rows))
             # A table with no data block is empty rather than unreadable, and the oracle says so.
             tables[-1] = (name, base, size, cap, bool(blocks), rows)
             if name == "datanames":
                 first = segments(raw)[0][0]
                 stop = raw.find(INDICES, first) + len(INDICES)
-                block = raw[blocks[0]:blocks[0] + BLOCK]
+                block = raw[blocks[0]:blocks[0] + page]
                 by_name = dict((f[0], f) for f in rows)
                 want = ("TableID", "TableName", "FieldID", "SetID", "Name", "Abbreviation")
-                decoded = [scan_table(block[HEADER + k * size:], by_name, want)
-                           for k in range(DATA // size)]
+                decoded = [scan_table(block[base + k * size:], by_name, want)
+                           for k in range(cap)]
                 sample = (raw[first:stop], block, decoded)
             if name == "years":
-                block = raw[blocks[0]:blocks[0] + BLOCK]
+                block = raw[blocks[0]:blocks[0] + page]
                 by_name = dict((f[0], f) for f in rows)
                 live = []
-                for k in range(DATA // size):
-                    rec = block[HEADER + k * size:HEADER + (k + 1) * size]
-                    if unwritten(rec, k):
-                        continue
+                for k in live_slots(block, base, size):
+                    rec = block[base + k * size:base + (k + 1) * size]
                     name_field = by_name["Name"]
                     live.append((i16(rec, by_name["YearID"][3]),
                                  narrow(rec, name_field[3], name_field[4])))
                 years = (block, live)
             if name == "regions":
-                block = raw[blocks[0]:blocks[0] + BLOCK]
+                block = raw[blocks[0]:blocks[0] + page]
                 by_name = dict((f[0], f) for f in rows)
                 live = []
-                for k in range((BLOCK - 4 - base) // size):
+                for k in live_slots(block, base, size):
                     rec = block[base + k * size:base + (k + 1) * size]
-                    if unwritten(rec, k):
-                        continue
                     name_field = by_name["Name"]
                     live.append((i16(rec, by_name["RegionID"][3]),
                                  wide(rec, name_field[3], name_field[4])))
                 regions = (block, live)
             if name == "staticdata":
-                block = raw[blocks[0]:blocks[0] + BLOCK]
+                block = raw[blocks[0]:blocks[0] + page]
                 by_name = dict((f[0], f) for f in rows)
                 live = []
-                for k in range((BLOCK - 4 - base) // size):
+                for k in live_slots(block, base, size):
                     rec = block[base + k * size:base + (k + 1) * size]
-                    if unwritten(rec, k):
-                        continue
                     bid = by_name["BranchID"]
                     vid = by_name["VariableID"]
                     exp = by_name["Expression"]
@@ -434,25 +539,34 @@ def main(out):
             if name in ("years", "datanames", "regions", "balcat",
                         "scenarios", "staticdata"):
                 live_counts.append((name,
-                                    i16(raw[blocks[0]:blocks[0] + BLOCK], 0x1e),
-                                    raw[blocks[0]:blocks[0] + BLOCK].hex()))
+                                    i16(raw[blocks[0]:blocks[0] + page], 0x1e),
+                                    raw[blocks[0]:blocks[0] + page].hex()))
             if name == "fuels":
-                first = segments(raw)[0][0]
-                stop = raw.find(INDICES, first) + len(INDICES)
-                fuels_dictionary = raw[first:stop]
+                # The file's own pages through the one the dictionary ends on, so the seam the
+                # dictionary crosses is in the fixture rather than repaired before it.
+                pitch = int.from_bytes(raw[20:24], "little") + 4
+                fuels_dictionary = raw[:(raw.find(INDICES) // pitch + 1) * pitch]
+            if name == "units":
+                # The first block whose slot map has a hole below its highest live slot: a
+                # record deleted from the middle, which the signature cannot see.
+                for one in blocks:
+                    whole = raw[one:one + page]
+                    cap = (page - 4 - base) // size
+                    mapped = slot_map(whole, base, cap)
+                    if mapped and max(mapped) + 1 != len(mapped):
+                        units_holed = whole
+                        break
             if name == "masterstructure":
-                block = raw[blocks[0]:blocks[0] + BLOCK]
-                last = raw[blocks[-1]:blocks[-1] + BLOCK]
+                block = raw[blocks[0]:blocks[0] + page]
+                last = raw[blocks[-1]:blocks[-1] + page]
                 first = segments(raw)[0][0]
                 stop = raw.find(INDICES, first) + len(INDICES)
                 by_name = dict((f[0], f) for f in rows)
                 got = []
                 for one in blocks:
-                    whole = raw[one:one + BLOCK]
-                    for k in range(DATA // size):
-                        rec = whole[HEADER + k * size:HEADER + (k + 1) * size]
-                        if unwritten(rec, k):
-                            continue
+                    whole = raw[one:one + page]
+                    for k in live_slots(whole, base, size):
+                        rec = whole[base + k * size:base + (k + 1) * size]
                         name_field = by_name["Name"]
                         got.append((i32(rec, by_name["BranchID"][3]),
                                     i32(rec, by_name["ParentBranchID"][3]),
@@ -461,15 +575,13 @@ def main(out):
                                     wide(rec, name_field[3], name_field[4])))
                 branches = (raw[first:stop], block, got, last)
             if name == "scenariodata":
-                block = raw[blocks[0]:blocks[0] + BLOCK]
+                block = raw[blocks[0]:blocks[0] + page]
                 first = segments(raw)[0][0]
                 stop = raw.find(INDICES, first) + len(INDICES)
                 by_name = dict((f[0], f) for f in rows)
                 got = []
-                for k in range(DATA // size):
-                    rec = block[HEADER + k * size:HEADER + (k + 1) * size]
-                    if unwritten(rec, k):
-                        continue
+                for k in live_slots(block, base, size):
+                    rec = block[base + k * size:base + (k + 1) * size]
                     slot = by_name["Expression"]
                     got.append((i32(rec, by_name["BranchID"][3]),
                                 i16(rec, by_name["VariableID"][3]),
@@ -477,29 +589,37 @@ def main(out):
                                 i16(rec, by_name["ScenarioID"][3]),
                                 int.from_bytes(rec[slot[3]:slot[3] + 4], "little"),
                                 int.from_bytes(rec[slot[3] + 4:slot[3] + 8], "little")))
-                blob_blocks = [b for b in range(len(raw) // BLOCK)
-                               if raw[b * BLOCK:b * BLOCK + 4] == b"NXHD"]
-                blob = raw[blob_blocks[0] * BLOCK:(blob_blocks[0] + 1) * BLOCK]
-                # The block whose first record is longer than its allocation accounts for is the
-                # one a walk from the header cannot finish, so the tool finds it rather than naming
-                # it: 0x14 in, count the records and compare with what the block states.
-                broken = None
+                blob_blocks = [b for b in range(len(raw) // page)
+                               if raw[b * page:b * page + 4] == b"NXHD"]
+                blob = raw[blob_blocks[0] * page:(blob_blocks[0] + 1) * page]
+                # Every blob block has to walk to the count it states, at the stride the block's
+                # own headers show: the record occupies round_up_to_four(allocation + 2) bytes.
+                # The fixture handed to the Rust tests is the block whose first memo is a sentence
+                # rather than a number -- it is the one whose allocation was one byte past its
+                # text, which the wider (+3) stride used to land inside the next header.
+                long = None
+                longest = 0
                 for number in blob_blocks:
-                    one = raw[number * BLOCK:(number + 1) * BLOCK]
+                    one = raw[number * page:(number + 1) * page]
                     stated = int.from_bytes(one[0x10:0x14], "little")
                     at = 0x14
                     seen = 0
-                    while at + 6 <= BLOCK and seen < stated:
+                    first_length = 0
+                    while at + 6 <= page and seen < stated:
                         alloc = one[at] | (one[at + 1] << 8)
-                        size = (alloc + 6) // 4 * 4
-                        if alloc < 4 or at + size > BLOCK:
+                        size = (alloc + 2 + 3) // 4 * 4
+                        if alloc < 4 or at + size > page:
                             break
+                        if seen == 0:
+                            first_length = alloc
                         seen += 1
                         at += size
                     if seen < stated:
-                        broken = one
-                        break
-                long = broken
+                        raise SystemExit("%s: blob block at %#x walks %d of %d memos"
+                                         % (name, number * page, seen, stated))
+                    if first_length > longest:
+                        longest = first_length
+                        long = one
                 scenarios = (raw[first:stop], block, got, blob_blocks, blob, long)
 
     lines = []
@@ -569,10 +689,13 @@ def main(out):
     lines.append("")
     if fuels_dictionary is None:
         fuels_dictionary = b""
-    lines.append("/// The fuels dictionary bytes, field segment through the indices marker. Its")
-    lines.append("/// placement carries one two-byte slack in front of PluginGUID (nxtNullString),")
-    lines.append("/// which the reader reads instead of returning an empty layout.")
+    lines.append("/// The fuels table file through the page its dictionary ends on. The dictionary")
+    lines.append("/// crosses a page seam, so the reader has to splice the pages to read all 45 fields.")
     lines.append("pub const NX1_FUELS_DICTIONARY: &str = %s;" % quote(fuels_dictionary.hex()))
+    lines.append("")
+    lines.append("/// A units data block whose used-slot map has a hole: slot 8 was deleted, and")
+    lines.append("/// its residue still looks written to the unwritten-slot signature.")
+    lines.append("pub const NX1_UNITS_HOLED_BLOCK: &str = %s;" % quote(units_holed.hex()))
     lines.append("")
     lines.append("/// The u16 word at 0x1e of one data block per table, which states how many")
     lines.append("/// records the table holds live: 31 years, 7 datanames, 1 region, 13 balance")
@@ -605,7 +728,9 @@ def main(out):
     lines.append("")
     lines.append("/// The first of those blocks, which holds the memos the first rows point at.")
     lines.append("pub const NX1_SCENARIO_BLOB_BLOCK: &str = %s;" % quote(scenarios[4].hex()))
-    lines.append("/// The last one, whose first record is a text longer than its allocation allows.")
+    lines.append("/// The block whose first memo is a sentence: an allocation one byte past its text, which")
+    lines.append("/// the `+3` record stride used to land inside the next record's header and the `+2` stride")
+    lines.append("/// does not.")
     lines.append("pub const NX1_SCENARIO_LONG_BLOB_BLOCK: &str = %s;" % quote(scenarios[5].hex()))
     lines.append("")
     lines.append("/// Rows as (branch, variable, region, scenario, memo index, memo block).")

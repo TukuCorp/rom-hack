@@ -15,9 +15,11 @@
 //!
 //! One part of that form is a delimited literal rather than an expression. LEAP writes a
 //! time series as a function call whose argument is wrapped in U+00A4, the currency sign,
-//! holding a flat run of year and value tokens whose internal grammar is not established.
-//! This module keeps that run verbatim in `Expr::Series`, so a tree round-trips exactly
-//! without the port claiming to understand the series yet.
+//! holding a flat run of year and value tokens. This module keeps that run verbatim in
+//! `Expr::Series`, so a tree round-trips exactly, and `parse_series` reads the typed
+//! year/value pairs out of it: comma-separated, alternating year then value, years strictly
+//! ascending, as the decompiled year/value-list validation and LEAP's Interp help page read
+//! them.
 //!
 //! What the codes mean is not established here, and the port does not act on it. `@F001`
 //! wraps a value, `@F010` carries what looks like a percentage, `@F007` the series and
@@ -99,6 +101,9 @@ pub enum Expr {
     Var { args: Option<Vec<Expr>> },
     Const(u32),
     /// The text between the delimiters of a series literal, without the delimiters.
+    ///
+    /// Kept verbatim so a tree round-trips exactly; `parse_series` reads the typed pairs
+    /// out of it when the caller needs values rather than text.
     Series(String),
     Binary {
         op: BinOp,
@@ -111,6 +116,100 @@ pub enum Expr {
     },
     /// Parentheses are kept, because dropping them would change what re-parsing produces.
     Paren(Box<Expr>),
+}
+
+/// One year/value pair of a series literal, as `parse_series` reads it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SeriesPoint {
+    pub year: i32,
+    pub value: f64,
+}
+
+/// The inside of a series literal as year/value pairs.
+///
+/// The grammar is the flat run the area stores: comma-separated tokens alternating a year
+/// and a value, at least one pair, years strictly ascending. That is what the decompiled
+/// year/value-list validation reads: `FUN_01c25af0` (`chunk-00338.c`) refuses a first
+/// parameter that is not a valid year and years that are not in ascending chronological
+/// order, and its error text names the shape -- "Separate years and values with the list
+/// separator character". LEAP's Interp help page shows the same run (`Interp(2000, 10,
+/// 2010, 16, 2020, 30)`), with linear interpolation between neighbours and no extrapolation
+/// past the ends.
+///
+/// Two things are deliberately strict. The separator is the comma the area holds: the engine
+/// reads the Windows list separator, but no stored literal uses anything else, so anything
+/// else is refused rather than guessed at. And a trailing odd token is refused even though
+/// LEAP documents an optional growth rate after the last pair (`Interp(2000, 100, 2010, 150,
+/// 2%)`): the area holds no such tail, so this reader does not model it yet.
+///
+/// A value is a plain decimal -- an optional sign, digits, an optional fraction -- because
+/// that is every value the area spells. Exponents and non-finite text are refused.
+pub fn parse_series(inner: &str) -> Result<Vec<SeriesPoint>, Error> {
+    let mut points = Vec::new();
+    let mut pending: Option<i32> = None;
+    let mut at = 0usize;
+    for raw in inner.split(',') {
+        let start = at;
+        at += raw.len() + ','.len_utf8();
+        let token = raw.trim();
+        if token.is_empty() {
+            return Err(Error::new(start, "an empty entry in the series literal"));
+        }
+        let tok_at = start + (raw.len() - raw.trim_start().len());
+        match pending.take() {
+            None => match token.parse::<i32>() {
+                Ok(year) => pending = Some(year),
+                Err(_) => {
+                    return Err(Error::new(tok_at, format!("{token:?} is not a year")));
+                }
+            },
+            Some(year) => {
+                let Some(value) = parse_series_value(token) else {
+                    return Err(Error::new(tok_at, format!("{token:?} is not a value")));
+                };
+                if points.last().is_some_and(|prev: &SeriesPoint| year <= prev.year) {
+                    return Err(Error::new(
+                        tok_at,
+                        "series years are not in ascending order",
+                    ));
+                }
+                points.push(SeriesPoint { year, value });
+            }
+        }
+    }
+    if pending.is_some() {
+        return Err(Error::new(
+            inner.len(),
+            "a year with no value ends the series literal",
+        ));
+    }
+    if points.is_empty() {
+        return Err(Error::new(0, "a series literal holds no year/value pair"));
+    }
+    Ok(points)
+}
+
+/// A plain decimal value: an optional sign, digits, an optional fraction, nothing else.
+fn parse_series_value(token: &str) -> Option<f64> {
+    let digits = token.strip_prefix(['+', '-']).unwrap_or(token);
+    let (whole, frac) = match digits.split_once('.') {
+        Some((whole, frac)) => (whole, Some(frac)),
+        None => (digits, None),
+    };
+    if whole.is_empty() && frac.is_some_and(str::is_empty) {
+        return None;
+    }
+    if !whole.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    if frac.is_some_and(|frac| !frac.bytes().all(|b| b.is_ascii_digit())) {
+        return None;
+    }
+    if whole.is_empty() && frac.is_none() {
+        return None;
+    }
+    let value: f64 = token.parse().ok()?;
+    value.is_finite().then_some(value)
 }
 
 /// Where and why a source text is not an expression.
