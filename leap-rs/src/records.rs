@@ -364,6 +364,92 @@ pub fn stride(table: &str, fields: &[Field]) -> Option<usize> {
     measured_stride(table).or_else(|| record_size(fields))
 }
 
+/// The stride a table file's records are written at, read from its own data blocks.
+///
+/// `MEASURED_STRIDE` pins the shipped Freedonia area's strides by hand; other areas carry the
+/// same tables at strides of their own, so this finds the stride the blocks agree on. Two facts
+/// of a block depend on the stride. A full block -- free-list head zero -- holds exactly as many
+/// live records as the stride's geometry has slots. A partial block's free-slot chain, whose
+/// links sit in each free slot's first u16, visits exactly the slots the used-slot map leaves
+/// free, and only when those slots are read at the stride the block was written at. The answer
+/// is the narrowest stride, from the engine's rule up in steps of four, that every block passes;
+/// a table with no data block is written at the rule. It reproduces all 28 measured strides of
+/// the shipped area but one, `variabledata`, whose single sparse record does not pin it
+/// (`stride_of` settles that case).
+pub fn infer_stride(bytes: &[u8], fields: &[Field]) -> Option<usize> {
+    let rule = record_size(fields)?;
+    let page = page_size(bytes);
+    let blocks: Vec<&[u8]> = data_blocks_in(bytes, page)
+        .into_iter()
+        .filter_map(|at| bytes.get(at..at + page))
+        .collect();
+    if blocks.is_empty() {
+        return Some(rule);
+    }
+    let fits = |stride: usize| blocks.iter().all(|block| stride_fits(block, page, stride));
+    (rule..page).step_by(4).find(|stride| fits(*stride))
+}
+
+/// The stride to read a table file at: the measured stride its name carries when the file's
+/// blocks agree with it, or else the stride they infer.
+///
+/// A block holding one sparse record per page does not pin its stride: any stride whose geometry
+/// still has one slot, and whose first record starts past every byte the record writes, reads it
+/// alike. The measured value settles that for the tables it names (`variabledata` holds a single
+/// record whose expressions sit 520 and 1322 bytes into a 3072-byte slot); for the rest the
+/// narrowest consistent stride is the answer.
+pub fn stride_of(table: &str, bytes: &[u8], fields: &[Field]) -> Option<usize> {
+    let page = page_size(bytes);
+    let blocks: Vec<&[u8]> = data_blocks_in(bytes, page)
+        .into_iter()
+        .filter_map(|at| bytes.get(at..at + page))
+        .collect();
+    match measured_stride(&table.to_lowercase()) {
+        Some(stride) if blocks.iter().all(|block| stride_fits(block, page, stride)) => Some(stride),
+        _ => infer_stride(bytes, fields),
+    }
+}
+
+/// Whether one data block reads consistently at a stride: see `infer_stride`.
+fn stride_fits(block: &[u8], page: usize, stride: usize) -> bool {
+    let Some((base, cap)) = geometry_in(page, stride) else {
+        return false;
+    };
+    let (Some(live), Some(head)) = (header_live_count(block), free_list_head(block)) else {
+        return false;
+    };
+    let live = live as usize;
+    let Some(map) = slot_map(block, base, cap) else {
+        return false;
+    };
+    // Between the used-slot map and the first record nothing is written; a stride narrower
+    // than the block's own puts the first record's bytes in that gap.
+    let gap = block.get(SLOT_MAP + (cap + 7) / 8..base).unwrap_or(&[]);
+    if gap.iter().any(|byte| *byte != 0) {
+        return false;
+    }
+    if live == cap {
+        return head == 0;
+    }
+    let mut seen = vec![false; cap];
+    let mut next = head as usize;
+    let mut walked = 0;
+    while next != 0 {
+        let k = next - 1;
+        if k >= cap || map[k] || seen[k] {
+            return false;
+        }
+        seen[k] = true;
+        walked += 1;
+        let at = base + k * stride;
+        let Some(link) = block.get(at..at + 2) else {
+            return false;
+        };
+        next = u16::from_le_bytes([link[0], link[1]]) as usize;
+    }
+    walked == cap - live
+}
+
 /// The measured stride for one table, where the engine's rule is not the block's answer.
 pub fn measured_stride(table: &str) -> Option<usize> {
     MEASURED_STRIDE
@@ -578,7 +664,9 @@ fn decode(block: &[u8], base: usize, field: &Field) -> Value {
     match field.type_name.as_str() {
         "nxtInt8" => bytes::<1>(slot).map_or(Value::Unset, |b| Value::Int(b[0] as i8 as i64)),
         "nxtInt16" => bytes::<2>(slot).map_or(Value::Unset, |b| Value::Int(i16::from_le_bytes(b) as i64)),
-        "nxtInt32" => bytes::<4>(slot).map_or(Value::Unset, |b| Value::Int(i32::from_le_bytes(b) as i64)),
+        "nxtInt32" | "nxtAutoInc" | "nxtDate" => {
+            bytes::<4>(slot).map_or(Value::Unset, |b| Value::Int(i32::from_le_bytes(b) as i64))
+        }
         "nxtInt64" => bytes::<8>(slot).map_or(Value::Unset, |b| Value::Int(i64::from_le_bytes(b))),
         "nxtDouble" | "nxtDateTime" => {
             bytes::<8>(slot).map_or(Value::Unset, |b| Value::Float(f64::from_le_bytes(b)))
@@ -586,6 +674,7 @@ fn decode(block: &[u8], base: usize, field: &Field) -> Value {
         "nxtBoolean" => bytes::<1>(slot).map_or(Value::Unset, |b| Value::Bool(b[0] != 0)),
         "nxtWideString" => bytes::<2>(slot).map_or(Value::Unset, |_| Value::Text(wide_string(slot))),
         "nxtNullString" => bytes::<1>(slot).map_or(Value::Unset, |_| Value::Text(narrow_string(slot))),
+        "nxtShortString" => bytes::<1>(slot).map_or(Value::Unset, |_| Value::Text(short_string(slot))),
         "nxtBlob" | "nxtBlobWideMemo" | "nxtBlobMemo" => {
             bytes::<8>(slot).map_or(Value::Unset, |b| Value::Blob(u64::from_le_bytes(b)))
         }
@@ -610,6 +699,12 @@ fn wide_string(slot: &[u8]) -> String {
     char::decode_utf16(text)
         .map(|unit| unit.unwrap_or('\u{fffd}'))
         .collect()
+}
+
+/// A length-prefixed narrow slot: the first byte counts the characters that follow.
+fn short_string(slot: &[u8]) -> String {
+    let len = (slot[0] as usize).min(slot.len() - 1);
+    String::from_utf8_lossy(&slot[1..1 + len]).into_owned()
 }
 
 /// A narrow slot, NUL terminated inside itself.

@@ -402,6 +402,19 @@ fn lex_number(src: &str, start: usize) -> usize {
             break;
         }
     }
+    // An exponent (`3.316e-05`): Asiana's disease-rate series are written this way.
+    if matches!(bytes.get(i), Some(b'e' | b'E')) {
+        let mut j = i + 1;
+        if matches!(bytes.get(j), Some(b'+' | b'-')) {
+            j += 1;
+        }
+        if bytes.get(j).is_some_and(|b| b.is_ascii_digit()) {
+            while bytes.get(j).is_some_and(|b| b.is_ascii_digit()) {
+                j += 1;
+            }
+            i = j;
+        }
+    }
     i
 }
 

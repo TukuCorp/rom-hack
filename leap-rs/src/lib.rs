@@ -6,9 +6,12 @@
 //! parity test asserting bit-for-bit equality against output captured from the
 //! original binary.
 
+pub mod area;
 pub mod blobs;
+pub mod calc;
 pub mod calendar;
 pub mod container;
+pub mod data;
 pub mod deflate;
 pub mod eval;
 pub mod expr;
@@ -27,3 +30,5 @@ pub mod oracle_records;
 pub mod oracle_run;
 pub mod records;
 pub mod resolve;
+pub mod results;
+pub mod table;

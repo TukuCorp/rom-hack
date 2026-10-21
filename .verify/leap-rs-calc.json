@@ -1,0 +1,69 @@
+{
+  "task": "leap-rs: calculation engine held to LEAP's definitive regression results (Freedonia, Transport Exercise) and stride inference",
+  "claims": [
+    {
+      "id": "c1-full-suite",
+      "claim": "The full leap-rs test suite passes with the GNU toolchain + rust-lld command.",
+      "run": "cd leap-rs && export RUSTFLAGS='-C linker=rust-lld' && ~/.cargo/bin/cargo.exe +stable-x86_64-pc-windows-gnu test --release --target x86_64-pc-windows-gnu 2>&1 | grep -E 'Running|test result|FAILED|panicked|^error'; exit ${PIPESTATUS[0]}",
+      "expect_exit": 0,
+      "expect_output": "(?s)Running tests[\\\\/]case_studies\\.rs.*test result: ok\\. 2 passed; 0 failed.*Running tests[\\\\/]stride_inference\\.rs.*test result: ok\\. 1 passed; 0 failed",
+      "timeout": 1800
+    },
+    {
+      "id": "c2a-case-studies-test",
+      "claim": "tests/case_studies.rs passes with LEAP installed (not via its 'not found, skipped' path): every held Freedonia and Transport Exercise variable matches RegressionResults within results::close.",
+      "run": "cd leap-rs && export RUSTFLAGS='-C linker=rust-lld' && out=$(~/.cargo/bin/cargo.exe +stable-x86_64-pc-windows-gnu test --release --target x86_64-pc-windows-gnu --test case_studies -- --nocapture 2>&1); rc=$?; echo \"$out\" | tail -n 20; if echo \"$out\" | grep -q 'case study skipped'; then echo 'SKIPPED: LEAP area not found'; exit 1; fi; exit $rc",
+      "expect_exit": 0,
+      "expect_output": "test result: ok\\. 2 passed; 0 failed",
+      "timeout": 1800
+    },
+    {
+      "id": "c2b-calc-without-oracle",
+      "claim": "The calculation uses the area's inputs only: with every regression/results file removed from the inputs, calc::run gives bit-identical output to the full zip, and all claimed variables (independently listed in the probe) still match LEAP's definitive results.",
+      "run": "bash .verify/checks/calc_without_oracle.sh",
+      "expect_exit": 0,
+      "expect_output": "(?s)Freedonia: stripped-input results \\d+ values, full-zip results \\d+ values, bit-identical: true.*Freedonia: 40 held variables, [1-9]\\d* oracle values checked: ALL MATCH.*Transport Exercise: stripped-input results \\d+ values, full-zip results \\d+ values, bit-identical: true.*Transport Exercise: 15 held variables, [1-9]\\d* oracle values checked: ALL MATCH",
+      "timeout": 1800
+    },
+    {
+      "id": "c2c-no-oracle-in-calc-source",
+      "claim": "No code (comments excluded) in leap-rs/src/calc/, data.rs or the modules calc uses names RegressionResults/definitive/read_regression/_RegressionTests/oracle_ modules, and calc reads tables only by literal non-results names.",
+      "run": "python -I .verify/checks/no_oracle_in_calc.py",
+      "expect_exit": 0,
+      "expect_output": "CLEAN: no oracle reference in the calc path",
+      "timeout": 120
+    },
+    {
+      "id": "c2d-held-lists",
+      "claim": "The HELD lists in tests/case_studies.rs are exactly the claimed Freedonia (40 ids) and Transport Exercise (15 ids) variables, each wired to a #[test].",
+      "run": "python -I .verify/checks/held_lists.py",
+      "expect_exit": 0,
+      "expect_output": "HELD lists match the claim",
+      "timeout": 120
+    },
+    {
+      "id": "c3a-stride-inference-test",
+      "claim": "tests/stride_inference.rs passes with Freedonia present (not via its skip path).",
+      "run": "cd leap-rs && export RUSTFLAGS='-C linker=rust-lld' && out=$(~/.cargo/bin/cargo.exe +stable-x86_64-pc-windows-gnu test --release --target x86_64-pc-windows-gnu --test stride_inference -- --nocapture 2>&1); rc=$?; echo \"$out\" | tail -n 10; if echo \"$out\" | grep -q 'inference test skipped'; then echo 'SKIPPED: area not found'; exit 1; fi; exit $rc",
+      "expect_exit": 0,
+      "expect_output": "test the_inferred_stride_is_every_stride_the_area_pins \\.\\.\\. ok[\\s\\S]*test result: ok\\. 1 passed; 0 failed",
+      "timeout": 1800
+    },
+    {
+      "id": "c3b-stride-probe",
+      "claim": "Independently: every one of the 28 MEASURED_STRIDE tables is in Freedonia with data blocks and records::stride_of returns its measured stride.",
+      "run": "export RUSTFLAGS='-C linker=rust-lld' CARGO_TARGET_DIR=\"$(pwd)/.verify/checks/probe/target\" && ~/.cargo/bin/cargo.exe +stable-x86_64-pc-windows-gnu build --release --target x86_64-pc-windows-gnu --manifest-path .verify/checks/probe/Cargo.toml 2>&1 | tail -n 2 && \"$CARGO_TARGET_DIR/x86_64-pc-windows-gnu/release/verify-probe.exe\" stride 'C:/Program Files/LEAP/Freedonia.zip'",
+      "expect_exit": 0,
+      "expect_output": "stride_of reproduces 28 measured strides: ALL OK",
+      "timeout": 1800
+    },
+    {
+      "id": "c4-no-test-weakened",
+      "claim": "No existing test file under leap-rs/tests was deleted or lost lines, and no #[ignore] was added.",
+      "run": "d=$(git diff HEAD --diff-filter=D --name-only -- leap-rs/tests); if [ -n \"$d\" ]; then echo \"deleted: $d\"; exit 1; fi; git diff HEAD --numstat -- leap-rs/tests | awk '$2!=0{bad=1; print \"removed lines: \" $0} END{exit bad}' || exit 1; if git diff HEAD -- leap-rs/tests leap-rs/src | grep -E '^\\+.*#\\[ignore'; then echo 'ignore added'; exit 1; fi; echo NO_TEST_WEAKENED",
+      "expect_exit": 0,
+      "expect_output": "NO_TEST_WEAKENED",
+      "timeout": 120
+    }
+  ]
+}

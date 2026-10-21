@@ -299,6 +299,84 @@ pub fn resolve_at(file: &[u8], index: u64, block: u64) -> Option<Memo> {
     Some(Memo { kind, bytes })
 }
 
+/// The bytes a memo holds, a long memo's segments assembled.
+///
+/// A kind-5 memo is a directory of segments, each a little-endian `u32` triple: the one-based
+/// memo position of the segment, the heap page it sits on, and the byte offset at which the
+/// segment ends in the assembled value. A segment is either raw bytes (its whole payload, cut to
+/// the length the offsets give it) or a further directory, read the same way: the directory a row
+/// points at can name a second directory that lists the data segments. The Freedonia passenger
+/// activity reads this way: a directory naming one directory of two segments, 61 and 65 bytes,
+/// which assemble into the 63 wide characters `75/40 ? calculated passenger km divided @C1000
+/// total population`.
+pub fn assemble(file: &[u8], index: u64, block: u64, depth: usize) -> Option<Vec<u8>> {
+    let page = records::page_size(file);
+    let start = (block as usize).checked_mul(page)?;
+    let whole = file.get(start..start + page)?;
+    if whole.get(..4) != Some(&b"NXHD"[..]) {
+        return None;
+    }
+    let (kind, bytes) = heap::record_raw(whole, index)?;
+    if kind != 5 {
+        return Some(bytes);
+    }
+    if depth > 8 || bytes.len() < 12 {
+        return None;
+    }
+    let mut out = Vec::new();
+    let mut at = 0;
+    while at + 12 <= bytes.len() {
+        let word = |k: usize| u32::from_le_bytes([bytes[at + k], bytes[at + k + 1], bytes[at + k + 2], bytes[at + k + 3]]);
+        let (pos, pg, end) = (word(0) as u64, word(4) as u64, word(8) as usize);
+        let piece = assemble(file, pos, pg, depth + 1)?;
+        let need = end.checked_sub(out.len())?;
+        out.extend_from_slice(piece.get(..need)?);
+        at += 12;
+    }
+    Some(out)
+}
+
+/// The text of a terminated memo read leniently: the units (or bytes) up to the terminator, any
+/// control character read as a space. Areas carry stray control characters after expressions --
+/// Asiana's `1403000` ends in U+0007 -- which the strict reading refuses outright.
+pub fn lenient_text(memo: &Memo, width: Width) -> Option<String> {
+    if memo.kind != 4 {
+        return None;
+    }
+    let clean = |c: char| if c.is_control() { ' ' } else { c };
+    Some(match width {
+        Width::Narrow => memo.bytes.iter().take_while(|b| **b != 0).map(|b| clean(*b as char)).collect(),
+        Width::Wide => {
+            let units: Vec<u16> = memo.bytes.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).take_while(|u| *u != 0).collect();
+            char::decode_utf16(units).map(|c| clean(c.unwrap_or(char::REPLACEMENT_CHARACTER))).collect()
+        }
+    })
+}
+
+/// The text a blob field value names, long memos assembled from their segments.
+pub fn resolve_text(file: &[u8], blob: u64, width: Width) -> Option<String> {
+    let memo = resolve(file, blob)?;
+    if memo.kind != 5 {
+        return memo.text(width).or_else(|| lenient_text(&memo, width));
+    }
+    let (index, block) = split(blob)?;
+    let bytes = assemble(file, index, block, 0)?;
+    Some(match width {
+        Width::Narrow => {
+            let end = bytes.iter().position(|b| *b == 0).unwrap_or(bytes.len());
+            bytes[..end].iter().map(|b| *b as char).collect()
+        }
+        Width::Wide => {
+            let units: Vec<u16> = bytes
+                .chunks_exact(2)
+                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .take_while(|u| *u != 0)
+                .collect();
+            char::decode_utf16(units).map(|c| c.unwrap_or(char::REPLACEMENT_CHARACTER)).collect()
+        }
+    })
+}
+
 /// Whether the memo at a one-based position carries the zeroed first payload byte of a
 /// superseded memo. No live row points at such a memo; skipping the byte reads the text
 /// it held. Nothing past the count the block states and holds.

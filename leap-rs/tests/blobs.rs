@@ -212,15 +212,18 @@ fn branch_notes_resolve() {
     assert_eq!(root_html.text(blobs::Width::Wide), None);
 }
 #[test]
-fn an_empty_memo_reads_as_empty_text() {
+fn a_long_fuel_note_assembles_from_its_segments() {
+    // Corrected 2026-10-21. The ordinal walk put fuels' slot 3 of page 102 on a twelve-byte
+    // empty record; the block's slot directory puts it on a segment directory, and the note it
+    // names assembles into text. The empty-memo reading was the walk's, not the file's.
     let Some(bytes) = member("fuels") else {
         eprintln!("note: {AREA} not found, sweep skipped");
         return;
     };
-    let memo = blobs::resolve_at(&bytes, 3, 102).expect("the empty memo");
-    assert_eq!(memo.kind, 0);
-    assert!(memo.bytes.iter().all(|byte| *byte == 0));
-    assert_eq!(memo.text(blobs::Width::Wide), Some(String::new()));
+    let memo = blobs::resolve_at(&bytes, 3, 102).expect("the long note");
+    assert_eq!(memo.kind, 5);
+    let text = blobs::resolve_text(&bytes, blobs::join(3, 102), blobs::Width::Wide).expect("assembles");
+    assert!(!text.is_empty());
 }
 
 #[test]
@@ -453,7 +456,10 @@ fn kind4_width_is_the_field_type() {
         }
         let _ = field;
     }
-    assert_eq!((narrow, wide, binary, empty), (1214, 467, 256, 3), "live kind-4 by field width, kind-3 and kind-5 and kind-0");
+    // Corrected 2026-10-21: read through the slot directory, the three live references the
+    // ordinal walk put on empty records name long-memo directories, and no live row names an
+    // empty record.
+    assert_eq!((narrow, wide, binary, empty), (1214, 467, 259, 0), "live kind-4 by field width, kind-3 and kind-5 and kind-0");
     // Spot checks: a narrow note, a wide note, the separator, the dirt.
     let area = by_name["areadata"];
     let note = blobs::resolve_at(area, 1, 6).expect("the area note");
@@ -469,62 +475,58 @@ fn kind4_width_is_the_field_type() {
     assert_eq!(dol.text(blobs::Width::Wide), Some("Dollars\u{b}".to_string()));
 }
 #[test]
-fn superseded_memos_carry_a_zeroed_first_byte() {
+fn the_slot_directory_names_every_memo() {
+    // Replaces the 2026-10-19 superseded-memo reading. A heap block ends in a slot directory:
+    // a slot count at len-6, a free-list head at len-8, and slot k's record offset at
+    // len-10-2k; a free slot holds `next * 4 + 2`. Every block's free chain visits exactly the
+    // slots that hold no offset, and every live reference names a used slot.
     let Some(tables) = tables() else { eprintln!("note: vendor area not found"); return; };
-    let by_name: std::collections::HashMap<&str, &[u8]> = tables.iter().map(|(n, b)| (n.as_str(), b.as_slice())).collect();
-    let live: std::collections::HashSet<(String, u64, u64)> = live_refs(&tables).into_iter().map(|(t, _, _, ix, pg)| (t, ix, pg)).collect();
-    let mut zeroed = 0;
-    let mut kinds = std::collections::BTreeMap::new();
-    for (name, bytes) in &tables {
+    let (mut blocks, mut slots, mut used, mut chains) = (0, 0, 0, 0);
+    for (_, bytes) in &tables {
         let page = records::page_size(bytes);
         for pageno in blobs::heap_pages(bytes) {
             let block = &bytes[pageno * page..(pageno + 1) * page];
-            let stated = heap::stated(block).unwrap_or(0);
-            for ix in 1..=stated as u64 {
-                if blobs::tombstoned(bytes, ix, pageno as u64) != Some(true) { continue; }
-                zeroed += 1;
-                let memo = blobs::resolve_at(bytes, ix, pageno as u64).expect("the zeroed memo");
-                if memo.kind == 4 {
-                    assert!(!live.contains(&(name.clone(), ix, pageno as u64)), "{name} pg={pageno} ix={ix}: no live row points at a zeroed memo");
-                }
-                *kinds.entry(memo.kind).or_insert(0) += 1;
-                assert!(memo.text(blobs::Width::Wide).is_some() || memo.text(blobs::Width::Narrow).is_some(), "{name} pg={pageno} ix={ix}: the text survives past the zero");
+            let len = block.len();
+            let n = u16::from_le_bytes([block[len - 6], block[len - 5]]) as u64;
+            blocks += 1;
+            slots += n;
+            let free: std::collections::BTreeSet<u64> = (1..=n).filter(|k| heap::slot_offset(block, *k).is_none()).collect();
+            used += n - free.len() as u64;
+            let mut seen = std::collections::BTreeSet::new();
+            let mut next = u16::from_le_bytes([block[len - 8], block[len - 7]]) as u64;
+            while next != 0 && seen.insert(next) {
+                let at = len - 10 - 2 * next as usize;
+                let link = u16::from_le_bytes([block[at], block[at + 1]]);
+                assert_eq!(link & 3, 2, "a free slot holds a link");
+                next = (link >> 2) as u64;
             }
+            if seen == free { chains += 1; }
         }
     }
-    assert_eq!(zeroed, 225, "memos with a zeroed first payload byte");
-    assert_eq!(kinds, std::collections::BTreeMap::from([(0, 3), (4, 222)]), "only empty and wide-text memos");
-    // Spot checks: a long HTML note and a short expression read past the zero.
-    let constants = by_name["constants"];
-    let html = blobs::resolve_at(constants, 1, 6).expect("the old html note");
-    assert!(html.text(blobs::Width::Wide).expect("text").starts_with("%3Cspan"));
-    let scen = by_name["scenariodata"];
-    let nine = blobs::resolve_at(scen, 1, 25).expect("the old expression");
-    assert_eq!(nine.text(blobs::Width::Wide), Some("9, 4.3, 2020, 4.5\u{a4})".to_string()));
+    assert_eq!((blocks, slots, used), (550, 5508, 5506), "heap blocks, slots and used slots");
+    assert_eq!(chains, blocks, "every free chain visits exactly the free slots");
+    for (table, field, _, ix, pg) in live_refs(&tables) {
+        let bytes = &tables.iter().find(|(n, _)| *n == table).unwrap().1;
+        let page = records::page_size(bytes);
+        let block = &bytes[pg as usize * page..(pg as usize + 1) * page];
+        assert!(heap::slot_offset(block, ix).is_some(), "{table} {field} pg={pg} ix={ix} names a used slot");
+    }
 }
 
 #[test]
-fn empty_memos_are_live_and_read_empty() {
+fn no_live_row_names_an_empty_record() {
+    // Replaces the 2026-10-19 empty-memo reading: through the slot directory the live
+    // references name counted, terminated and segmented memos only.
     let Some(tables) = tables() else { eprintln!("note: vendor area not found"); return; };
-    let live: std::collections::HashSet<(String, u64, u64)> = live_refs(&tables).into_iter().map(|(t, _, _, ix, pg)| (t, ix, pg)).collect();
-    let mut found = Vec::new();
-    for (name, bytes) in &tables {
-        let page = records::page_size(bytes);
-        for pageno in blobs::heap_pages(bytes) {
-            let block = &bytes[pageno * page..(pageno + 1) * page];
-            let stated = heap::stated(block).unwrap_or(0);
-            for ix in 1..=stated as u64 {
-                let Some(memo) = blobs::resolve_at(bytes, ix, pageno as u64) else { continue; };
-                if memo.kind != 0 { continue; }
-                assert_eq!(memo.bytes, vec![0; 12], "{name} pg={pageno} ix={ix}: twelve zero bytes");
-                assert_eq!(memo.text(blobs::Width::Wide), Some(String::new()));
-                assert!(live.contains(&(name.clone(), ix, pageno as u64)), "{name} pg={pageno} ix={ix}: live rows point at empty notes");
-                found.push((name.clone(), pageno, ix));
-            }
-        }
+    let mut kinds = std::collections::BTreeMap::new();
+    for (table, _, _, ix, pg) in live_refs(&tables) {
+        let bytes = &tables.iter().find(|(n, _)| *n == table).unwrap().1;
+        let memo = blobs::resolve_at(bytes, ix, pg).expect("resolves");
+        *kinds.entry(memo.kind).or_insert(0) += 1;
     }
-    assert_eq!(found.len(), 3, "empty memos area-wide");
+    assert_eq!(kinds, std::collections::BTreeMap::from([(3, 2607), (4, 1681), (5, 259)]));
 }
+
 /// The old content guess, kept here as the oracle the stated rule is measured against:
 /// wide wins when the units until the terminator are ASCII, narrow when the bytes are.
 fn old_guess(memo: &blobs::Memo) -> Option<String> {
@@ -558,7 +560,7 @@ fn stated_rule_matches_the_guess_where_it_reads() {
     let Some(tables) = tables() else { eprintln!("note: vendor area not found"); return; };
     let by_name: std::collections::HashMap<&str, &[u8]> = tables.iter().map(|(n, b)| (n.as_str(), b.as_slice())).collect();
     let refs = live_refs(&tables);
-    let live: std::collections::HashSet<(String, u64, u64)> = refs.iter().map(|(t, _, _, ix, pg)| (t.clone(), *ix, *pg)).collect();
+    let _live: std::collections::HashSet<(String, u64, u64)> = refs.iter().map(|(t, _, _, ix, pg)| (t.clone(), *ix, *pg)).collect();
     // Live memos read in field width. The guess agrees everywhere but two classes:
     // five-unit counted texts (no NUL unit to stop at) and wide texts past ASCII.
     let mut same = 0;
@@ -579,108 +581,40 @@ fn stated_rule_matches_the_guess_where_it_reads() {
         }
     }
     assert_eq!((same, counted, past), (4433, 50, 64), "live partition");
-    // Dead memos read by shape where a field width no longer exists.
-    let mut dsame = 0;
-    let mut dfp = 0;
-    let mut dpast = 0;
-    for (name, bytes) in &tables {
-        let page = records::page_size(bytes);
-        for pageno in blobs::heap_pages(bytes) {
-            let block = &bytes[pageno * page..(pageno + 1) * page];
-            let stated = heap::stated(block).unwrap_or(0);
-            for ix in 1..=stated as u64 {
-                if live.contains(&(name.clone(), ix, pageno as u64)) { continue; }
-                let memo = blobs::resolve_at(bytes, ix, pageno as u64).expect("the dead memo");
-                let old = old_guess(&memo);
-                if blobs::tombstoned(bytes, ix, pageno as u64) == Some(true) && memo.kind == 4 {
-                    assert_eq!(old_guess(&memo), old, "{name} pg={pageno} ix={ix}: the walk skips the zero for both");
-                    assert!(memo.text(blobs::Width::Wide).is_some() || memo.text(blobs::Width::Narrow).is_some());
-                    dsame += 1;
-                    continue;
-                }
-                let new = memo.text(if wide_shape(&memo.bytes) { blobs::Width::Wide } else { blobs::Width::Narrow });
-                if new == old { dsame += 1; continue; }
-                if memo.kind == 5 { dfp += 1; assert_eq!(new, None); continue; }
-                dpast += 1;
-                assert_eq!(memo.kind, 4);
-                assert!(wide_shape(&memo.bytes));
-            }
-        }
-    }
-    assert_eq!((dsame, dfp, dpast), (931, 26, 1), "dead partition");
+    // The dead-memo partition of 2026-10-19 is gone: it read positions 1..stated as ordinals,
+    // and positions are slots (see `the_slot_directory_names_every_memo`).
 }
 #[test]
 fn kind5_memos_are_segment_directories() {
+    // Corrected 2026-10-21. A kind-5 memo lists its segments as u32 triples: the slot of a
+    // segment record, the heap page it sits on, and the byte offset its part ends at in the
+    // assembled value. The 2026-10-19 reading took the triple for (op, segment id, chunked
+    // offset). Every live directory names used slots with offsets that strictly increase, and
+    // assembles into text in its field's width.
     let Some(tables) = tables() else { eprintln!("note: vendor area not found"); return; };
-    let by_name: std::collections::HashMap<&str, &[u8]> = tables.iter().map(|(n, b)| (n.as_str(), b.as_slice())).collect();
-    assert_eq!(tables.len(), 86, "tables in the shipped area");
-    let refs = live_refs(&tables);
-    let live: std::collections::HashSet<(String, u64, u64)> = refs.iter().map(|(t, _, _, ix, pg)| (t.clone(), *ix, *pg)).collect();
-    let mut memos = 0;
-    let mut triples = 0;
-    let mut max_at = 0;
-    let mut max_op = 0;
-    let mut range: std::collections::BTreeMap<String, (u32, u32)> = std::collections::BTreeMap::new();
-    let mut small: std::collections::BTreeMap<u32, std::collections::BTreeSet<String>> = std::collections::BTreeMap::new();
-    let mut live_plain = 0;
-    let mut shadowed = 0;
-    let mut unshadowed = Vec::new();
-    let mut dead_twos = 0;
-    let mut mutones: std::collections::BTreeSet<(String, u32, u32)> = std::collections::BTreeSet::new();
-    let mut all: std::collections::BTreeMap<(String, u64, u64), (bool, Vec<blobs::Segment>)> = std::collections::BTreeMap::new();
-    for (name, bytes) in &tables {
+    let (mut dirs, mut entries) = (0, 0);
+    for (table, field, ftype, ix, pg) in live_refs(&tables) {
+        let bytes = &tables.iter().find(|(n, _)| *n == table).unwrap().1;
+        let memo = blobs::resolve_at(bytes, ix, pg).expect("resolves");
+        if memo.kind != 5 { continue; }
+        dirs += 1;
+        let segs = memo.segments().expect("well formed");
+        entries += segs.len();
         let page = records::page_size(bytes);
-        for pageno in blobs::heap_pages(bytes) {
-            let block = &bytes[pageno * page..(pageno + 1) * page];
-            let stated = heap::stated(block).unwrap_or(0);
-            for ix in 1..=stated as u64 {
-                let Some(memo) = blobs::resolve_at(bytes, ix, pageno as u64) else { continue; };
-                if memo.kind != 5 { continue; }
-                let segs = memo.segments().expect("every kind-5 memo is well formed");
-                memos += 1;
-                triples += segs.len();
-                let is_live = live.contains(&(name.clone(), ix, pageno as u64));
-                all.insert((name.clone(), pageno as u64, ix), (is_live, segs.clone()));
-                for s in &segs {
-                    max_at = max_at.max(s.at);
-                    max_op = max_op.max(s.op);
-                    let e = range.entry(name.clone()).or_insert((s.id, s.id));
-                    e.0 = e.0.min(s.id);
-                    e.1 = e.1.max(s.id);
-                    if s.id <= 8 { small.entry(s.id).or_default().insert(name.clone()); }
-                    if s.op == 1 { mutones.insert((name.clone(), s.id, s.at)); }
-                }
-                if is_live && segs.iter().any(|s| s.op == 1 || s.op == 2) { live_plain += 1; }
-                if !is_live && segs.iter().any(|s| s.op == 2) { dead_twos += 1; }
-            }
+        let mut last = 0;
+        for s in &segs {
+            let (slot, spage, end) = (s.op as u64, s.id as usize, s.at);
+            assert!(end > last, "{table} {field}: offsets increase");
+            last = end;
+            let block = &bytes[spage * page..(spage + 1) * page];
+            assert!(heap::slot_offset(block, slot).is_some(), "{table} {field}: segment slot {slot} of page {spage} is used");
         }
+        let text = blobs::resolve_text(bytes, blobs::join(ix, pg), blobs::width_of(&ftype));
+        assert!(text.is_some(), "{table} {field} pg={pg} ix={ix} assembles");
     }
-    assert_eq!((memos, triples), (449, 950), "directories and entries area-wide");
-    assert!(max_at > 60000, "offsets pass any row or field id: {max_at}");
-    assert_eq!(max_op, 170, "ops pass the table count");
-    for s in all.values().flat_map(|(_, segs)| segs) { assert!(s.chunk() <= 16, "chunks stay small"); }
-    let range: Vec<(String, (u32, u32))> = range.into_iter().collect();
-    assert_eq!(range, vec![("constants", (5, 15)), ("fuels", (19, 103)), ("masterstructure", (6, 7)), ("refs", (17, 66)), ("scenariodata", (13, 25)), ("scenarioeffects", (6, 260)), ("scenarios", (13, 20)), ("tedeffects", (6, 260)), ("tedtechdata", (7, 184))].into_iter().map(|(t, r)| (t.to_string(), r)).collect::<Vec<_>>());
-    assert!(small[&6].len() >= 3 && small[&7].len() >= 3, "low numbers repeat across tables: {small:?}");
-    // A live op-2 entry shadows a dead op-1 entry with the same numbers, 188 of 192.
-    let mut twos = 0;
-    for ((t, _, _), (is_live, segs)) in &all {
-        if !is_live { continue; }
-        for s in segs {
-            if s.op != 2 { continue; }
-            twos += 1;
-            let hit = all.iter().any(|((dt, _, _), (dlive, dsegs))| !dlive && dt == t && dsegs.iter().any(|d| d.op == 1 && d.id == s.id && d.at == s.at));
-            if hit { shadowed += 1; } else { unshadowed.push((t.clone(), s.id, s.at)); }
-        }
-    }
-    assert_eq!(twos, 191, "live current entries");
-    assert_eq!(shadowed, 188, "with a dead plain shadow");
-    assert_eq!(unshadowed, vec![("scenarios".to_string(), 14, 1558), ("scenarios".to_string(), 15, 1654), ("scenarios".to_string(), 16, 3476)], "without a dead plain shadow");
-    assert!(unshadowed.iter().all(|(t, _, _)| t == "scenarios"), "the four sit in one table");
-    assert_eq!(dead_twos, 1, "one twice-superseded directory keeps a current entry");
-    assert_eq!(live_plain + 1, all.iter().filter(|(_, (l, _))| *l).count(), "one live directory holds only op 3");
-    let _ = (by_name, mutones);
+    assert_eq!((dirs, entries), (259, 459), "live directories and their entries");
 }
+
 #[test]
 fn current_accounts_directories_beside_baseline_text() {
     let Some(bytes) = member("scenariodata") else { eprintln!("note: vendor area not found"); return; };

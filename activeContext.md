@@ -244,3 +244,52 @@ Baseline: 128 tests green (GNU + rust-lld, `target-leapblob`).
 - Churn note: stride-agent `records.rs` rework mid-round misdecoded masterstructure rows
   (BranchID -8/-1); branch-notes test now pins memos by position, join sweep still green.
 - Full suite green at finish: 128 tests over 15 suites, no warnings.
+## 2026-10-21 - leap-rs: calculation engine to result parity on the public sample areas
+
+Goal (/goal): complete the LEAP Rust rewrite and test it against public case studies until it matches.
+Oracle: each sample area SEI ships (`C:/Program Files/LEAP/{Freedonia,Asiana,Transport Exercise,
+Optimization Exercise}.zip`) carries `_RegressionTests/Definitive/RegressionResults.nx1`, LEAP's own
+results at full double precision keyed (BranchID, VariableID, ScenarioID, RegionID, YearID, ExtraID1,
+ExtraID2): Freedonia 57,380 values (45 result vars, scen 2/11), Asiana 578,480 (36 vars), Transport
+13,552 (16 vars, stock turnover), Optimization 83,457 (40 vars, NEMO LP). Result variable names and
+extra dimensions come from `_dictionaryNX.zip` `ResultDimensions`; input variable names from `Variables`.
+Match criterion: |got - want| <= 1e-6 * max(|want|, scale of that variable) (LEAP's own float noise
+sits at 1e-10 of the variable's scale).
+
+### Plan
+- [x] 0. Stride inference so other areas and the dictionary read (`records::infer_stride`/`stride_of`,
+      red/green in `tests/stride_inference.rs`); ShortString/AutoInc/Date decoders.
+- [ ] 1. `table` + `area` modules: any table of an area dir or zip as typed rows; dictionary tables.
+- [ ] 2. Results oracle reader + comparison harness (per area, per variable match counts).
+- [ ] 3. Expression evaluator over the area data model (every code the four areas use).
+- [ ] 4. Demand: Activity Level (2027), Final Energy Demand (30), Useful Energy (31).
+- [ ] 5. Stock turnover (Transport Exercise: 60-68, 81, 85).
+- [ ] 6. Transformation modules, dispatch, capacity (1-13, 16, 22, 42, 43, 46, 65, 77, 82, 89, 126, 127).
+- [ ] 7. Supply balances (14, 17, 18, 19, 36, 73, 84, 125, 138).
+- [ ] 8. Emissions and GWP (20, 21, 40, 41, 104, 105) and allocation to demands (35).
+- [ ] 9. Costs (5, 86, 87, 88, 103).
+- [ ] 10. Asiana specifics (InterpFSY, Call, indicators), Optimization Exercise (least-cost LP).
+- [ ] 11. E2E tests per case study, docs (README/PORTING), report.
+
+### Progress (2026-10-21, session paused at usage limit)
+- [x] 1. `table`, `area`, `data` modules; kind-5 long-memo assembly (`blobs::assemble`/`resolve_text`).
+- [x] 2. `results` oracle reader + `examples/compare.rs`; `tests/case_studies.rs` (E2E, red/green).
+- [x] 3. `calc::inputs` evaluator (scenario chains, Growth/Interp/Step/Remainder/%/GrowthAs/
+      BaselineValue/AnnualizedCost, @C1000.. built-ins from the decompiled registration).
+- [x] 4. Demand: Freedonia Final Energy Demand 360/360, Useful Energy 30/30 (FEI, category
+      intensity with fuel shares, useful-energy method, physical-unit fuels).
+- [~] 5. Stock turnover: Transport Exercise 13,510/13,552 (99.69%); only base-year Device
+      Retirements (var 85, 42 values = 0.133799 x base stock) unexplained -- search decompilation.
+- Open: scenario multi-inheritance order is an assumption (later entry wins); Freedonia vars
+  beyond 30/31 (transformation, supply, emissions, costs), Optimization (LP), Asiana not started.
+- Not committed yet (CLAUDE.md wants /verify before commit). Background research agent was
+  writing `leap-rs/research/2026-10-21_leap-methodology.md`.
+
+### Progress (2026-10-21, resumed)
+- Freedonia 57,370/57,380 (99.98%): transformation (simple/standard modules, historical
+  dispatch, merit-order load-curve dispatch, endogenous capacity), resources, emissions incl.
+  non-energy, allocation to demands (35/104/105), costs (5/86/88/103) all match. Open: 10 values of
+  gasoline-in-litres SO2 (LEAP = ours/1.1).
+- Transport 13,510/13,552: open base-year Device Retirements (42).
+- Optimization Exercise 89.3%, Asiana 96.8% before area-specific work.
+- /verify (independent subagent) -> verified, checks in `.verify/leap-rs-calc.json`.

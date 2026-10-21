@@ -115,6 +115,30 @@ pub fn memo(block: &[u8], position: u64) -> Option<String> {
     None
 }
 
+/// Where the memo at a one-based position starts, by the block's slot directory.
+///
+/// A heap block ends in a directory that grows down from its four-byte trailer: the u16 at
+/// `len - 6` counts the slots, `len - 8` heads the free-slot list, and slot `k`'s
+/// record offset is the u16 at `len - 10 - 2k`. A position is a slot, not an ordinal: once memos
+/// are freed their slots stay, holding `next_free * 4 + 2`, and the memos after them keep their
+/// numbers. The Optimization Exercise's scenario table frees slots 73 to 76 of one block, and only
+/// the directory puts its later rows on their own memos -- an ordinal walk reads them five memos
+/// on. Nothing when the directory does not hold the position or names a free slot.
+pub fn slot_offset(block: &[u8], position: u64) -> Option<usize> {
+    let len = block.len();
+    let word = |at: usize| block.get(at..at + 2).map(|b| u16::from_le_bytes([b[0], b[1]]) as usize);
+    let slots = word(len.checked_sub(6)?)?;
+    let k = position as usize;
+    if k == 0 || k > slots || 10 + 2 * k > len {
+        return None;
+    }
+    let at = word(len - 10 - 2 * k)?;
+    if at & 3 == 2 || at < DATA_START || at + 6 > len - 10 - 2 * slots {
+        return None;
+    }
+    Some(at)
+}
+
 /// One record's kind byte and payload bytes at a one-based position, without decoding the text.
 ///
 /// `memos` and `memo` read every memo as wide text, which is what the scenario table's memos are.
@@ -127,6 +151,10 @@ pub fn record_bytes(block: &[u8], position: u64) -> Option<(u8, Vec<u8>)> {
     if position == 0 {
         return None;
     }
+    if let Some(at) = slot_offset(block, position) {
+        let (from, end, _) = header(block, at)?;
+        return Some((block[at + 2], block[from..end].to_vec()));
+    }
     let want = stated(block).map(|count| count as usize);
     let mut at = DATA_START;
     let mut seen = 0usize;
@@ -138,6 +166,40 @@ pub fn record_bytes(block: &[u8], position: u64) -> Option<(u8, Vec<u8>)> {
         seen += 1;
         if seen == position as usize {
             return Some((block[at + 2], block[from..end].to_vec()));
+        }
+        at += size;
+    }
+    None
+}
+
+/// One record's kind byte and its whole payload at a one-based position: the `allocation - 1`
+/// bytes after the kind byte, with nothing skipped.
+///
+/// This is how a segment of a long memo reads. A memo longer than one record is stored as a
+/// directory of segments (`crate::blobs::assemble`), and a segment boundary can fall inside a
+/// UTF-16 unit, so a segment's first byte can be the zero high byte of a character the previous
+/// segment began. The text readers above take a zero there for a skipped byte; a segment needs
+/// every byte its allocation counts.
+pub fn record_raw(block: &[u8], position: u64) -> Option<(u8, Vec<u8>)> {
+    if position == 0 {
+        return None;
+    }
+    if let Some(at) = slot_offset(block, position) {
+        let alloc = u16::from_le_bytes([block[at], block[at + 1]]) as usize;
+        return Some((block[at + 2], block.get(at + 3..at + 2 + alloc)?.to_vec()));
+    }
+    let want = stated(block).map(|count| count as usize);
+    let mut at = DATA_START;
+    let mut seen = 0usize;
+    while at + 6 <= block.len() {
+        if want.is_some_and(|count| seen >= count) {
+            break;
+        }
+        let (_, _, size) = header(block, at)?;
+        seen += 1;
+        if seen == position as usize {
+            let alloc = u16::from_le_bytes([block[at], block[at + 1]]) as usize;
+            return Some((block[at + 2], block.get(at + 3..at + 2 + alloc)?.to_vec()));
         }
         at += size;
     }
