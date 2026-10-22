@@ -96,7 +96,7 @@ fn calls(expr: &Expr, out: &mut Vec<(u32, usize)>) {
         }
         Expr::Unary { expr, .. } => calls(expr, out),
         Expr::Paren(inner) => calls(inner, out),
-        Expr::Number(_) | Expr::Const(_) | Expr::Series(_) => {}
+        Expr::Number(_) | Expr::Const(_) | Expr::Series(_) | Expr::Ident(_) => {}
     }
 }
 

@@ -238,6 +238,9 @@ impl<'m> Inputs<'m> {
     pub fn eval(&self, e: &Expr, cx: &Cx) -> f64 {
         match e {
             Expr::Number(s) => s.parse().unwrap_or(0.0),
+            // `year` is the year being calculated.
+            Expr::Ident(name) if name.eq_ignore_ascii_case("year") => cx.year as f64,
+            Expr::Ident(_) => 0.0,
             Expr::Paren(inner) => self.eval(inner, cx),
             Expr::Unary { op, expr } => {
                 let v = self.eval(expr, cx);
@@ -253,6 +256,13 @@ impl<'m> Inputs<'m> {
                     BinOp::Add => a + b,
                     BinOp::Sub => a - b,
                     BinOp::Mul => a * b,
+                    BinOp::Pow => a.powf(b),
+                    BinOp::Lt => f64::from(u8::from(a < b)),
+                    BinOp::Gt => f64::from(u8::from(a > b)),
+                    BinOp::Le => f64::from(u8::from(a <= b)),
+                    BinOp::Ge => f64::from(u8::from(a >= b)),
+                    BinOp::Eq => f64::from(u8::from(a == b)),
+                    BinOp::Ne => f64::from(u8::from(a != b)),
                     BinOp::Div => {
                         if b == 0.0 {
                             0.0
@@ -311,7 +321,13 @@ impl<'m> Inputs<'m> {
     pub fn fuel_property(&self, code: u32, fuel: i64) -> f64 {
         let Some(t) = self.m.table("fuels") else { return 0.0 };
         let Some(row) = t.rows.iter().find(|r| t.int(r, "FuelID") == Some(fuel)) else { return 0.0 };
-        let f = |name: &str| t.float(row, name).unwrap_or(0.0);
+        // LEAP reads the percentage properties to two decimals: Asiana's charcoal sulfur of 0.036%
+        // loads as 0.04 and its 0.00064% for gas and LPG as nothing, and Freedonia's gasoline 0.044%
+        // as 0.04 -- the only reading under which their SO2 loadings match.
+        let f = |name: &str| {
+            let v = t.float(row, name).unwrap_or(0.0);
+            if name.starts_with("Percent") || name == "SulfurRetention" { (v * 100.0).round() / 100.0 } else { v }
+        };
         match code {
             175 => f("PercentCarbon") / 100.0,
             176 => f("PercentSulfur") / 100.0,
@@ -383,6 +399,22 @@ impl<'m> Inputs<'m> {
         let tail = (items.len() % 2 == 1).then(|| items[items.len() - 1]);
         let points = items.chunks_exact(2).map(|p| (p[0], p[1])).collect();
         (points, tail)
+    }
+
+    /// Every value a function's arguments hold, series literals split into their entries.
+    fn series_values(&self, args: &[Expr], cx: &Cx) -> Vec<f64> {
+        let mut items = Vec::new();
+        for a in args {
+            match a {
+                Expr::Series(inner) => {
+                    for part in split_top(inner) {
+                        items.push(self.parse(part).map(|t| self.eval(&t, cx)).unwrap_or(0.0));
+                    }
+                }
+                other => items.push(self.eval(other, cx)),
+            }
+        }
+        items
     }
 
     /// Series points headed by the base-year value when they start after the base year and the
@@ -492,6 +524,15 @@ impl<'m> Inputs<'m> {
             165 => UNLIMITED,
             167 => 1.0,
             168 => 0.0,
+            // If(condition, then, else), its arguments in a series literal or as arguments.
+            150 => {
+                let parts: Vec<f64> = self.series_values(args, cx);
+                match parts.as_slice() {
+                    [c, a, b, ..] => if *c != 0.0 { *a } else { *b },
+                    [c, a] => if *c != 0.0 { *a } else { 0.0 },
+                    _ => 0.0,
+                }
+            }
             // Call(¤Name¤): a script function.
             105 => {
                 let name = match args.first() {

@@ -177,8 +177,11 @@ And the same tables hold URL-encoded HTML, whose `@page` rule is a wide, NUL-ter
 printable run that looks like arithmetic until the `@F`, `@V` or `@C` marker is required.
 
 The grammar is `@F<code>` for a function, `@V(...)` for a variable and `@C<code>` for a constant,
-with numbers, `+ - * /`, parentheses and comma-separated arguments, and the series literal kept
-verbatim because its internal grammar is not established. The binary corroborates the syntax
+with numbers, `+ - * /`, the power `^`, the comparisons `< > <= >= = <>`, a bare name such as
+`year`, parentheses and comma-separated arguments, and the series literal kept
+verbatim because its internal grammar is not established. A comparison is looser than a sum and
+the power binds tighter than a product, so `1<2+3` is `1<(2+3)` and `2*3^2` is `2*(3^2)`. The
+binary corroborates the syntax
 from inside rather than the corpus implying it: it formats `@F007`, `@F039` and `@F083` itself,
 and its error strings say "Separate years and values with the list separator character" and
 "Year parameters of the %s function are not in ascending chronological order".

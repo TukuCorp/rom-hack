@@ -22,7 +22,7 @@
       "claim": "The calculation uses the area's inputs only: with every regression/results file removed from the inputs, calc::run gives bit-identical output to the full zip, and all claimed variables (independently listed in the probe) still match LEAP's definitive results.",
       "run": "bash .verify/checks/calc_without_oracle.sh",
       "expect_exit": 0,
-      "expect_output": "(?s)Freedonia: stripped-input results \\d+ values, full-zip results \\d+ values, bit-identical: true.*Freedonia: 40 held variables, [1-9]\\d* oracle values checked: ALL MATCH.*Transport Exercise: stripped-input results \\d+ values, full-zip results \\d+ values, bit-identical: true.*Transport Exercise: 15 held variables, [1-9]\\d* oracle values checked: ALL MATCH",
+      "expect_output": "(?s)Freedonia: stripped-input results \\d+ values, full-zip results \\d+ values, bit-identical: true.*Freedonia: 45 held variables, [1-9]\\d* oracle values checked: ALL MATCH.*Transport Exercise: stripped-input results \\d+ values, full-zip results \\d+ values, bit-identical: true.*Transport Exercise: 15 held variables, [1-9]\\d* oracle values checked: ALL MATCH",
       "timeout": 1800
     },
     {
@@ -35,7 +35,7 @@
     },
     {
       "id": "c2d-held-lists",
-      "claim": "The HELD lists in tests/case_studies.rs are exactly the claimed Freedonia (40 ids) and Transport Exercise (15 ids) variables, each wired to a #[test].",
+      "claim": "The HELD lists in tests/case_studies.rs are exactly the claimed Freedonia (45 ids) and Transport Exercise (15 ids) variables, each wired to a #[test].",
       "run": "python -I .verify/checks/held_lists.py",
       "expect_exit": 0,
       "expect_output": "HELD lists match the claim",

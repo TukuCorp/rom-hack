@@ -93,7 +93,8 @@ into a block that states 152; at the stride the block's own headers show, the re
 header begins.
 
 And the arithmetic has values. `eval` turns a tree into a number where the port can
-stand behind it -- the numbers the file spells, `+ - * /` with the parser's precedence, `@F010`,
+stand behind it -- the numbers the file spells, `+ - * /` and the power `^` with the parser's
+precedence, the comparisons `< > <= >= = <>` which value to 1 or 0, `@F010`,
 whose decompiled evaluator `FUN_01bcf430` is a single division by 100.0, `@F029`/`@F030`
 (Million/Billion, pure powers of ten), and now the growth family, the annualized cost and the
 baseline value: Growth, Interp, Step, GrowthAs and AnnualizedCost evaluate through
@@ -109,7 +110,7 @@ evaluate.
 
 ## How it is checked
 
-One hundred twenty-eight tests over fifteen suites. None of them asserts against the crate's own output, but
+One hundred thirty-five tests over eighteen suites. None of them asserts against the crate's own output, but
 read the `nx1_*` and `model` suites knowing where their expected values come from: the calendar and
 container vectors are output of the vendor's own code, while the table oracles come from
 `tools/capture_nx1_records.py`, a Python reader written from the same byte-level reading as the
@@ -200,13 +201,40 @@ satisfying its links, record bases measured by hand, and the live counts the fil
 * `vendor_e2e` - the ported binary and the vendor binary run against each other over 55
   argument lists, plus the five sample areas SEI ships, up to twelve megabytes each. Nothing
   pre-recorded.
+* `case_studies` - the calculation against LEAP's own definitive regression results, on the sample
+  areas SEI ships. Every held variable of Freedonia and of the Transport Exercise has to match
+  `RegressionResults.nx1` within `results::close`, and nothing is mocked: the inputs and the
+  oracle are the vendor's own files, read through the crate's own readers. The oracle is read by
+  the test only, never by the calculation. It prints a note and passes when LEAP is not installed.
 
 Beyond the suite, `tools/differential_sweep.py` builds archives nobody chose and diffs the two
 binaries over 87 argument lists. It currently reports 0 divergences over 80 archives.
 
+## The calculation
+
+`calc` calculates an area from its inputs alone: the demand, the transformation and its dispatch,
+the supply balances, the resources, the emissions and the costs. The result is held against
+LEAP's own definitive regression results, which the sample areas SEI ships carry at full double
+precision, keyed by branch, variable, scenario, region, year and extra dimension. Nothing is
+mocked: the inputs and the oracle are the vendor's own files, read through the crate's own
+readers, and the oracle is read by the test only, never by the calculation.
+
+| area | matched |
+|---|---|
+| Freedonia | 57,380 / 57,380 (100.00%) |
+| Asiana | 578,468 / 578,480 (99.998%) |
+| Transport Exercise | 13,510 / 13,552 (99.69%) |
+| Optimization Exercise | 78,392 / 83,457 (93.93%) |
+
+`tests/case_studies.rs` holds Freedonia's 45 variables and the Transport Exercise's 15 to that
+oracle. The three areas that are not at 100% are short of a few values each: the Transport
+Exercise's base-year Device Retirements, the Optimization Exercise's least-cost LP scenarios,
+and Asiana's refinery NMVOC dispatch station and two crude oil reserve values. `activeContext.md`
+carries the state and what is next.
+
 ## The two things not yet reachable
 
-The model itself, meaning the arithmetic behind a LEAP area, is not ported, and the two routes
+The model itself, meaning the arithmetic behind a LEAP area, is not ported in full, and the two routes
 to it are both gated. They are written up in `docs/nx1-reconnaissance.md`.
 
 * Through LEAP, which is the sanctioned route: the install registers a COM automation server
@@ -231,17 +259,18 @@ to it are both gated. They are written up in `docs/nx1-reconnaissance.md`.
   through `FUN_01be8250` and `FUN_01bbc620` against hand-arithmetic goldens. What is not done is the
   evaluation of everything else the area stores.
 
-So the honest state is: one component ported and verified hard, and the model readable down to its
-branch tree, its year list, its keys and, for the first block, its equations. The arithmetic parses,
+So the honest state is: one component ported and verified hard, the model readable down to its
+branch tree, its year list, its keys and its equations, and the calculation itself now running
+over the sample areas and held to LEAP's own results. The arithmetic parses,
 every code in it is named, the address of the function that would evaluate it is known, the rows it
 would read are where the dictionary says they are, and the shipped model's expressions now
 come out as text -- 1,009 scenario memos and 2,067 TED environmental ones resolve, of which the
-plain numbers parse and evaluate, except the two scenario rows whose memos are binary arrays. Of those, the ones that are plain numbers have values, and ten function codes are ported end to end:
+plain numbers parse and evaluate, except the two scenario rows whose memos are binary arrays. Of those, the ones that are plain numbers have values, and the function codes behind the calculation are ported end to end:
 plain arithmetic and `@F010`/`@F029`/`@F030`, the Growth/Interp/Step/GrowthAs family, the annualized
 cost and BaselineValue, with stored-expression goldens holding each against hand arithmetic -- 861
-of the 1,009 stored expressions evaluate at 2027. The rest of the codes the area stores -- the fuel
-property references, Remainder and YearlyShape -- still read `None`, as do names and settings the
-table holds alongside the arithmetic.
+of the 1,009 stored expressions evaluate at 2027. What the calculation still reads as nothing is
+narrower than it was: the fuel property references, Remainder and YearlyShape read `None` in the
+standalone evaluator, and the calculation reaches them by its own path, through the area's tables.
 
 ## Build and test
 

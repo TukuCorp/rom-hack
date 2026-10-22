@@ -14,9 +14,9 @@ const LEAP: &str = "C:/Program Files/LEAP";
 
 /// The variables each area is held to in full.
 const HELD: &[(&str, &[i64])] = &[
-    // Every Freedonia variable but the costs (5, 86, 88, 103) and the pollutant loadings (40,
-    // where one gasoline SO2 branch stated in litres is 1.1 times LEAP's).
-    ("Freedonia", &[1, 2, 3, 4, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 30, 31, 35, 36, 41, 42, 43, 46, 65, 73, 77, 82, 84, 87, 89, 104, 105, 125, 126, 127, 2027]),
+    // Every variable the Freedonia regression results hold: all 45 of them, the costs (5, 86,
+    // 88, 103) and the pollutant loadings (40) included.
+    ("Freedonia", &[1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 30, 31, 35, 36, 40, 41, 42, 43, 46, 65, 73, 77, 82, 84, 86, 87, 88, 89, 103, 104, 105, 125, 126, 127, 2027]),
     // Every Transport Exercise variable but 85 (Device Retirements), whose base-year value is
     // not yet derived; its later years already match.
     ("Transport Exercise", &[20, 21, 30, 40, 41, 60, 61, 62, 64, 66, 67, 68, 81, 125, 2027]),

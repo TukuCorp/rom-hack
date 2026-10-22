@@ -66,6 +66,25 @@ fn the_operators_take_the_precedence_the_parser_gives_them() {
 }
 
 #[test]
+fn the_power_and_the_comparisons_evaluate_as_the_language_states() {
+    for (src, want) in [
+        ("2^3", 8.0),
+        ("2^3^2", 512.0),
+        ("2*3^2", 18.0),
+        ("1<2", 1.0),
+        ("1>2", 0.0),
+        ("2<=2", 1.0),
+        ("2>=3", 0.0),
+        ("2=2", 1.0),
+        ("2<>2", 0.0),
+    ] {
+        assert_eq!(eval::text(src), Some(want), "{src}");
+    }
+    // A name is a name: the standalone evaluator has no year to answer with.
+    assert_eq!(eval::text("year"), None);
+}
+
+#[test]
 fn the_percent_function_divides_by_a_hundred() {
     // @F010 is the registry's `%`, `_pc`, and the decompiled body at 0x1bcf430 is a single
     // division by 100.0. The corpus stores it wrapped in @F001, as `@F001(@F010(3))`, which is
@@ -482,7 +501,11 @@ fn the_share_of_stored_expressions_that_evaluate() {
         }
     }
     assert_eq!(some, 861, "stored expressions evaluating at 2027");
-    assert_eq!(parse_fail, 69, "names, padded property refs and noted memos");
+    // Ten of the texts that used to refuse to parse are a single name, and a name is now a
+    // token: they parse and have no value, so they count as unresolvable rather than as text
+    // the reader cannot take. The rest are padded property refs, unit strings and noted
+    // memos, which still do not parse.
+    assert_eq!(parse_fail, 59, "padded property refs, unit strings and noted memos");
     assert_eq!(unsettled, 67, "fuel properties, Remainder and YearlyShape");
-    assert_eq!(unresolvable, 12, "missing rows, unknown constants and junk bases");
+    assert_eq!(unresolvable, 22, "missing rows, unknown constants, junk bases and names");
 }

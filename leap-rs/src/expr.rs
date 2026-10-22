@@ -74,6 +74,17 @@ pub enum TokenKind {
     Comma,
     LParen,
     RParen,
+    /// `^`, the power operator.
+    Caret,
+    /// Comparisons: `<`, `>`, `<=`, `>=`, `=`, `<>`.
+    Less,
+    Greater,
+    LessEq,
+    GreaterEq,
+    Equal,
+    NotEqual,
+    /// A name: `year`, the year being calculated.
+    Ident,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,6 +93,13 @@ pub enum BinOp {
     Sub,
     Mul,
     Div,
+    Pow,
+    Lt,
+    Gt,
+    Le,
+    Ge,
+    Eq,
+    Ne,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -116,6 +134,8 @@ pub enum Expr {
     },
     /// Parentheses are kept, because dropping them would change what re-parsing produces.
     Paren(Box<Expr>),
+    /// A name, such as `year`.
+    Ident(String),
 }
 
 /// One year/value pair of a series literal, as `parse_series` reads it.
@@ -322,6 +342,44 @@ pub fn tokenize(src: &str) -> Result<Vec<Token>, Error> {
                 i += 1;
                 TokenKind::RParen
             }
+            '^' => {
+                i += 1;
+                TokenKind::Caret
+            }
+            '<' => match bytes.get(i + 1) {
+                Some(b'=') => {
+                    i += 2;
+                    TokenKind::LessEq
+                }
+                Some(b'>') => {
+                    i += 2;
+                    TokenKind::NotEqual
+                }
+                _ => {
+                    i += 1;
+                    TokenKind::Less
+                }
+            },
+            '>' => {
+                if bytes.get(i + 1) == Some(&b'=') {
+                    i += 2;
+                    TokenKind::GreaterEq
+                } else {
+                    i += 1;
+                    TokenKind::Greater
+                }
+            }
+            '=' => {
+                i += 1;
+                TokenKind::Equal
+            }
+            c if c.is_ascii_alphabetic() || c == '_' => {
+                i += 1;
+                while bytes.get(i).is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_') {
+                    i += 1;
+                }
+                TokenKind::Ident
+            }
             '@' => {
                 i = lex_reference(src, start)?;
                 match bytes[start + 1] {
@@ -429,7 +487,7 @@ pub fn parse(src: &str) -> Result<Expr, Error> {
         tokens,
         at: 0,
     };
-    let expr = p.sum()?;
+    let expr = p.comparison()?;
     if let Some(t) = p.tokens.get(p.at) {
         return Err(Error::new(t.start, "trailing input after the expression"));
     }
@@ -456,6 +514,34 @@ impl<'a> Parser<'a> {
 
     fn text(&self, t: Token) -> &'a str {
         &self.src[t.start..t.end]
+    }
+
+    /// `comparison := sum (('<' | '>' | '<=' | '>=' | '=' | '<>') sum)?`
+    fn comparison(&mut self) -> Result<Expr, Error> {
+        let lhs = self.sum()?;
+        let op = match self.peek() {
+            Some(TokenKind::Less) => BinOp::Lt,
+            Some(TokenKind::Greater) => BinOp::Gt,
+            Some(TokenKind::LessEq) => BinOp::Le,
+            Some(TokenKind::GreaterEq) => BinOp::Ge,
+            Some(TokenKind::Equal) => BinOp::Eq,
+            Some(TokenKind::NotEqual) => BinOp::Ne,
+            _ => return Ok(lhs),
+        };
+        self.at += 1;
+        let rhs = self.sum()?;
+        Ok(Expr::Binary { op, lhs: Box::new(lhs), rhs: Box::new(rhs) })
+    }
+
+    /// `power := primary ('^' unary)?`, right-associative.
+    fn power(&mut self) -> Result<Expr, Error> {
+        let base = self.primary()?;
+        if self.peek() != Some(TokenKind::Caret) {
+            return Ok(base);
+        }
+        self.at += 1;
+        let exponent = self.unary()?;
+        Ok(Expr::Binary { op: BinOp::Pow, lhs: Box::new(base), rhs: Box::new(exponent) })
     }
 
     /// `sum := product (('+' | '-') product)*`
@@ -501,7 +587,7 @@ impl<'a> Parser<'a> {
         let op = match self.peek() {
             Some(TokenKind::Minus) => UnOp::Neg,
             Some(TokenKind::Plus) => UnOp::Pos,
-            _ => return self.primary(),
+            _ => return self.power(),
         };
         self.at += 1;
         let expr = self.unary()?;
@@ -537,8 +623,9 @@ impl<'a> Parser<'a> {
             TokenKind::VarRef => Ok(Expr::Var {
                 args: self.optional_arguments()?,
             }),
+            TokenKind::Ident => Ok(Expr::Ident(self.text(t).to_string())),
             TokenKind::LParen => {
-                let inner = self.sum()?;
+                let inner = self.comparison()?;
                 self.expect(TokenKind::RParen, "a closing parenthesis")?;
                 Ok(Expr::Paren(Box::new(inner)))
             }
@@ -565,7 +652,7 @@ impl<'a> Parser<'a> {
         let mut args = Vec::new();
         if self.peek() != Some(TokenKind::RParen) {
             loop {
-                args.push(self.sum()?);
+                args.push(self.comparison()?);
                 if self.peek() == Some(TokenKind::Comma) {
                     self.at += 1;
                     continue;
@@ -610,10 +697,17 @@ impl fmt::Display for Expr {
             Expr::Series(inner) => write!(f, "{SERIES_DELIM}{inner}{SERIES_DELIM}"),
             Expr::Binary { op, lhs, rhs } => {
                 let op = match op {
-                    BinOp::Add => '+',
-                    BinOp::Sub => '-',
-                    BinOp::Mul => '*',
-                    BinOp::Div => '/',
+                    BinOp::Add => "+",
+                    BinOp::Sub => "-",
+                    BinOp::Mul => "*",
+                    BinOp::Div => "/",
+                    BinOp::Pow => "^",
+                    BinOp::Lt => "<",
+                    BinOp::Gt => ">",
+                    BinOp::Le => "<=",
+                    BinOp::Ge => ">=",
+                    BinOp::Eq => "=",
+                    BinOp::Ne => "<>",
                 };
                 write!(f, "{lhs}{op}{rhs}")
             }
@@ -625,6 +719,7 @@ impl fmt::Display for Expr {
                 write!(f, "{op}{expr}")
             }
             Expr::Paren(inner) => write!(f, "({inner})"),
+            Expr::Ident(name) => f.write_str(name),
         }
     }
 }

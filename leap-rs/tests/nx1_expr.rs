@@ -258,6 +258,51 @@ fn precedence_and_associativity() {
 }
 
 #[test]
+fn the_power_and_the_comparisons_bind_as_the_language_states() {
+    // `^` is the power, it associates to the right and it binds tighter than `*`.
+    assert_eq!(
+        expr::parse("2^3^2").unwrap(),
+        binary(BinOp::Pow, num("2"), binary(BinOp::Pow, num("3"), num("2")))
+    );
+    assert_eq!(
+        expr::parse("2*3^2").unwrap(),
+        binary(BinOp::Mul, num("2"), binary(BinOp::Pow, num("3"), num("2")))
+    );
+    // A unary minus applies to the power, so `-2^2` is `-(2^2)`.
+    assert_eq!(
+        expr::parse("-2^2").unwrap(),
+        neg(binary(BinOp::Pow, num("2"), num("2")))
+    );
+    // A comparison is looser than a sum, so `1<2+3` is `1<(2+3)`.
+    assert_eq!(
+        expr::parse("1<2+3").unwrap(),
+        binary(BinOp::Lt, num("1"), binary(BinOp::Add, num("2"), num("3")))
+    );
+    for (op, text) in [
+        (BinOp::Lt, "<"),
+        (BinOp::Gt, ">"),
+        (BinOp::Le, "<="),
+        (BinOp::Ge, ">="),
+        (BinOp::Eq, "="),
+        (BinOp::Ne, "<>"),
+    ] {
+        let tree = expr::parse(&format!("1{text}2")).unwrap();
+        assert_eq!(tree, binary(op, num("1"), num("2")), "{text}");
+        assert_eq!(tree.to_string(), format!("1{text}2"), "{text} prints back as written");
+    }
+}
+
+#[test]
+fn a_name_is_a_token_and_prints_back_as_itself() {
+    assert_eq!(expr::parse("year").unwrap(), Expr::Ident("year".to_string()));
+    assert_eq!(expr::parse("year").unwrap().to_string(), "year");
+    assert_eq!(
+        expr::parse("year*2").unwrap(),
+        binary(BinOp::Mul, Expr::Ident("year".to_string()), num("2"))
+    );
+}
+
+#[test]
 fn forms_outside_the_language_are_refused() {
     for (src, at) in [
         ("", 0usize),

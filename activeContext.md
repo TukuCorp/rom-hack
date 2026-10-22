@@ -293,3 +293,89 @@ sits at 1e-10 of the variable's scale).
 - Transport 13,510/13,552: open base-year Device Retirements (42).
 - Optimization Exercise 89.3%, Asiana 96.8% before area-specific work.
 - /verify (independent subagent) -> verified, checks in `.verify/leap-rs-calc.json`.
+
+## 2026-10-22 - leap-rs: expression grammar, LEAP's fuel percentages, ShapeDefault, dispatch and reserves
+
+The work was done in the Herdr tab `rom-hack-claude` (workspace w37, tab w37:t1, cwd `rom-hack`).
+That tab stopped at its session usage limit while it was writing this section, so the notes below
+are taken from its diff, its terminal transcript and a fresh measurement of the four sample areas
+against LEAP's own regression results (release build, GNU toolchain with rust-lld).
+
+### Plan
+- [x] 1. Expression grammar: power `^` (right-associative), the six comparisons `<`, `>`, `<=`, `>=`,
+      `=`, `<>`, and the `year` identifier. `comparison` sits above `sum`; `power` sits between
+      `unary` and `primary`; a name is a token of its own.
+- [x] 2. Fuel properties as LEAP reads them: `Percent*` and `SulfurRetention` to two decimals.
+- [x] 3. `If(condition, then, else)` (code 150), including arguments written as a series literal.
+- [x] 4. `ShapeDefault` (`@F235`): a fuel with a Load Shapes branch that states no shape takes the
+      area's first yearly shape profile.
+- [x] 5. Dispatch without capacity: a branch with no capacity spreads its output over the time
+      slices by the shape instead of running the load curve.
+- [x] 6. Reserves: every fuel but biomass, hydro, wind/renewables and solar draws its reserves down.
+- [x] 7. The tree left red by the tab is green: the new `Expr::Ident` variant broke the exhaustive
+      match in `tests/functions.rs`, and the tab's grammar change moved ten stored texts from "does
+      not parse" to "parses and has no value", so `tests/eval.rs`'s counts are recounted.
+- [x] 8. The held lists now claim what the areas actually reach: Freedonia's 45 variables, all of
+      them, the costs and the pollutant loadings included. The verify record follows.
+
+### Review/results
+- Operators: `expr::tokenize` now yields `Caret`, the six comparisons and `Ident`; `expr::parse`
+  starts at `comparison`, so `a < b + 1` reads as `a < (b + 1)`, and `^` binds tighter than `*`
+  and looser than unary minus. `Expr::Ident` prints back as its name. `eval::number` and
+  `eval::at` return `None` for a name they do not know; `calc::inputs::eval` answers `year` with
+  the year being calculated and any other name with 0. The comparisons value to 1 or 0.
+- The power is not speculation: Asiana stores `(1 + @V(-10,1732,...) * @V(-10,1211,...)) ^ 0.59`,
+  and the reader could not take it before.
+- Percentages: LEAP reads the fuel percentages to two decimals, so `PercentSulfur` of 0.036 loads
+  as 0.04 and 0.00064 loads as nothing. `fuel_property` rounds `Percent*` and `SulfurRetention`
+  to two decimals before the code divides them into fractions; the other properties (energy
+  content, the LHV/HHV ratio) are read as the table holds them. This is what closed Freedonia's
+  ten gasoline-in-litres SO2 values and Asiana's charcoal and gas sulfur loadings.
+- `If`: code 150 takes its three arguments from a series literal or from plain arguments; the
+  condition is true when it is not zero, and a missing third argument is 0.
+- Shape default: `transform::profile_values` is a profile's values by time slice, split out of
+  `yearly_shape` so the default can be read without an expression. A module with more than one
+  candidate holder (itself and a Load Shapes branch for one of its fuels) and no shape stated
+  takes the profile with the lowest `ProfileOrder` in `tsprofiles`.
+- Dispatch: `run_module` runs the load-curve dispatch only when the branch has capacity; a branch
+  without capacity falls back to the annual dispatch and its output is spread over the slices by
+  the shape.
+- Reserves: `is_fossil` was a list of fuel types (coal, natural gas, crude, nuclear), which left
+  Asiana's coking coal (fuel type 0) out; it is now every fuel but the renewable ones (biomass 2,
+  hydro 11, wind/renewables 12, solar 13).
+- Measured against LEAP's definitive regression results, release build:
+
+  | area | before | after |
+  |---|---|---|
+  | Freedonia | 57,370/57,380 (99.98%) | **57,380/57,380 (100.00%)** |
+  | Asiana | 96.8% | **578,468/578,480 (99.998%)** |
+  | Transport Exercise | 13,510/13,552 (99.69%) | 13,510/13,552 (99.69%) |
+  | Optimization Exercise | 89.3% | **78,392/83,457 (93.93%)** |
+
+  The "before" column is what the 2026-10-21 section recorded; the "after" column is measured.
+- Tests: the full suite is green -- 135 tests over 18 suites, no warnings -- with LEAP installed,
+  so the case-study tests really ran rather than taking their skip path. The oracle-free check
+  (`.verify/checks/calc_without_oracle.sh`) also passes with the extended claim: Freedonia's 45
+  variables and 57,380 oracle values all match, and the calculation from stripped inputs is
+  bit-identical to the calculation from the full zip.
+- Docs: README and PORTING carry the new grammar (the power, the comparisons, the name and their
+  precedence), the calculation section with the four areas' parity, the test count and the
+  `case_studies` suite.
+
+### Pending
+- [ ] Transport Exercise: the base-year Device Retirements (variable 85, 42 values, ours 0 against
+      LEAP's 755,268.39 on the Gasoline branch at 2020).
+- [ ] Optimization Exercise: the least-cost LP. The remaining values are the NEMO-optimised
+      scenarios (s6 to s10) of the NGCC and Electricity Generation branches, where the dispatch
+      comes out empty or as the unoptimised answer.
+- [ ] Asiana: ten values of variable 40 (the refinery NMVOC dispatch station, ours 0 against
+      LEAP's 12.5 to 22.7 million) and two values of variable 73 (the crude oil reserves at 2050,
+      1.3e-6 relative out, just past the 1e-6 criterion).
+- [ ] A name that is not `year` evaluates to 0 in the calculation path, where "no value" would be
+      the honest answer. No sample area stores a bare name, so nothing is wrong today, but a name
+      that means something in an area would come out as zero rather than as nothing.
+- [ ] The rest of the 2026-10-21 plan (items 5-11): the E2E case-study tests for Asiana and the
+      Optimization Exercise, and the final report. The README's earlier rounds still describe the
+      state before the calculation engine existed and want a full pass.
+- [ ] The `rom-hack-claude` tab was at its session usage limit when it stopped, so whatever it
+      still intended is not written down anywhere. It resumes at 17:40 (Asia/Ho_Chi_Minh).

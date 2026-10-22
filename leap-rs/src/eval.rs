@@ -187,6 +187,7 @@ pub const PORTED: &[(u32, &str, &str, usize, &str)] = &[
 pub fn number(expr: &Expr) -> Option<f64> {
     match expr {
         Expr::Number(text) => text.parse::<f64>().ok(),
+        Expr::Ident(_) => None,
         Expr::Paren(inner) => number(inner),
         Expr::Unary { op, expr } => {
             let value = number(expr)?;
@@ -202,6 +203,13 @@ pub fn number(expr: &Expr) -> Option<f64> {
                 crate::expr::BinOp::Sub => lhs - rhs,
                 crate::expr::BinOp::Mul => lhs * rhs,
                 crate::expr::BinOp::Div => lhs / rhs,
+                crate::expr::BinOp::Pow => lhs.powf(rhs),
+                crate::expr::BinOp::Lt => f64::from(u8::from(lhs < rhs)),
+                crate::expr::BinOp::Gt => f64::from(u8::from(lhs > rhs)),
+                crate::expr::BinOp::Le => f64::from(u8::from(lhs <= rhs)),
+                crate::expr::BinOp::Ge => f64::from(u8::from(lhs >= rhs)),
+                crate::expr::BinOp::Eq => f64::from(u8::from(lhs == rhs)),
+                crate::expr::BinOp::Ne => f64::from(u8::from(lhs != rhs)),
             })
         }
         Expr::Func { code, args } => {
@@ -372,6 +380,7 @@ pub fn growth_as_value(own_base: f64, ref_now: f64, ref_base: f64, elasticity: f
 pub fn at(ctx: &Context, tree: &Expr, year: i32) -> Option<f64> {
     match tree {
         Expr::Number(text) => text.parse::<f64>().ok(),
+        Expr::Ident(_) => None,
         Expr::Paren(inner) => at(ctx, inner, year),
         Expr::Unary { op, expr } => {
             let value = at(ctx, expr, year)?;
@@ -387,6 +396,13 @@ pub fn at(ctx: &Context, tree: &Expr, year: i32) -> Option<f64> {
                 crate::expr::BinOp::Sub => lhs - rhs,
                 crate::expr::BinOp::Mul => lhs * rhs,
                 crate::expr::BinOp::Div => lhs / rhs,
+                crate::expr::BinOp::Pow => lhs.powf(rhs),
+                crate::expr::BinOp::Lt => f64::from(u8::from(lhs < rhs)),
+                crate::expr::BinOp::Gt => f64::from(u8::from(lhs > rhs)),
+                crate::expr::BinOp::Le => f64::from(u8::from(lhs <= rhs)),
+                crate::expr::BinOp::Ge => f64::from(u8::from(lhs >= rhs)),
+                crate::expr::BinOp::Eq => f64::from(u8::from(lhs == rhs)),
+                crate::expr::BinOp::Ne => f64::from(u8::from(lhs != rhs)),
             })
         }
         Expr::Func { code, args } => {

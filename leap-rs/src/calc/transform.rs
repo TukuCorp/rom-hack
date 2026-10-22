@@ -240,7 +240,6 @@ pub fn modules(inp: &Inputs) -> Vec<i64> {
 /// A yearly shape's values by time slice and its profile type (0 energy, 1 percent of peak,
 /// 2 availability), when an expression of a branch's variable is `YearlyShape(n)`.
 pub fn yearly_shape(inp: &Inputs, branch: i64, var: i64, year: i32) -> Option<(i64, Vec<(i64, f64, f64)>)> {
-    let m = inp.m;
     let (text, def) = inp.expression(branch, var, inp.scenario, inp.region, year)?;
     let tree = inp.parse(text)?;
     let profile = match &*tree {
@@ -250,6 +249,13 @@ pub fn yearly_shape(inp: &Inputs, branch: i64, var: i64, year: i32) -> Option<(i
         }
         _ => return None,
     };
+    profile_values(inp, profile)
+}
+
+/// A yearly shape profile's values by time slice, with its type (0 energy, 1 percent of peak,
+/// 2 availability).
+pub fn profile_values(inp: &Inputs, profile: i64) -> Option<(i64, Vec<(i64, f64, f64)>)> {
+    let m = inp.m;
     let kind = m
         .table("tsprofiles")
         .and_then(|t| t.rows.iter().find(|r| t.int(r, "TSProfileID") == Some(profile)).and_then(|r| t.int(r, "ProfileType")))
@@ -281,12 +287,24 @@ fn load_shape(inp: &Inputs, module: i64, fuels: &[i64], year: i32) -> Option<Vec
         .chain(m.branches.values().filter(|b| b.kind == 49 && names.contains(&b.name)).map(|b| b.id))
         .collect();
     let mut found = None;
-    for b in holders {
+    for &b in &holders {
         for var in [input::SYSTEM_PEAK_LOAD_SHAPE, input::SYSTEM_LOAD_SHAPE] {
             if found.is_none() && inp.has(b, var) {
                 found = yearly_shape(inp, b, var, year);
             }
         }
+    }
+    // A fuel with a Load Shapes branch that states no shape takes the default (ShapeDefault,
+    // `@F235`): the area's first yearly shape profile.
+    if found.is_none() && holders.len() > 1 {
+        let first = m.table("tsprofiles").and_then(|t| {
+            t.rows
+                .iter()
+                .filter_map(|r| Some((t.int(r, "ProfileOrder")?, t.int(r, "TSProfileID")?)))
+                .min()
+                .map(|(_, id)| id)
+        });
+        found = first.and_then(|p| profile_values(inp, p));
     }
     let (kind, vals) = found?;
     if kind == 0 {
@@ -465,7 +483,9 @@ fn run_module(inp: &Inputs, module: i64, year: i32, led: &mut Ledger, st: &mut S
     }
     let residual = residual.max(0.0);
     if procs.iter().any(|p| !p.historical) {
-        if let Some(shape) = &shape {
+        // Without capacity there is nothing to fill the load curve with: dispatch for the year and
+        // spread each output over the slices by the shape.
+        if let (Some(shape), true) = (&shape, has_capacity) {
             dispatch_load_curve(&procs, residual, shape, shape_sum, &mut outputs, &mut slices);
         } else {
             dispatch_annual(&procs, residual, has_capacity, &mut outputs);
@@ -473,7 +493,7 @@ fn run_module(inp: &Inputs, module: i64, year: i32, led: &mut Ledger, st: &mut S
     }
     if let Some(shape) = &shape {
         for (i, p) in procs.iter().enumerate() {
-            if p.historical {
+            if p.historical || !has_capacity {
                 let kwh = outputs[i] / GJ_PER_KWH;
                 slices[i] = shape.iter().map(|(t, pct, h)| (*t, kwh * pct / shape_sum * h)).collect();
             }
@@ -791,10 +811,11 @@ fn resources(inp: &Inputs, year: i32, led: &mut Ledger, st: &mut State, results:
     }
 }
 
-/// Fuels whose production draws down reserves: coal, natural gas and crude oil (LEAP fuel types).
+/// Fuels whose production draws down reserves: every resource but the renewable ones. The four
+/// sample areas report reserves for natural gas, crude oil and the coals (Asiana's coking coal is
+/// fuel type 0) and none for biomass (type 2), hydro (11), wind and renewables (12) or solar (13).
 pub fn is_fossil(inp: &Inputs, fuel: i64) -> bool {
     let Some(t) = inp.m.table("fuels") else { return false };
     let Some(row) = t.rows.iter().find(|r| t.int(r, "FuelID") == Some(fuel)) else { return false };
-    // Assumption: fuel types 7 (coal), 9 (natural gas), 16 (crude) and 6 (nuclear) are depletable.
-    matches!(t.int(row, "FuelTypeID"), Some(6 | 7 | 9 | 16))
+    !matches!(t.int(row, "FuelTypeID"), Some(2 | 11 | 12 | 13))
 }
