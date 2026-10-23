@@ -125,6 +125,29 @@ pub fn saved_energy(m: &crate::data::Model, results: &mut Results) {
 
 /// One process's costs in a year.
 #[allow(clippy::too_many_arguments)]
+/// The variable O&M and fuel cost of one GJ of a process's output, with the conversions `process`
+/// charges them by: what a least-cost dispatch ranks processes on.
+pub fn running_cost(inp: &Inputs, module: i64, p: i64, eff: f64, feedstocks: &[(i64, i64, f64)], year: i32) -> f64 {
+    let m = inp.m;
+    if eff == 0.0 {
+        return 0.0;
+    }
+    let var_unit = super::units::to_gj(m, -1, m.static_or_default(module, 475) as i64);
+    let basis = if m.static_or_default(module, 874) != 0.0 { 1.0 / eff - 1.0 } else { 1.0 };
+    let mut cost = if var_unit == 0.0 { 0.0 } else { inp.value(p, input::VARIABLE_OM, year) * money(inp, module, 399, 400) * basis / var_unit };
+    for (fb, f, share) in feedstocks {
+        if !inp.has(*fb, input::FUEL_COST) {
+            continue;
+        }
+        let unit = m.static_value(*fb, 478).unwrap_or_else(|| m.static_or_default(module, 478)) as i64;
+        let gj = super::units::to_gj(m, *f, unit);
+        if gj != 0.0 {
+            cost += share / eff / gj * inp.value(*fb, input::FUEL_COST, year) * money(inp, module, 476, 477);
+        }
+    }
+    cost
+}
+
 pub fn process(
     inp: &Inputs,
     module: i64,
@@ -208,8 +231,10 @@ pub fn externality_per_kg(inp: &Inputs, effect: i64, year: i32) -> f64 {
     if !inp.has(b.id, 2267) {
         return 0.0;
     }
-    let per = 10f64.powi(m.static_or_default(b.id, 2235) as i32) * m.unit_conversion(m.static_or_default(b.id, 2236) as i64);
-    if per == 0.0 { 0.0 } else { inp.value(b.id, 2267, year) / per }
+    // The cost carries its own scale and money unit (2268, 2269) per unit of emission (2270, a kg
+    // by default); 2235/2236 are the scale and unit of the Annual Emission Constraint instead.
+    let per = m.unit_conversion(m.static_or_default(b.id, 2270) as i64);
+    if per == 0.0 { 0.0 } else { inp.value(b.id, 2267, year) * money(inp, b.id, 2268, 2269) / per }
 }
 
 /// A resource's costs: production at its production cost, imports at their import cost, exports

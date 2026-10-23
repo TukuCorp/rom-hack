@@ -61,6 +61,11 @@ pub mod input {
     pub const HISTORICAL_PRODUCTION: i64 = 2148;
     pub const FEEDSTOCK_SHARE: i64 = 1036;
     pub const ENDOGENOUS_CAPACITY: i64 = 506;
+    /// On a module: optimise its capacity with NEMO (`Yes`).
+    pub const OPTIMIZE: i64 = 2232;
+    /// On a process: the capacity NEMO added each year, which LEAP stores back into the area
+    /// as a `Data` series commented "Optimized on <date> (NEMO/<solver>)".
+    pub const OPTIMIZED_NEW_CAPACITY: i64 = 2295;
     pub const ADDITION_ORDER: i64 = 512;
     pub const ALLOW_UNPLANNED: i64 = 513;
     pub const LIFETIME: i64 = 393;
@@ -104,6 +109,8 @@ pub mod out {
     pub const PLANNING_RESERVE_MARGIN: i64 = 82;
     pub const UNMET: i64 = 84;
     pub const ENERGY_GENERATION: i64 = 89;
+    /// On the Transformation root, by fuel and time slice; LEAP fills it for optimised modules.
+    pub const PRIMARY_REQUIREMENTS_TIMESLICED: i64 = 138;
     pub const CURTAILED_ENERGY: i64 = 126;
     pub const CURTAILED_POWER: i64 = 127;
 }
@@ -465,7 +472,12 @@ fn run_module(inp: &Inputs, module: i64, year: i32, led: &mut Ledger, st: &mut S
         }
     };
     let peak = peak_of(target);
-    if has_capacity && procs.iter().any(|p| !p.historical) {
+    let optimized = has_capacity && inp.value(module, input::OPTIMIZE, year) != 0.0;
+    if optimized {
+        // An optimised module builds what NEMO chose, as LEAP stored it, instead of planning to
+        // the reserve margin.
+        add_optimized(inp, year, &mut procs, st, output_capacity, cap_conv);
+    } else if has_capacity && procs.iter().any(|p| !p.historical) {
         add_endogenous(inp, module, year, &mut procs, peak, st, output_capacity, cap_conv);
     }
 
@@ -485,7 +497,9 @@ fn run_module(inp: &Inputs, module: i64, year: i32, led: &mut Ledger, st: &mut S
     if procs.iter().any(|p| !p.historical) {
         // Without capacity there is nothing to fill the load curve with: dispatch for the year and
         // spread each output over the slices by the shape.
-        if let (Some(shape), true) = (&shape, has_capacity) {
+        if let (Some(shape), true, true) = (&shape, has_capacity, optimized) {
+            dispatch_least_cost(inp, module, year, &procs, residual, shape, shape_sum, &mut outputs, &mut slices);
+        } else if let (Some(shape), true) = (&shape, has_capacity) {
             dispatch_load_curve(&procs, residual, shape, shape_sum, &mut outputs, &mut slices);
         } else {
             dispatch_annual(&procs, residual, has_capacity, &mut outputs);
@@ -582,6 +596,15 @@ fn run_module(inp: &Inputs, module: i64, year: i32, led: &mut Ledger, st: &mut S
         super::costs::process(inp, module, p.id, year, if has_capacity { p.exog_kw + p.endog_kw } else { 0.0 }, &vintages, outputs[i], input_gj, &fed, &loads, results);
         // Generation by time slice, or for the year as one slice.
         if shape.is_some() {
+            if optimized && p.eff != 0.0 {
+                let root = m.branches.get(&module).map(|b| b.parent).unwrap_or(module);
+                for (t, kwh) in &slices[i] {
+                    for (_, fuel, share) in &p.feedstocks {
+                        let k = crate::results::Key { branch: root, variable: out::PRIMARY_REQUIREMENTS_TIMESLICED, scenario: s, region: r, year: year as i64, x1: *fuel, x2: *t };
+                        *results.entry(k).or_default() += kwh * GJ_PER_KWH / p.eff * share;
+                    }
+                }
+            }
             for (t, kwh) in &slices[i] {
                 let hours = inp.m.timeslices.iter().find(|x| x.id == *t).map(|x| x.hours).unwrap_or(HOURS);
                 put(results, p.id, out::POWER_GENERATION, s, r, year, *t, -1, kwh / hours);
@@ -614,6 +637,67 @@ fn alive_endogenous(inp: &Inputs, st: &State, p: i64, year: i32) -> f64 {
         .get(&p)
         .map(|v| v.iter().filter(|(y, _)| *y <= year && year < *y + life.max(1)).map(|(_, k)| k).sum())
         .unwrap_or(0.0)
+}
+
+/// Dispatch an optimised module as its least-cost solution does when the capacity is fixed and
+/// nothing stores energy: in each time slice the processes run cheapest first, each up to its
+/// capacity times its availability in that slice (a yearly shape where Maximum Availability is
+/// one), and what is not needed is curtailed. Equal costs share in proportion to their room.
+#[allow(clippy::too_many_arguments)]
+fn dispatch_least_cost(inp: &Inputs, module: i64, year: i32, procs: &[Process], target: f64, shape: &[(i64, f64, f64)], shape_sum: f64, outputs: &mut [f64], slices: &mut [Vec<(i64, f64)>]) {
+    let kwh = target / GJ_PER_KWH;
+    let avail: Vec<Option<Vec<(i64, f64, f64)>>> = procs.iter().map(|p| yearly_shape(inp, p.id, input::MAX_AVAILABILITY, year).map(|(_, v)| v)).collect();
+    let mut groups: BTreeMap<i64, Vec<usize>> = BTreeMap::new();
+    for (i, p) in procs.iter().enumerate() {
+        if !p.historical {
+            let cost = super::costs::running_cost(inp, module, p.id, p.eff, &p.feedstocks, year);
+            // Grouped on a fixed grid so that costs equal but for rounding share.
+            groups.entry((cost * 1e9).round() as i64).or_default().push(i);
+        }
+    }
+    for (t, pct, hours) in shape {
+        let mut need = kwh * pct / shape_sum;
+        let room_of = |i: usize| -> f64 {
+            let a = match &avail[i] {
+                Some(v) => v.iter().find(|x| x.0 == *t).map(|x| x.1 / 100.0).unwrap_or(0.0),
+                None => procs[i].avail,
+            };
+            procs[i].cap_kw * a
+        };
+        let mut got = vec![0.0; procs.len()];
+        for g in groups.values() {
+            let room: f64 = g.iter().map(|i| room_of(*i)).sum();
+            if room <= 0.0 || need <= 0.0 {
+                continue;
+            }
+            let take = need.min(room);
+            for i in g {
+                got[*i] = take * room_of(*i) / room;
+            }
+            need -= take;
+        }
+        for i in 0..procs.len() {
+            if procs[i].historical {
+                continue;
+            }
+            let energy = got[i] * hours;
+            outputs[i] += energy * GJ_PER_KWH;
+            slices[i].push((*t, energy));
+        }
+    }
+}
+
+/// Add the capacity the optimisation chose for this year to each process.
+fn add_optimized(inp: &Inputs, year: i32, procs: &mut [Process], st: &mut State, output_capacity: bool, cap_conv: f64) {
+    for p in procs.iter_mut() {
+        let size = inp.value(p.id, input::OPTIMIZED_NEW_CAPACITY, year) * cap_conv;
+        if size == 0.0 {
+            continue;
+        }
+        p.endog_kw += size;
+        p.cap_kw = (p.exog_kw + p.endog_kw) * if output_capacity { 1.0 } else { p.eff };
+        st.added.entry(p.id).or_default().push((year, size));
+    }
 }
 
 /// Add endogenous capacity until the firm capacity meets the planning reserve margin.

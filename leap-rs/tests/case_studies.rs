@@ -20,9 +20,22 @@ const HELD: &[(&str, &[i64])] = &[
     // Every Transport Exercise variable but 85 (Device Retirements), whose base-year value is
     // not yet derived; its later years already match.
     ("Transport Exercise", &[20, 21, 30, 40, 41, 60, 61, 62, 64, 66, 67, 68, 81, 125, 2027]),
+    // Every Optimization Exercise variable but the three by time slice (77, 89, 138), on every
+    // scenario but BET (see `OPTIMIZATION_SKIPPED`). The optimised scenarios (OPT and its
+    // children) build the capacity LEAP stored from NEMO's solution as Optimized New Capacity and
+    // dispatch it least-cost by time slice.
+    ("Optimization Exercise", &[1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 22, 30, 35, 36, 42, 43, 46, 65, 73, 82, 84, 86, 87, 88, 103, 104, 105, 125, 126, 127]),
 ];
 
+/// Scenarios left out of the Optimization Exercise's check: BET (10) adds batteries, which move
+/// energy between time slices, and only solving NEMO's problem places that.
+const OPTIMIZATION_SKIPPED: &[i64] = &[10];
+
 fn check(area: &str, vars: &[i64]) {
+    check_except(area, vars, &[]);
+}
+
+fn check_except(area: &str, vars: &[i64], skip_scenarios: &[i64]) {
     let Some(zip) = Area::from_zip_file(format!("{LEAP}/{area}.zip")) else {
         eprintln!("note: {area} not found, case study skipped");
         return;
@@ -30,7 +43,10 @@ fn check(area: &str, vars: &[i64]) {
     let dict = Area::from_zip_file(format!("{LEAP}/_dictionaryNX.zip"));
     let m = Model::load(&zip, dict.as_ref());
     let want = results::definitive(&zip).expect("the area ships its regression results");
-    let got = calc::run(&m);
+    let mut got = calc::run(&m);
+    let mut want = want;
+    got.retain(|k, _| !skip_scenarios.contains(&k.scenario));
+    want.retain(|k, _| !skip_scenarios.contains(&k.scenario));
     let reports = results::compare(&got, &want);
     let mut failures = Vec::new();
     for v in vars {
@@ -48,6 +64,15 @@ fn freedonia_matches_leap() {
     for (area, vars) in HELD {
         if *area == "Freedonia" {
             check(area, vars);
+        }
+    }
+}
+
+#[test]
+fn optimization_exercise_matches_leap() {
+    for (area, vars) in HELD {
+        if *area == "Optimization Exercise" {
+            check_except(area, vars, OPTIMIZATION_SKIPPED);
         }
     }
 }

@@ -379,3 +379,65 @@ against LEAP's own regression results (release build, GNU toolchain with rust-ll
       state before the calculation engine existed and want a full pass.
 - [ ] The `rom-hack-claude` tab was at its session usage limit when it stopped, so whatever it
       still intended is not written down anywhere. It resumes at 17:40 (Asia/Ho_Chi_Minh).
+
+## 2026-10-23 - leap-rs: capture LEAP's NEMO run of the Optimization Exercise
+
+Goal: run the Optimization Exercise's optimised scenarios in the installed LEAP once, capture the
+NEMO input database (`NEMO.SQLite`) and NEMO's results, and use the pair as the oracle for the
+LEAP -> NEMO translation layer. Then re-estimate how complete leap-rs is as a research package.
+
+Found so far: NemoMod.jl is Apache-2.0 (v2.6, 2026-06-29, Julia 1.12, JuMP 1.29.4, SQLite). LEAP
+looks in `C:\NemoMod\`, writes `NEMO.SQLite` and `JULIA_NEMO.BAT`, and runs
+`julia -E "using NemoMod, JuMP, <solver>; NemoMod.calculatescenario(\"<db>\"; jumpmodel=..., varstosave=...)"`.
+NEMO is not installed here; the official installer needs a LEAP-site login.
+
+### Plan
+- [x] 1. NEMO from GitHub: Julia 1.12.7 via juliaup (now the default; undo `juliaup default lts`),
+      NemoMod v2.6 + JuMP 1.29.4 + HiGHS + Cbc + SQLite + DataFrames, precompiled with one task (8 GB
+      machine). Smoke test: NEMO's `test/storage_test.sqlite` on HiGHS gives all ten published
+      `vtotaldiscountedcost` values within 1e-6.
+- [~] 2. LEAP capture. The licence is active (city-ghg, 2026-10-14); the evaluation-copy note above was
+      stale. Script: scratchpad `capture_nemo.py` (COM; a watcher copies NEMO/julia files from
+      `_LEAPWork`, the area and `C:\NemoMod`). Learned:
+      - The startup Tips window blocks the area API ("not available when a supporting screen is
+        open"): HKCU `...\LEAP2024\ShowTipsOnStartUp` set to 0 (was 1).
+      - A fresh instance answers `Areas` only once startup finishes ("closed dataset"): wait for it.
+      - `Area.Open()` and `ActiveArea =` raise "Analysis View is not enabled". What worked: LEAP's
+        `LastArea` (HKCU LEAP2024) and `OpenAreas.txt` set to the area before launch.
+      - Optimization Exercise opened (9 scenarios); `Calculate()` raised a bare COM error and no NEMO
+        file was written. LEAP finds NEMO only through the NEMO installer's uninstall key
+        `{4EEC991C-8D33-4773-84D3-7FE4162EEF82}_is1` (JuliaPath, JuliaVersion, DisplayVersion), then
+        lists packages with `using Pkg;pkgs = Pkg.installed();` (works on 1.12).
+      - BLOCKED: writing that key under HKCU was denied by the auto-mode permission classifier.
+- [ ] 3. Run NemoMod on the captured db directly; compare its results against LEAP's regression oracle.
+- [ ] 4. Report the updated completeness estimate.
+- [x] User decision (2026-10-23): skip the capture. Build the LEAP -> NEMO translation from NEMO's
+      documented scenario-database layout and test it against LEAP's RegressionResults.nx1.
+
+## 2026-10-23 - leap-rs: least-cost optimisation through NEMO (no capture)
+
+Baseline (release, GNU + rust-lld): Optimization Exercise 78,392/83,457 (93.93%). All 5,065 misses
+are scenarios s6-s10, in 25 variables, on the Electricity Generation module (NGCC, Natural Gas
+resource, capacities, dispatch by slice 77/89, costs 5/86/88/103, shares 11/12). The optimised
+scenarios come out as the unoptimised answer (e.g. NGCC output 0 against 17.3 million).
+
+### Plan
+- [ ] 1. Map the optimised scenarios: which of s6-s10 set `Optimize`/Energy System Optimization,
+      the solver/foresight arguments, and every LEAP input NEMO needs (processes, exogenous and
+      residual capacity, capital/fixed/variable costs, lifetimes, availability, efficiencies, the
+      96-slice load shape, CO2 limit/social cost, storage for BET, discount rate).
+- [ ] 2. Red: a golden test on the Optimization Exercise's s6-s10 values (skips when Julia/NemoMod
+      are absent, like the case studies skip without LEAP).
+- [ ] 3. `nemo` module: LEAP model -> NEMO dimension and parameter rows (REGION, TECHNOLOGY, FUEL,
+      EMISSION, YEAR, TIMESLICE; YearSplit, SpecifiedAnnualDemand, SpecifiedDemandProfile,
+      CapitalCost, FixedCost, VariableCost, ResidualCapacity, OperationalLife, Input/
+      OutputActivityRatio, AvailabilityFactor, CapacityFactor, EmissionActivityRatio,
+      AnnualEmissionLimit, EmissionsPenalty, DiscountRate, storage tables).
+- [ ] 4. Bridge: leap-rs writes those rows as CSV; checked-in `tools/nemo_run.jl` builds the db with
+      `NemoMod.createnemodb`, loads the rows, runs `calculatescenario` with HiGHS, exports the
+      solution tables (vnewcapacity, vtotalcapacityannual, vproductionbytechnology, vusebytechnology,
+      costs) as CSV. Keeps the crate dependency-free.
+- [ ] 5. Read the solution back into `calc` (capacity, dispatch by slice, fuel use, costs) and let
+      the existing emissions/costs/allocation code run on it.
+- [ ] 6. Iterate to parity on s6-s10; keep Freedonia/Asiana/Transport unchanged.
+- [ ] 7. README/PORTING, /verify, review section, completeness estimate.
