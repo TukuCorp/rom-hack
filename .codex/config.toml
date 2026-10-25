@@ -1,0 +1,9 @@
+[mcp_servers.ghidra_mcp]
+command = 'C:\Users\tukum\AppData\Local\hermes\bin\uv.EXE'
+args = ["run", "--directory", 'C:\Users\tukum\Downloads\rom-hack\ghidra-mcp', "bridge-mcp-ghidra", "--transport", "stdio"]
+startup_timeout_sec = 120.0
+
+[mcp_servers.ghidra_mcp.env]
+GHIDRA_MCP_URL = "http://127.0.0.1:8089"
+PYTHONIOENCODING = "utf-8"
+
